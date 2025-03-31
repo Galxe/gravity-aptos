@@ -135,10 +135,7 @@ use move_vm_types::gas::{GasMeter, UnmeteredGasMeter};
 use num_cpus;
 use once_cell::sync::OnceCell;
 use std::{
-    cmp::{max, min},
-    collections::{BTreeMap, BTreeSet},
-    marker::Sync,
-    sync::Arc,
+    cmp::{max, min}, collections::{BTreeMap, BTreeSet}, io::Take, marker::Sync, sync::Arc
 };
 
 static EXECUTION_CONCURRENCY_LEVEL: OnceCell<usize> = OnceCell::new();
@@ -1978,6 +1975,7 @@ impl AptosVM {
             TransactionPayload::ModuleBundle(_) => {
                 unwrap_or_discard!(Err(deprecated_module_bundle!()))
             },
+            TransactionPayload::GTxnBytes(bytes) => todo!(),
         };
         drop(payload_timer);
 
@@ -2588,6 +2586,7 @@ impl AptosVM {
 
             // Deprecated.
             TransactionPayload::ModuleBundle(_) => Err(deprecated_module_bundle!()),
+            TransactionPayload::GTxnBytes(bytes) => todo!(),
         }
     }
 
