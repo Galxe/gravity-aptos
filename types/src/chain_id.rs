@@ -74,7 +74,7 @@ impl FromStr for NamedChain {
 /// Note: u7 in a u8 is uleb-compatible, and any usage of this should be aware
 /// that this field maybe updated to be uleb64 in the future
 #[derive(Clone, Copy, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct ChainId(u64);
+pub struct ChainId(u8);
 
 impl ChainId {
     /// Returns true iff the chain ID matches testnet
@@ -99,13 +99,13 @@ impl ChainId {
 
 impl From<u64> for ChainId {
     fn from(value: u64) -> Self {
-        ChainId(value)
+        ChainId(value as u8)
     }
 }
 
 impl Into<u64> for ChainId {
     fn into(self) -> u64 {
-        self.0
+        self.0 as u64
     }
 }
 
