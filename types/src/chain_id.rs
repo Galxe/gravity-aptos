@@ -97,6 +97,18 @@ impl ChainId {
     }
 }
 
+impl From<u64> for ChainId {
+    fn from(value: u64) -> Self {
+        ChainId(value)
+    }
+}
+
+impl Into<u64> for ChainId {
+    fn into(self) -> u64 {
+        self.0
+    }
+}
+
 pub fn deserialize_config_chain_id<'de, D>(
     deserializer: D,
 ) -> std::result::Result<ChainId, D::Error>
