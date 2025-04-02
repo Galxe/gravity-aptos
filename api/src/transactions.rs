@@ -1106,6 +1106,7 @@ impl TransactionsApi {
                             ledger_info,
                         ))
                     },
+                    TransactionPayload::GTxnBytes(_) => todo!(),
                 }
                 // TODO: Verify script args?
 
@@ -1423,6 +1424,7 @@ impl TransactionsApi {
                     "Multisig::unknown".to_string()
                 }
             },
+            TransactionPayload::GTxnBytes(_) => todo!(),
         };
         self.context
             .simulate_txn_stats()
