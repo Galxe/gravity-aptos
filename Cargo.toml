@@ -67,7 +67,9 @@ default = [
     "aptos-executor-types/fuzzing",
     "aptos-schemadb/fuzzing",
     "aptos-time-service/async",
-    "aptos-time-service/testing"
+    "aptos-time-service/testing",
+    "move-core-types/fuzzing",
+    "aptos-crypto/fuzzing",
 ]
 
 [workspace]
