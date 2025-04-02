@@ -74,7 +74,7 @@ impl FromStr for NamedChain {
 /// Note: u7 in a u8 is uleb-compatible, and any usage of this should be aware
 /// that this field maybe updated to be uleb64 in the future
 #[derive(Clone, Copy, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct ChainId(u8);
+pub struct ChainId(u64);
 
 impl ChainId {
     /// Returns true iff the chain ID matches testnet
