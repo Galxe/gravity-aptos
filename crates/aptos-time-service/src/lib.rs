@@ -87,6 +87,7 @@ impl TimeService {
     /// tasks.
     ///
     /// See [`MockTimeService`].
+    #[cfg(any(test, feature = "testing"))]
     pub fn mock() -> Self {
         MockTimeService::new().into()
     }
