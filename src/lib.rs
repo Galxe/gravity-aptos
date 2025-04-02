@@ -19,7 +19,7 @@ pub use aptos_bitvec;
 // pub use aptos_experimental_runtimes;
 // pub use aptos_fallible;
 // pub use aptos_global_constants;
-// pub use aptos_id_generator;
+pub use aptos_id_generator;
 // pub use aptos_infallible;
 // pub use aptos_inspection_service;
 // pub use aptos_keygen;

@@ -10,7 +10,7 @@ rust-version = { workspace = true }
 
 [dependencies]
 aptos-bitvec = { workspace = true }
-# aptos-id-generator = { workspace = true }
+aptos-id-generator = { workspace = true }
 # aptos-compression = { workspace = true }
 # aptos-proptest-helpers = { workspace = true }
 # aptos-crash-handler = { workspace = true }
