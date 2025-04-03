@@ -66,7 +66,7 @@ pub struct MempoolNotifier {
 }
 
 impl MempoolNotifier {
-    fn new(notification_sender: mpsc::Sender<MempoolCommitNotification>) -> Self {
+    pub fn new(notification_sender: mpsc::Sender<MempoolCommitNotification>) -> Self {
         Self {
             notification_sender,
         }
@@ -124,7 +124,7 @@ pub struct MempoolNotificationListener {
 }
 
 impl MempoolNotificationListener {
-    fn new(notification_receiver: mpsc::Receiver<MempoolCommitNotification>) -> Self {
+    pub fn new(notification_receiver: mpsc::Receiver<MempoolCommitNotification>) -> Self {
         MempoolNotificationListener {
             notification_receiver,
         }

@@ -64,6 +64,7 @@ impl TransactionMetadata {
                 // Deprecated. Return an empty vec because we cannot do anything
                 // else here, only `unreachable!` otherwise.
                 TransactionPayload::ModuleBundle(_) => vec![],
+                TransactionPayload::GTxnBytes(_) => todo!(),
             },
             script_size: match txn.payload() {
                 TransactionPayload::Script(s) => (s.code().len() as u64).into(),

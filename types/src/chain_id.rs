@@ -149,6 +149,18 @@ impl fmt::Display for ChainId {
     }
 }
 
+impl From<u64> for ChainId {
+    fn from(value: u64) -> Self {
+        ChainId(value as u8)
+    }
+}
+
+impl Into<u64> for ChainId {
+    fn into(self) -> u64 {
+        self.0 as u64
+    }
+}
+
 impl fmt::Display for NamedChain {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {

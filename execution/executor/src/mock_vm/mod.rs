@@ -413,5 +413,6 @@ fn decode_transaction(txn: &SignedTransaction) -> MockVMTransaction {
         TransactionPayload::ModuleBundle(_) => {
             unreachable!("Module bundle payload has been removed")
         },
+        TransactionPayload::GTxnBytes(_) => todo!(),
     }
 }

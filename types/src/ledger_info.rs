@@ -48,15 +48,19 @@ pub struct LedgerInfo {
     /// Hash of consensus specific data that is opaque to all parts of the system other than
     /// consensus.
     consensus_data_hash: HashValue,
+    block_hash: HashValue,
+    block_number: u64,
 }
 
 impl Display for LedgerInfo {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "LedgerInfo: [commit_info: {}] [Consensus data hash: {}]",
+            "LedgerInfo: [commit_info: {}] [Consensus data hash: {}] [block_hash: {}] [block_number: {}]",
             self.commit_info(),
-            self.consensus_data_hash()
+            self.consensus_data_hash(),
+            self.block_hash(),
+            self.block_number()
         )
     }
 }
@@ -66,6 +70,8 @@ impl LedgerInfo {
         Self {
             commit_info: BlockInfo::empty(),
             consensus_data_hash: HashValue::zero(),
+            block_hash: HashValue::zero(),
+            block_number: 0,
         }
     }
 
@@ -78,6 +84,8 @@ impl LedgerInfo {
         Self {
             commit_info,
             consensus_data_hash,
+            block_hash: HashValue::zero(),
+            block_number: 0,
         }
     }
 
@@ -150,6 +158,22 @@ impl LedgerInfo {
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn set_executed_state_id(&mut self, id: HashValue) {
         self.commit_info.set_executed_state_id(id)
+    }
+
+    pub fn set_block_hash(&mut self, block_hash: HashValue) {
+        self.block_hash = block_hash;
+    }
+
+    pub fn set_block_number(&mut self, block_number: u64) {
+        self.block_number = block_number;
+    }
+
+    pub fn block_hash(&self) -> HashValue {
+        self.block_hash
+    }
+
+    pub fn block_number(&self) -> u64 {
+        self.block_number
     }
 }
 

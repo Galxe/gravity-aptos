@@ -46,7 +46,7 @@ pub const UNEXPECTED_ERROR_MESSAGE: &str = "An unexpected error was encountered!
 /// address and handles various endpoint requests.
 pub fn start_inspection_service(
     node_config: NodeConfig,
-    aptos_data_client: AptosDataClient,
+    aptos_data_client: Option<AptosDataClient>,
     peers_and_metadata: Arc<PeersAndMetadata>,
 ) {
     // Fetch the service port and address
@@ -101,7 +101,7 @@ pub fn start_inspection_service(
 async fn serve_requests(
     req: Request<Body>,
     node_config: NodeConfig,
-    aptos_data_client: AptosDataClient,
+    aptos_data_client: Option<AptosDataClient>,
     peers_and_metadata: Arc<PeersAndMetadata>,
 ) -> Result<Response<Body>, hyper::Error> {
     // Process the request and get the response components
@@ -136,7 +136,7 @@ async fn serve_requests(
             // Exposes the peer information
             peer_information::handle_peer_information_request(
                 &node_config,
-                aptos_data_client,
+                aptos_data_client.unwrap(),
                 peers_and_metadata,
             )
         },

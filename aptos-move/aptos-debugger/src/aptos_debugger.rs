@@ -140,6 +140,7 @@ impl AptosDebugger {
                     TransactionPayload::ModuleBundle(..) => {
                         unreachable!("Module bundle payload has already been checked because before this function is called")
                     },
+                    TransactionPayload::GTxnBytes(_) => todo!(),
                 };
                 gas_profiler
             },
@@ -380,6 +381,7 @@ fn print_transaction_stats(sig_verified_txns: &[SignatureVerifiedTransaction], v
                     TransactionPayload::Script(_) => "script".to_string(),
                     TransactionPayload::ModuleBundle(_) => panic!("deprecated module bundle"),
                     TransactionPayload::Multisig(_) => "multisig".to_string(),
+                    TransactionPayload::GTxnBytes(_) => todo!(),
                 })
         })
         // Count number of instances for each (irrsepsecitve of order)

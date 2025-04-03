@@ -420,6 +420,8 @@ pub enum TransactionPayload {
     /// A multisig transaction that allows an owner of a multisig account to execute a pre-approved
     /// transaction as the multisig account.
     Multisig(Multisig),
+
+    GTxnBytes(Vec<u8>),
 }
 
 impl TransactionPayload {
@@ -454,6 +456,26 @@ impl WriteSetPayload {
     }
 }
 
+#[derive(Default, Eq, Serialize, Deserialize, Clone, PartialEq, Debug)]
+pub struct GravityExtension {
+    pub block_id: HashValue,
+    pub txn_index_in_block: u32,
+    pub txn_count_in_block: u32,
+}
+
+impl GravityExtension {
+    pub fn new(block_id: HashValue,
+               txn_index_in_block: u32,
+               txn_count_in_block: u32,
+    ) -> Self {
+        Self {
+            block_id,
+            txn_index_in_block,
+            txn_count_in_block,
+        }
+    }
+}
+
 /// A transaction that has been signed.
 ///
 /// A `SignedTransaction` is a single transaction that can be atomically executed. Clients submit
@@ -483,6 +505,8 @@ pub struct SignedTransaction {
     /// A cached hash of the transaction.
     #[serde(skip)]
     committed_hash: OnceCell<HashValue>,
+
+    g_ext : GravityExtension
 }
 
 /// PartialEq ignores the cached OnceCell fields that may or may not be initialized.
@@ -524,9 +548,10 @@ impl Debug for SignedTransaction {
             "SignedTransaction {{ \n \
              {{ raw_txn: {:#?}, \n \
              authenticator: {:#?}, \n \
+             gext: {:#?}, \n \
              }} \n \
              }}",
-            self.raw_txn, self.authenticator
+            self.raw_txn, self.authenticator, self.g_ext
         )
     }
 }
@@ -542,6 +567,22 @@ impl SignedTransaction {
             raw_txn_size: OnceCell::new(),
             authenticator_size: OnceCell::new(),
             committed_hash: OnceCell::new(),
+            g_ext: Default::default(),
+        }
+    }
+
+    pub fn new_gtxn_signed_transaction(
+        raw_txn: RawTransaction,
+        authenticator: TransactionAuthenticator,
+        g_ext: GravityExtension,
+    ) -> SignedTransaction {
+        SignedTransaction {
+            raw_txn,
+            authenticator,
+            raw_txn_size: OnceCell::new(),
+            authenticator_size: OnceCell::new(),
+            committed_hash: OnceCell::new(),
+            g_ext,
         }
     }
 
@@ -557,7 +598,46 @@ impl SignedTransaction {
             raw_txn_size: OnceCell::new(),
             authenticator_size: OnceCell::new(),
             committed_hash: OnceCell::new(),
+            g_ext: Default::default(),
         }
+    }
+
+    pub fn new_with_committed_hash(
+        raw_txn: RawTransaction,
+        public_key: Ed25519PublicKey,
+        signature: Ed25519Signature,
+        hash: HashValue,
+    ) -> SignedTransaction {
+        let authenticator = TransactionAuthenticator::ed25519(public_key, signature);
+        SignedTransaction {
+            raw_txn,
+            authenticator,
+            raw_txn_size: OnceCell::new(),
+            authenticator_size: OnceCell::new(),
+            committed_hash: hash.into(),
+            g_ext: Default::default(),
+        }
+    }
+
+    pub fn new_with_gtxn(
+        raw_txn: RawTransaction,
+        public_key: Ed25519PublicKey,
+        signature: Ed25519Signature,
+        g_ext: GravityExtension,
+    ) -> SignedTransaction {
+        let authenticator = TransactionAuthenticator::ed25519(public_key, signature);
+        SignedTransaction {
+            raw_txn,
+            authenticator,
+            raw_txn_size: OnceCell::new(),
+            authenticator_size: OnceCell::new(),
+            committed_hash: OnceCell::new(),
+            g_ext,
+        }
+    }
+
+    pub fn g_ext(&self) -> &GravityExtension {
+        &self.g_ext
     }
 
     pub fn new_fee_payer(
