@@ -234,6 +234,7 @@ fn test_db_indexer_data() {
         ident_str!("vesting"),
         ident_str!("bls12381"),
         ident_str!("chain_id"),
+        ident_str!("daa_siws"),
         ident_str!("features"),
         ident_str!("from_bcs"),
         ident_str!("pool_u64"),
@@ -379,7 +380,7 @@ fn test_db_indexer_data() {
         ),
         (
             false,
-            "0x1::account_abstraction::DomainDispatchableAuthenticator",
+            "0x1::account_abstraction::DerivableDispatchableAuthenticator",
         ),
         (false, "0x1::coin::CoinInfo<0x1::aptos_coin::AptosCoin>"),
         (

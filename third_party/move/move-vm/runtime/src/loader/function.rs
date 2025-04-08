@@ -3,10 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    loader::{
-        access_specifier_loader::load_access_specifier, LegacyModuleStorageAdapter, Loader, Module,
-        Resolver, Script,
-    },
+    loader::{access_specifier_loader::load_access_specifier, Module, Resolver, Script},
     native_functions::{NativeFunction, NativeFunctions, UnboxedNativeFunction},
     storage::ty_tag_converter::TypeTagConverter,
     LayoutConverter, ModuleStorage, StorageLayoutConverter,
@@ -34,6 +31,7 @@ use move_vm_types::{
         runtime_access_specifier::AccessSpecifier,
         runtime_types::{StructIdentifier, Type},
     },
+    resolver::ResourceResolver,
     values::{AbstractFunction, SerializedFunctionData},
 };
 use std::{cell::RefCell, cmp::Ordering, fmt::Debug, rc::Rc, sync::Arc};
@@ -75,6 +73,12 @@ pub struct LoadedFunction {
     pub ty_args: Vec<Type>,
     // Definition of the loaded function.
     pub function: Arc<Function>,
+}
+
+impl LoadedFunction {
+    pub fn owner(&self) -> &LoadedFunctionOwner {
+        &self.owner
+    }
 }
 
 /// A lazy loaded function, which can either be unresolved (as resulting
@@ -228,12 +232,19 @@ impl LazyLoadedFunction {
                         "captured argument count does not match declared parameters".to_string(),
                     ));
             }
+
+            let ty_builder = &module_storage.runtime_environment().vm_config().ty_builder;
             for (actual_arg_ty, serialized_layout) in
                 captured_arg_types.into_iter().zip(captured_layouts)
             {
                 // Note that the below call returns a runtime layout, so we can directly
                 // compare it without desugaring.
-                let actual_arg_layout = converter.type_to_type_layout(actual_arg_ty)?;
+                let actual_arg_layout = if ty_args.is_empty() {
+                    converter.type_to_type_layout(actual_arg_ty)?
+                } else {
+                    let actual_arg_ty = ty_builder.create_ty_with_subst(actual_arg_ty, &ty_args)?;
+                    converter.type_to_type_layout(&actual_arg_ty)?
+                };
                 if !serialized_layout.is_compatible_with(&actual_arg_layout) {
                     return Err(PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE)
                         .with_message(
@@ -351,7 +362,7 @@ impl LoadedFunction {
     }
 
     /// Returns true if the loaded function is an entry function.
-    pub(crate) fn is_entry(&self) -> bool {
+    pub fn is_entry(&self) -> bool {
         self.function.is_entry()
     }
 
@@ -415,16 +426,15 @@ impl LoadedFunction {
 
     pub(crate) fn get_resolver<'a>(
         &self,
-        loader: &'a Loader,
-        module_store: &'a LegacyModuleStorageAdapter,
         module_storage: &'a impl ModuleStorage,
+        resource_resolver: &'a impl ResourceResolver,
     ) -> Resolver<'a> {
         match &self.owner {
             LoadedFunctionOwner::Module(module) => {
-                Resolver::for_module(loader, module_store, module_storage, module.clone())
+                Resolver::for_module(module.clone(), module_storage, resource_resolver)
             },
             LoadedFunctionOwner::Script(script) => {
-                Resolver::for_script(loader, module_store, module_storage, script.clone())
+                Resolver::for_script(script.clone(), module_storage, resource_resolver)
             },
         }
     }

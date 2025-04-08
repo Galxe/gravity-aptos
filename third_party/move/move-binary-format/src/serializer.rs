@@ -542,14 +542,7 @@ fn serialize_function_handle(
     serialize_ability_sets(binary, &function_handle.type_parameters)?;
     if major_version >= VERSION_7 {
         serialize_access_specifiers(binary, &function_handle.access_specifiers)?
-    } else if function_handle.access_specifiers.is_some()
-        && function_handle
-            .access_specifiers
-            .as_ref()
-            .unwrap()
-            .iter()
-            .any(|sp| !sp.is_old_style_acquires())
-    {
+    } else if function_handle.access_specifiers.is_some() {
         return Err(anyhow!(
             "Access specifiers not supported in bytecode version {}",
             major_version
@@ -904,7 +897,6 @@ fn serialize_access_specifier(binary: &mut BinaryData, acc: &AccessSpecifier) ->
     binary.push(match acc.kind {
         AccessKind::Reads => SerializedAccessKind::READ,
         AccessKind::Writes => SerializedAccessKind::WRITE,
-        AccessKind::Acquires => SerializedAccessKind::ACQUIRES,
     } as u8)?;
     binary.push(
         if acc.negated {
@@ -1678,6 +1670,14 @@ impl ScriptSerializer {
     fn serialize_main(&mut self, binary: &mut BinaryData, script: &CompiledScript) -> Result<()> {
         serialize_ability_sets(binary, &script.type_parameters)?;
         serialize_signature_index(binary, &script.parameters)?;
+        if self.common.major_version >= VERSION_8 {
+            serialize_access_specifiers(binary, &script.access_specifiers)?
+        } else if script.access_specifiers.is_some() {
+            return Err(anyhow!(
+                "Access specifiers on scripts not supported in bytecode version {}",
+                self.common.major_version
+            ));
+        }
         serialize_code_unit(self.common.major_version(), binary, &script.code)?;
         Ok(())
     }
