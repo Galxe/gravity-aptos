@@ -17,7 +17,7 @@ pub struct ChainIdResource {
 
 impl ChainIdResource {
     pub fn chain_id(&self) -> ChainId {
-        ChainId::new(self.chain_id as u8)
+        ChainId::new(self.chain_id as u64)
     }
 }
 
