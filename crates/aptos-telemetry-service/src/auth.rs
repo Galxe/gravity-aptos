@@ -48,7 +48,7 @@ pub async fn handle_auth(context: Context, body: AuthRequest) -> Result<impl Rep
     const ID_SIZE: usize = CHAIN_ID_LENGTH + PeerId::LENGTH;
     const PROLOGUE_SIZE: usize = CHAIN_ID_LENGTH + PeerId::LENGTH + x25519::PUBLIC_KEY_SIZE;
     let mut prologue = [0; PROLOGUE_SIZE];
-    prologue[..CHAIN_ID_LENGTH].copy_from_slice(&[body.chain_id.id()]);
+    prologue[..CHAIN_ID_LENGTH].copy_from_slice(&[body.chain_id.id() as u8]);
     prologue[CHAIN_ID_LENGTH..ID_SIZE].copy_from_slice(body.peer_id.as_ref());
     prologue[ID_SIZE..PROLOGUE_SIZE].copy_from_slice(body.server_public_key.as_slice());
 
