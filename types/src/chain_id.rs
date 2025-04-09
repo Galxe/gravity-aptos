@@ -74,7 +74,7 @@ impl FromStr for NamedChain {
 /// Note: u7 in a u8 is uleb-compatible, and any usage of this should be aware
 /// that this field maybe updated to be uleb64 in the future
 #[derive(Clone, Copy, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct ChainId(u8);
+pub struct ChainId(u64);
 
 impl ChainId {
     /// Returns true iff the chain ID matches testnet
@@ -123,9 +123,7 @@ where
         where
             E: serde::de::Error,
         {
-            Ok(ChainId::new(
-                u8::try_from(value).map_err(serde::de::Error::custom)?,
-            ))
+            Ok(ChainId::new(value))
         }
     }
 
@@ -151,13 +149,13 @@ impl fmt::Display for ChainId {
 
 impl From<u64> for ChainId {
     fn from(value: u64) -> Self {
-        ChainId(value as u8)
+        ChainId(value)
     }
 }
 
 impl Into<u64> for ChainId {
     fn into(self) -> u64 {
-        self.0 as u64
+        self.0
     }
 }
 
@@ -193,12 +191,12 @@ impl FromStr for ChainId {
 }
 
 impl ChainId {
-    pub fn new(id: u8) -> Self {
+    pub fn new(id: u64) -> Self {
         assert!(id > 0, "cannot have chain ID with 0");
         Self(id)
     }
 
-    pub fn id(&self) -> u8 {
+    pub fn id(&self) -> u64 {
         self.0
     }
 
