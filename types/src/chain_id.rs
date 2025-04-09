@@ -33,7 +33,7 @@ const PREMAINNET: &str = "premainnet";
 impl NamedChain {
     fn str_to_chain_id(string: &str) -> Result<ChainId> {
         let named_chain = NamedChain::from_str(string)?;
-        Ok(ChainId::new(named_chain.id()))
+        Ok(ChainId::new(named_chain.id() as u64))
     }
 
     pub fn id(&self) -> u8 {
@@ -185,7 +185,7 @@ impl FromStr for ChainId {
         NamedChain::str_to_chain_id(s).or_else(|_err| {
             let value = s.parse::<u8>()?;
             ensure!(value > 0, "cannot have chain ID with 0");
-            Ok(ChainId::new(value))
+            Ok(ChainId::new(value as u64))
         })
     }
 }
@@ -201,15 +201,15 @@ impl ChainId {
     }
 
     pub fn test() -> Self {
-        ChainId::new(NamedChain::TESTING.id())
+        ChainId::new(NamedChain::TESTING.id() as u64)
     }
 
     pub fn testnet() -> Self {
-        ChainId::new(NamedChain::TESTNET.id())
+        ChainId::new(NamedChain::TESTNET.id() as u64)
     }
 
     pub fn mainnet() -> Self {
-        ChainId::new(NamedChain::MAINNET.id())
+        ChainId::new(NamedChain::MAINNET.id() as u64)
     }
 }
 
