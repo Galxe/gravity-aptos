@@ -30,7 +30,7 @@ impl LedgerInfo {
     ) -> Self {
         let ledger_info = info.ledger_info();
         Self {
-            chain_id: chain_id.id(),
+            chain_id: chain_id.id() as u8,
             epoch: U64::from(ledger_info.epoch()),
             ledger_version: ledger_info.version().into(),
             oldest_ledger_version: oldest_ledger_version.into(),
