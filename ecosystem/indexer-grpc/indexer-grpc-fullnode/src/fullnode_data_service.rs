@@ -73,7 +73,7 @@ impl FullnodeData for FullnodeDataService {
                 tx.clone(),
             );
             // Sends init message (one time per request) to the client in the with chain id and starting version. Basically a handshake
-            let init_status = get_status(StatusType::Init, starting_version, None, ledger_chain_id);
+            let init_status = get_status(StatusType::Init, starting_version, None, ledger_chain_id as u8);
             match tx.send(Result::<_, Status>::Ok(init_status)).await {
                 Ok(_) => {
                     // TODO: Add request details later
@@ -117,7 +117,7 @@ impl FullnodeData for FullnodeDataService {
                     StatusType::BatchEnd,
                     coordinator.current_version,
                     Some(max_version),
-                    ledger_chain_id,
+                    ledger_chain_id as u8,
                 );
                 let channel_size = TRANSACTION_CHANNEL_SIZE - tx.capacity();
                 CHANNEL_SIZE
