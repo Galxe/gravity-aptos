@@ -64,6 +64,7 @@ aptos-network-discovery = { workspace = true }
 aptos-network-builder = { workspace = true }
 aptos-netcore = { workspace = true }
 aptos-network = { workspace = true }
+aptos-memsocket = { workspace = true }
 
 [features]
 default = [
