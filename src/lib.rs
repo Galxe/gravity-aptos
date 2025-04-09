@@ -49,3 +49,7 @@ pub use aptos_validator_transaction_pool;
 pub use aptos_vault_client;
 pub use move_core_types;
 pub use aptos_consensus;
+pub use aptos_network_discovery;
+pub use aptos_network_builder;
+pub use aptos_network;
+pub use aptos_netcore;

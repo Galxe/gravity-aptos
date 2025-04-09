@@ -60,6 +60,10 @@ aptos-num-variants = { workspace = true }
 aptos-telemetry = { workspace = true }
 aptos-telemetry-service = { workspace = true }
 aptos-consensus = { workspace = true }
+aptos-network-discovery = { workspace = true }
+aptos-network-builder = { workspace = true }
+aptos-netcore = { workspace = true }
+aptos-network = { workspace = true }
 
 [features]
 default = [
