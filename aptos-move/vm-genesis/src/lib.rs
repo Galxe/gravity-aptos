@@ -430,7 +430,7 @@ fn initialize(
         vec![],
         serialize_values(&vec![
             MoveValue::vector_u8(gas_schedule_blob),
-            MoveValue::U8(chain_id.id()),
+            MoveValue::U8(chain_id.id() as u8),
             MoveValue::U64(APTOS_MAX_KNOWN_VERSION.major),
             MoveValue::vector_u8(consensus_config_bytes),
             MoveValue::vector_u8(execution_config_bytes),

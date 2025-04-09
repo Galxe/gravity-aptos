@@ -64,7 +64,7 @@ impl<'a> CoinClient<'a> {
                 .unwrap()
                 .as_secs()
                 + options.timeout_secs,
-            ChainId::new(chain_id),
+            ChainId::new(chain_id as u64),
         )
         .sender(from_account.address())
         .sequence_number(from_account.sequence_number())
