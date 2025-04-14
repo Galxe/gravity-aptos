@@ -246,6 +246,16 @@ pub static TXN_DEDUP_SECONDS: Lazy<Histogram> = Lazy::new(|| {
     .unwrap()
 });
 
+pub static BLOCK_PREPARER_LATENCY: Lazy<DurationHistogram> = Lazy::new(|| {
+    DurationHistogram::new(
+        register_histogram!(
+            "aptos_execution_block_preparer_seconds",
+            "The time spent in block preparer",
+        )
+        .unwrap(),
+    )
+});
+
 /// Transaction dedup number of filtered
 pub static TXN_DEDUP_FILTERED: Lazy<Histogram> = Lazy::new(|| {
     register_avg_counter(
