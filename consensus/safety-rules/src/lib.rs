@@ -5,7 +5,7 @@
 #![forbid(unsafe_code)]
 
 mod consensus_state;
-mod counters;
+pub mod counters;
 mod error;
 mod local_client;
 mod logging;
