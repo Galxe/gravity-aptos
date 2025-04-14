@@ -675,9 +675,8 @@ pub static GENESIS_BLOCK_ID: Lazy<HashValue> = Lazy::new(|| {
     // This maintains the invariant that block.id() == block.hash(), for
     // the genesis block and allows us to (de/)serialize it consistently
     HashValue::new([
-        0x5E, 0x10, 0xBA, 0xD4, 0x5B, 0x35, 0xED, 0x92, 0x9C, 0xD6, 0xD2, 0xC7, 0x09, 0x8B, 0x13,
-        0x5D, 0x02, 0xDD, 0x25, 0x9A, 0xE8, 0x8A, 0x8D, 0x09, 0xF4, 0xEB, 0x5F, 0xBA, 0xE9, 0xA6,
-        0xF6, 0xE4,
+        141, 91, 216, 66, 168, 139, 218, 32, 132, 186, 161, 251, 250, 51, 34, 197, 38, 71, 196,
+        135, 49, 116, 247, 25, 67, 147, 163, 137, 28, 58, 62, 73,
     ])
 });
 
