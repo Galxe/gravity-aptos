@@ -92,7 +92,7 @@ impl PeerSetCacheUpdater {
 
         let (peer_addrs, state) = response.into_parts();
 
-        let chain_id = ChainId::new(state.chain_id);
+        let chain_id = ChainId::new(state.chain_id as u64);
 
         let mut validator_cache = self.validators.write();
         let mut vfn_cache = self.validator_fullnodes.write();

@@ -20,6 +20,7 @@ pub const SYSTEM_TTL_INDEX_LABEL: &str = "system_ttl";
 pub const TIMELINE_INDEX_LABEL: &str = "timeline";
 pub const PARKING_LOT_INDEX_LABEL: &str = "parking_lot";
 pub const TRANSACTION_HASH_INDEX_LABEL: &str = "transaction_hash";
+pub const TRANSACTION_STORE_INDEX_LABEL: &str = "transaction_store";
 pub const SIZE_BYTES_LABEL: &str = "size_bytes";
 
 // Core mempool stages labels
@@ -226,6 +227,22 @@ static CORE_MEMPOOL_TXN_LATENCIES: Lazy<HistogramVec> = Lazy::new(|| {
     .unwrap()
 });
 
+pub static MEMPOOL_TXN_ADD_COUNT: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "aptos_core_mempool_add_txns_count",
+        "Number of txns added to core mempool"
+    )
+    .unwrap()
+});
+
+pub static MEMPOOL_TXN_COMMIT_COUNT: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "aptos_core_mempool_commit_txns_count",
+        "Number of txns added to core mempool"
+    )
+    .unwrap()
+});
+
 pub static TXN_E2E_USE_CASE_COMMIT_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "aptos_txn_e2e_use_case_commit_latency",
@@ -339,6 +356,14 @@ pub static MEMPOOL_SERVICE_BYTES_GET_BLOCK: Lazy<Histogram> = Lazy::new(|| {
     register_histogram!(
         "aptos_mempool_service_bytes_get_block",
         "Histogram for the number of txns per (mempool returned for proposal) blocks."
+    )
+    .unwrap()
+});
+
+pub static MEMPOOL_TXN_COUNT_IN_GET_BACTH: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram!(
+        "aptos_mempool_service_txn_get_block",
+        "Histogram for the number of txns per (mempool returned for batch generator) blocks."
     )
     .unwrap()
 });

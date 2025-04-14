@@ -95,7 +95,7 @@ impl<'r, 'l> SessionExt<'r, 'l> {
         extensions.add(NativeTransactionContext::new(
             txn_hash.to_vec(),
             session_id.into_script_hash(),
-            chain_id.id(),
+            chain_id.id() as u8,
             maybe_user_transaction_context,
         ));
         extensions.add(NativeCodeContext::default());

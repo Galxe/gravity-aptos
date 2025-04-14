@@ -50,6 +50,22 @@ pub static ERROR_COUNT: Lazy<IntGauge> = Lazy::new(|| {
     .unwrap()
 });
 
+pub static APTOS_EXECUTION_TXNS: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram!(
+        "aptos_execution_transactions",
+        "Number of transactions handled in one request/response between mempool and execution layer",
+    )
+    .unwrap()
+});
+
+pub static APTOS_COMMIT_BLOCKS: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "aptos_commit_blocks",
+        "Number of transactions committed by consensus",
+    )
+    .unwrap()
+});
+
 /// This counter is set to the round of the highest committed block.
 pub static LAST_COMMITTED_ROUND: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!(
@@ -157,6 +173,55 @@ pub static NUM_SENDERS_IN_BLOCK: Lazy<Gauge> = Lazy::new(|| {
     register_gauge!("num_senders_in_block", "Total number of senders in a block").unwrap()
 });
 
+/// Number of executed block in buffer manager
+pub static EXECUTED_BLOCK_COUNTER: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "aptos_consensus_buffer_manager_executed_block_counter",
+        "Number of blocks processed by buffer manager"
+    )
+    .unwrap()
+});
+
+pub static SEND_TO_EXECUTION_BLOCK_COUNTER: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "aptos_consensus_buffer_manager_send_to_execution_block_counter",
+        "Number of blocks sent to execution layer"
+    )
+    .unwrap()
+});
+
+pub static SEND_TO_RECOVER_BLOCK_COUNTER: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "aptos_consensus_buffer_manager_send_to_recover_block_counter",
+        "Number of blocks sent to do recover in execution layer"
+    )
+    .unwrap()
+});
+
+pub static SEND_TO_PERSISTING_BLOCK_COUNTER: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "aptos_consensus_buffer_manager_send_to_persisting_block_counter",
+        "Number of blocks sent to do persisting in execution layer"
+    )
+    .unwrap()
+});
+
+pub static CREATED_EXECUTED_BLOCK_COUNTER: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "aptos_consensus_buffer_manager_created_executed_block_counter",
+        "Number of blocks created by buffer manager"
+    )
+    .unwrap()
+});
+
+pub static FINALIZED_EXECUTED_BLOCK_COUNTER: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "aptos_consensus_buffer_manager_finalized_executed_block_counter",
+        "Number of blocks finalized by buffer manager"
+    )
+    .unwrap()
+});
+
 /// Transaction shuffling call latency
 pub static TXN_SHUFFLE_SECONDS: Lazy<Histogram> = Lazy::new(|| {
     register_histogram!(
@@ -179,6 +244,16 @@ pub static TXN_DEDUP_SECONDS: Lazy<Histogram> = Lazy::new(|| {
         exponential_buckets(/*start=*/ 1e-6, /*factor=*/ 2.0, /*count=*/ 30).unwrap(),
     )
     .unwrap()
+});
+
+pub static BLOCK_PREPARER_LATENCY: Lazy<DurationHistogram> = Lazy::new(|| {
+    DurationHistogram::new(
+        register_histogram!(
+            "aptos_execution_block_preparer_seconds",
+            "The time spent in block preparer",
+        )
+        .unwrap(),
+    )
 });
 
 /// Transaction dedup number of filtered
@@ -809,6 +884,60 @@ const BLOCK_TRACING_BUCKETS: &[f64] = &[
     1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0,
     4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 10.0,
 ];
+
+pub static PIPELINE_INSERTION_TO_EXECUTED_TIME: Lazy<DurationHistogram> = Lazy::new(|| {
+    DurationHistogram::new(
+        register_histogram!(
+            "aptos_consensus_pipeline_insertion_to_executed_time",
+            "Histogram for the time it takes for a block to be executed after being inserted into the pipeline"
+        ).unwrap()
+    )
+});
+
+pub static PIPELINE_ENTRY_TO_INSERTED_TIME: Lazy<DurationHistogram> = Lazy::new(|| {
+    DurationHistogram::new(
+        register_histogram!(
+            "aptos_consensus_pipeline_entry_to_inserted_time",
+            "Histogram for the time it takes for a block to be inserted into the pipeline after being received"
+        ).unwrap()
+    )
+});
+
+pub static PREPARE_BLOCK_SIG_VERIFICATION_TIME: Lazy<DurationHistogram> = Lazy::new(|| {
+    DurationHistogram::new(
+        register_histogram!(
+            "aptos_consensus_prepare_block_sig_verification_time",
+            "Histogram for the time it takes to verify the signatures of a block after it is prepared"
+        ).unwrap()
+    )
+});
+
+pub static PREPARE_BLOCK_WAIT_TIME: Lazy<DurationHistogram> = Lazy::new(|| {
+    DurationHistogram::new(
+        register_histogram!(
+            "aptos_consensus_prepare_block_wait_time",
+            "Histogram for the time the block waits after it enters the pipeline before the block prepration starts"
+        ).unwrap()
+    )
+});
+
+pub static EXECUTE_BLOCK_WAIT_TIME: Lazy<DurationHistogram> = Lazy::new(|| {
+    DurationHistogram::new(
+        register_histogram!(
+            "aptos_consensus_execute_block_wait_time",
+            "Histogram for the time the block waits after the block is prepared before the block execution starts"
+        ).unwrap()
+    )
+});
+
+pub static APPLY_LEDGER_WAIT_TIME: Lazy<DurationHistogram> = Lazy::new(|| {
+    DurationHistogram::new(
+        register_histogram!(
+            "aptos_consensus_apply_ledger_wait_time",
+            "Histogram for the time the block waits after the block is executed before the ledger is applied"
+        ).unwrap()
+    )
+});
 
 /// Traces block movement throughout the node
 pub static BLOCK_TRACING: Lazy<HistogramVec> = Lazy::new(|| {
