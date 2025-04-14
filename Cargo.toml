@@ -59,6 +59,7 @@ aptos-proxy = { workspace = true }
 aptos-num-variants = { workspace = true }
 aptos-telemetry = { workspace = true }
 aptos-telemetry-service = { workspace = true }
+aptos-consensus = { workspace = true }
 
 [features]
 default = [

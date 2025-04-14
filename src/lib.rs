@@ -48,3 +48,4 @@ pub use aptos_types;
 pub use aptos_validator_transaction_pool;
 pub use aptos_vault_client;
 pub use move_core_types;
+pub use aptos_consensus;
