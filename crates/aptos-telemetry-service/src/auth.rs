@@ -44,7 +44,7 @@ pub async fn handle_auth(context: Context, body: AuthRequest) -> Result<impl Rep
     }
 
     // build the prologue (chain_id | peer_id | public_key)
-    const CHAIN_ID_LENGTH: usize = 1;
+    const CHAIN_ID_LENGTH: usize = 8;
     const ID_SIZE: usize = CHAIN_ID_LENGTH + PeerId::LENGTH;
     const PROLOGUE_SIZE: usize = CHAIN_ID_LENGTH + PeerId::LENGTH + x25519::PUBLIC_KEY_SIZE;
     let mut prologue = [0; PROLOGUE_SIZE];
