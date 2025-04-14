@@ -19,7 +19,7 @@ extern crate core;
 
 mod block_storage;
 mod consensusdb;
-mod dag;
+pub mod dag;
 mod epoch_manager;
 mod error;
 mod liveness;
