@@ -366,11 +366,12 @@ where
             .unwrap_or_else(|error| {
                 panic!("Trusted peers must exist, but found error: {:?}", error)
             });
-        assert!(
-            trusted_peers.is_empty(),
-            "Trusted peers must be empty. Found: {:?}",
-            trusted_peers
-        );
+        // TODO(gravity_lightman)
+        // assert!(
+        //     trusted_peers.is_empty(),
+        //     "Trusted peers must be empty. Found: {:?}",
+        //     trusted_peers
+        // );
 
         info!(
             NetworkSchema::new(&network_context),
