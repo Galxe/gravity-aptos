@@ -54,3 +54,4 @@ pub use aptos_network_builder;
 pub use aptos_network;
 pub use aptos_netcore;
 pub use aptos_memsocket;
+pub use aptos_safety_rules;

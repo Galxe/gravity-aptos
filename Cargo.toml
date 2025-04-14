@@ -65,6 +65,7 @@ aptos-network-builder = { workspace = true }
 aptos-netcore = { workspace = true }
 aptos-network = { workspace = true }
 aptos-memsocket = { workspace = true }
+aptos-safety-rules = { workspace = true }
 
 [features]
 default = [
