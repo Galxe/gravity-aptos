@@ -325,7 +325,7 @@ mock! {
 
         fn save_transactions<'a, 'b>(
             &self,
-            chunk: ChunkToCommit<'b>,
+            chunk: Option<ChunkToCommit<'b>>,
             ledger_info_with_sigs: Option<&'a LedgerInfoWithSignatures>,
             sync_commit: bool,
         ) -> Result<()>;

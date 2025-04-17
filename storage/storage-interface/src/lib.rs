@@ -542,7 +542,7 @@ pub trait DbWriter: Send + Sync {
     /// Persist transactions. Called by state sync to save verified transactions to the DB.
     fn save_transactions(
         &self,
-        chunk: ChunkToCommit,
+        chunk: Option<ChunkToCommit>,
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,
         sync_commit: bool,
     ) -> Result<()> {

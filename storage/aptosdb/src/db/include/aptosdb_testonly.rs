@@ -137,7 +137,7 @@ impl AptosDB {
             is_reconfig,
         };
 
-        self.save_transactions( chunk, ledger_info_with_sigs, sync_commit)
+        self.save_transactions( Some(chunk), ledger_info_with_sigs, sync_commit)
     }
 
     fn disassemble_txns_to_commit(txns_to_commit: &[TransactionToCommit]) -> (
