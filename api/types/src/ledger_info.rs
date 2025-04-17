@@ -50,7 +50,7 @@ impl LedgerInfo {
         ledger_timestamp: u64,
     ) -> Self {
         Self {
-            chain_id: chain_id.id(),
+            chain_id: chain_id.id() as u8,
             epoch: epoch.into(),
             ledger_version: ledger_version.into(),
             oldest_ledger_version: oldest_ledger_version.into(),

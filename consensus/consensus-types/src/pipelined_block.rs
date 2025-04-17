@@ -518,8 +518,5 @@ pub struct ExecutionSummary {
     pub to_retry: u64,
     pub execution_time: Duration,
     pub root_hash: HashValue,
-<<<<<<< HEAD
-=======
     pub gas_used: Option<u64>,
->>>>>>> aptos-node-v1.28.7
 }
