@@ -84,7 +84,7 @@ impl UseCaseAwareTransaction for SignatureVerifiedTransaction {
             payload.expect("No payload found for SignatureVerifiedTransaction in parse_use_case");
 
         match payload {
-            Script(_) | ModuleBundle(_) | Multisig(_) => Others,
+            Script(_) | ModuleBundle(_) | Multisig(_) | GTxnBytes(_) => Others,
             EntryFunction(entry_fun) => {
                 let module_id = entry_fun.module();
                 if module_id.address().is_special() {
