@@ -19,7 +19,7 @@ use aptos_executor_types::{
     state_compute_result::StateComputeResult, BlockExecutorTrait, ExecutorError, ExecutorResult,
 };
 use aptos_experimental_runtimes::thread_manager::optimal_min_len;
-use aptos_logger::{debug, warn};
+use aptos_logger::{debug, warn, error};
 use aptos_types::{
     block_executor::{config::BlockExecutorConfigFromOnchain, partitioner::ExecutableBlock},
     block_metadata_ext::BlockMetadataExt,
@@ -465,6 +465,7 @@ fn process_failed_to_send_result(
             e,
             &counters::PIPELINE_DISCARDED_EXECUTOR_ERROR_COUNT,
             block_id,
+            false,
         );
     }
 }

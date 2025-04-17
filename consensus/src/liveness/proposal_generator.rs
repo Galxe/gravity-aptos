@@ -593,16 +593,6 @@ impl ProposalGenerator {
             let (validator_txns, mut payload) = self
                 .payload_client
                 .pull_payload(
-<<<<<<< HEAD
-                    self.quorum_store_poll_time.saturating_sub(proposal_delay),
-                    self.max_block_txns,
-                    max_block_txns_after_filtering,
-                    max_txns_from_block_to_execute.unwrap_or(max_block_txns_after_filtering),
-                    max_block_bytes,
-                    // TODO: Set max_inline_txns and max_inline_bytes correctly
-                    self.max_inline_txns,
-                    self.max_inline_bytes,
-=======
                     PayloadPullParameters {
                         max_poll_time: self.quorum_store_poll_time.saturating_sub(proposal_delay),
                         max_txns: max_block_txns,
@@ -617,7 +607,6 @@ impl ProposalGenerator {
                         recent_max_fill_fraction: max_fill_fraction,
                         block_timestamp: timestamp,
                     },
->>>>>>> aptos-node-v1.28.7
                     validator_txn_filter,
                     wait_callback,
                 )
