@@ -206,7 +206,7 @@ impl LogEntry {
         let namespace = NAMESPACE.as_deref();
 
         let peer_id: Option<&str>;
-        let chain_id: Option<u8>;
+        let chain_id: Option<u64>;
 
         #[cfg(node_identity)]
         {
