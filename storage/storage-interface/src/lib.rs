@@ -546,6 +546,7 @@ pub trait DbWriter: Send + Sync {
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,
         sync_commit: bool,
     ) -> Result<()> {
+        let chunk = chunk.unwrap();
         // For reconfig suffix.
         if ledger_info_with_sigs.is_none() && chunk.is_empty() {
             return Ok(());
