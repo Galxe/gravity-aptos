@@ -154,7 +154,7 @@ pub(crate) fn run_script_prologue(
                     MoveValue::U64(txn_expiration_timestamp_secs)
                         .simple_serialize()
                         .unwrap(),
-                    MoveValue::U8(chain_id.id()).simple_serialize().unwrap(),
+                    MoveValue::U8(chain_id.id() as u8).simple_serialize().unwrap(),
                     MoveValue::Bool(is_simulation).simple_serialize().unwrap(),
                 ];
                 (
@@ -186,7 +186,7 @@ pub(crate) fn run_script_prologue(
                     MoveValue::U64(txn_expiration_timestamp_secs)
                         .simple_serialize()
                         .unwrap(),
-                    MoveValue::U8(chain_id.id()).simple_serialize().unwrap(),
+                    MoveValue::U8(chain_id.id() as u8).simple_serialize().unwrap(),
                     MoveValue::Bool(is_simulation).simple_serialize().unwrap(),
                 ];
                 (
@@ -232,7 +232,7 @@ pub(crate) fn run_script_prologue(
                     MoveValue::U64(txn_gas_price.into()),
                     MoveValue::U64(txn_max_gas_units.into()),
                     MoveValue::U64(txn_expiration_timestamp_secs),
-                    MoveValue::U8(chain_id.id()),
+                    MoveValue::U8(chain_id.id() as u8),
                     MoveValue::Bool(is_simulation),
                 ];
                 (
@@ -251,7 +251,7 @@ pub(crate) fn run_script_prologue(
                     MoveValue::U64(txn_gas_price.into()),
                     MoveValue::U64(txn_max_gas_units.into()),
                     MoveValue::U64(txn_expiration_timestamp_secs),
-                    MoveValue::U8(chain_id.id()),
+                    MoveValue::U8(chain_id.id() as u8),
                 ];
                 (&APTOS_TRANSACTION_VALIDATION.fee_payer_prologue_name, args)
             }
@@ -266,7 +266,7 @@ pub(crate) fn run_script_prologue(
                     MoveValue::U64(txn_gas_price.into()),
                     MoveValue::U64(txn_max_gas_units.into()),
                     MoveValue::U64(txn_expiration_timestamp_secs),
-                    MoveValue::U8(chain_id.id()),
+                    MoveValue::U8(chain_id.id() as u8),
                     MoveValue::Bool(is_simulation),
                 ];
                 (
@@ -283,7 +283,7 @@ pub(crate) fn run_script_prologue(
                     MoveValue::U64(txn_gas_price.into()),
                     MoveValue::U64(txn_max_gas_units.into()),
                     MoveValue::U64(txn_expiration_timestamp_secs),
-                    MoveValue::U8(chain_id.id()),
+                    MoveValue::U8(chain_id.id() as u8),
                 ];
                 (
                     &APTOS_TRANSACTION_VALIDATION.multi_agent_prologue_name,
@@ -300,7 +300,7 @@ pub(crate) fn run_script_prologue(
                     MoveValue::U64(txn_gas_price.into()),
                     MoveValue::U64(txn_max_gas_units.into()),
                     MoveValue::U64(txn_expiration_timestamp_secs),
-                    MoveValue::U8(chain_id.id()),
+                    MoveValue::U8(chain_id.id() as u8),
                     MoveValue::vector_u8(txn_data.script_hash.clone()),
                     MoveValue::Bool(is_simulation),
                 ];
@@ -316,7 +316,7 @@ pub(crate) fn run_script_prologue(
                     MoveValue::U64(txn_gas_price.into()),
                     MoveValue::U64(txn_max_gas_units.into()),
                     MoveValue::U64(txn_expiration_timestamp_secs),
-                    MoveValue::U8(chain_id.id()),
+                    MoveValue::U8(chain_id.id() as u8),
                     MoveValue::vector_u8(txn_data.script_hash.clone()),
                 ];
                 (&APTOS_TRANSACTION_VALIDATION.script_prologue_name, args)
