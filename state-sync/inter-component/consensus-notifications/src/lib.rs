@@ -41,6 +41,7 @@ pub trait ConsensusNotificationSender: Send + Sync {
         &self,
         transactions: Vec<Transaction>,
         subscribable_events: Vec<ContractEvent>,
+        block_number: u64,
     ) -> Result<(), Error>;
 
     /// Notifies state sync to synchronize storage for at least the specified duration,
@@ -95,6 +96,7 @@ impl ConsensusNotificationSender for ConsensusNotifier {
         &self,
         transactions: Vec<Transaction>,
         subscribable_events: Vec<ContractEvent>,
+        block_number: u64,
     ) -> Result<(), Error> {
         // Only send a notification if transactions have been committed
         if transactions.is_empty() {
