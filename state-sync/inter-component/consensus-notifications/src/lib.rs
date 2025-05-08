@@ -105,7 +105,7 @@ impl ConsensusNotificationSender for ConsensusNotifier {
 
         // Create a consensus commit notification
         let (notification, callback_receiver) =
-            ConsensusCommitNotification::new(transactions, subscribable_events);
+            ConsensusCommitNotification::new(transactions, subscribable_events, block_number);
         let commit_notification = ConsensusNotification::NotifyCommit(notification);
 
         // Send the notification to state sync
