@@ -92,6 +92,7 @@ impl ConsensusNotifier {
 
 #[async_trait]
 impl ConsensusNotificationSender for ConsensusNotifier {
+    // pass the params to handle_consensus_commit_notification in gravity-sdk
     async fn notify_new_commit(
         &self,
         transactions: Vec<Transaction>,
