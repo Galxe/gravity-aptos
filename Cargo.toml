@@ -9,6 +9,7 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 
 [dependencies]
+api-types = { workspace = true }
 aptos-bitvec = { workspace = true }
 aptos-id-generator = { workspace = true }
 aptos-compression = { workspace = true }
