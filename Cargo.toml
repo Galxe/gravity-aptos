@@ -83,7 +83,6 @@ default = [
 resolver = "2"
 
 members = [
-    "api-types",
     "api",
     "api/openapi-spec-generator",
     "api/test-context",
@@ -134,6 +133,7 @@ members = [
     "consensus",
     "consensus/consensus-types",
     "consensus/safety-rules",
+    "crates/api-types",
     "crates/aptos",
     "crates/aptos-admin-service",
     "crates/aptos-api-tester",
@@ -368,7 +368,7 @@ repository = "https://github.com/aptos-labs/aptos-core"
 rust-version = "1.78.0"
 
 [workspace.dependencies]
-api-types = { path = "api-types" }
+api-types = { path = "crates/api-types" }
 # Internal crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.
 aptos = { path = "crates/aptos" }
