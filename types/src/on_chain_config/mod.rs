@@ -43,11 +43,12 @@ pub use self::{
         AptosVersion, APTOS_MAX_KNOWN_VERSION, APTOS_VERSION_2, APTOS_VERSION_3, APTOS_VERSION_4,
     },
     commit_history::CommitHistoryResource,
-    consensus_config::{
-        AnchorElectionMode, ConsensusAlgorithmConfig, ConsensusConfigV1, DagConsensusConfigV1,
-        LeaderReputationType, OnChainConsensusConfig, ProposerAndVoterConfig, ProposerElectionType,
-        ValidatorTxnConfig, DEFAULT_WINDOW_SIZE,
-    },
+    consensus_config::OnChainConsensusConfig,
+    // consensus_config::{
+    //     AnchorElectionMode, ConsensusAlgorithmConfig, ConsensusConfigV1, DagConsensusConfigV1,
+    //     LeaderReputationType, OnChainConsensusConfig, ProposerAndVoterConfig, ProposerElectionType,
+    //     ValidatorTxnConfig, DEFAULT_WINDOW_SIZE,
+    // },
     execution_config::{
         BlockGasLimitType, ExecutionConfigV1, ExecutionConfigV2, ExecutionConfigV4,
         OnChainExecutionConfig, TransactionDeduperType, TransactionShufflerType,

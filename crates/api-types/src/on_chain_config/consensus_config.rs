@@ -19,7 +19,7 @@ pub enum ConsensusAlgorithmConfig {
         main: ConsensusConfigV1,
         quorum_store_enabled: bool,
     },
-    DAG(DagConsensusConfigV1),
+    // DAG(DagConsensusConfigV1),
     JolteonV2 {
         main: ConsensusConfigV1,
         quorum_store_enabled: bool,
@@ -62,7 +62,7 @@ impl ConsensusAlgorithmConfig {
                 quorum_store_enabled,
                 ..
             } => *quorum_store_enabled,
-            ConsensusAlgorithmConfig::DAG(_) => true,
+            // ConsensusAlgorithmConfig::DAG(_) => true,
         }
     }
 
@@ -79,7 +79,7 @@ impl ConsensusAlgorithmConfig {
         match self {
             ConsensusAlgorithmConfig::Jolteon { .. }
             | ConsensusAlgorithmConfig::JolteonV2 { .. } => false,
-            ConsensusAlgorithmConfig::DAG(_) => true,
+            // ConsensusAlgorithmConfig::DAG(_) => true,
         }
     }
 
@@ -107,12 +107,12 @@ impl ConsensusAlgorithmConfig {
         }
     }
 
-    pub fn unwrap_dag_config_v1(&self) -> &DagConsensusConfigV1 {
-        match self {
-            ConsensusAlgorithmConfig::DAG(dag) => dag,
-            _ => unreachable!("not a dag config"),
-        }
-    }
+    // pub fn unwrap_dag_config_v1(&self) -> &DagConsensusConfigV1 {
+    //     match self {
+    //         ConsensusAlgorithmConfig::DAG(dag) => dag,
+    //         _ => unreachable!("not a dag config"),
+    //     }
+    // }
 
     pub fn unwrap_jolteon_config_v1(&self) -> &ConsensusConfigV1 {
         match self {
@@ -519,12 +519,12 @@ pub struct ProposerAndVoterConfig {
     pub use_history_from_previous_epoch_max_count: u32,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AnchorElectionMode {
-    RoundRobin,
-    LeaderReputation(LeaderReputationType),
-}
+// #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+// #[serde(rename_all = "snake_case")]
+// pub enum AnchorElectionMode {
+//     RoundRobin,
+//     LeaderReputation(LeaderReputationType),
+// }
 
 // #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 // pub struct DagConsensusConfigV1 {
