@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 use anyhow::{anyhow, Result};
+use api_types::config_storage::ConfigStorage;
 use aptos_channels::{aptos_channel, message_queues::QueueStyle};
 use aptos_id_generator::{IdGenerator, U64IdGenerator};
 use aptos_infallible::RwLock;
@@ -22,12 +23,7 @@ use aptos_types::{
 use futures::{channel::mpsc::SendError, stream::FusedStream, Stream};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet},
-    fmt,
-    iter::FromIterator,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
+    collections::{HashMap, HashSet}, fmt, iter::FromIterator, pin::Pin, str::FromStr, sync::Arc, task::{Context, Poll}
 };
 use thiserror::Error;
 
@@ -87,10 +83,11 @@ pub struct EventSubscriptionService {
 
     // Internal subscription ID generator
     subscription_id_generator: U64IdGenerator,
+
+    gravity_storage: Option<Arc<dyn ConfigStorage>>,
 }
 
 impl EventSubscriptionService {
-    /// 修改成可以让gravity-sdk传递一个ConfigStorage的实例.
     pub fn new(storage: Arc<RwLock<DbReaderWriter>>) -> Self {
         Self {
             event_key_subscriptions: HashMap::new(),
@@ -99,7 +96,12 @@ impl EventSubscriptionService {
             reconfig_subscriptions: HashMap::new(),
             storage,
             subscription_id_generator: U64IdGenerator::new(),
+            gravity_storage: None,
         }
+    }
+
+    pub fn set_config_storage(&mut self, gravity_storage: Option<Arc<dyn ConfigStorage>>) {
+        self.gravity_storage = gravity_storage;
     }
 
     /// TODO(gravity_alex): gravity-sdk中暂时不会订阅任何事件，以后会订阅jwk
@@ -269,7 +271,6 @@ impl EventSubscriptionService {
             return Ok(()); // No reconfiguration subscribers!
         }
 
-        // todo 感觉还是只能在dbbackendprovidoer上做文章，改成范性返回值涉及的范围太广了
         let new_configs = self.read_on_chain_configs(version)?;
         for (_, reconfig_subscription) in self.reconfig_subscriptions.iter_mut() {
             reconfig_subscription.notify_subscriber_of_configs(version, new_configs.clone())?;
@@ -320,11 +321,17 @@ impl EventSubscriptionService {
             })?
             .epoch();
 
-        // Return the new on-chain config payload (containing all found configs at this version).
-        Ok(OnChainConfigPayload::new(
+        let mut config = DbBackedOnChainConfig::new(self.storage.read().reader.clone(), version);
+
+        config.set_config_storage(self.gravity_storage.clone());
+        
+        let payload = OnChainConfigPayload::new(
             epoch,
-            DbBackedOnChainConfig::new(self.storage.read().reader.clone(), version),
-        ))
+            config,
+        );
+
+        // Return the new on-chain config payload (containing all found configs at this version).
+        Ok(payload)
     }
 }
 
@@ -421,11 +428,16 @@ impl ReconfigSubscription {
 pub struct DbBackedOnChainConfig {
     pub reader: Arc<dyn DbReader>,
     pub version: Version,
+    pub gravity_storage: Option<Arc<dyn ConfigStorage>>,
 }
 
 impl DbBackedOnChainConfig {
     pub fn new(reader: Arc<dyn DbReader>, version: Version) -> Self {
-        Self { reader, version }
+        Self { reader, version, gravity_storage: None }
+    }
+
+    fn set_config_storage(&mut self, gravity_storage: Option<Arc<dyn ConfigStorage>>) {
+        self.gravity_storage = gravity_storage;
     }
 }
 
@@ -433,16 +445,31 @@ impl DbBackedOnChainConfig {
 impl OnChainConfigProvider for DbBackedOnChainConfig {
     fn get<T: OnChainConfig>(&self) -> Result<T> {
         let bytes = self
-            .reader
-            .get_state_value_by_version(&StateKey::on_chain_config::<T>()?, self.version)?
+            .gravity_storage
+            .as_ref()
+            .unwrap()
+            .fetch_config_bytes(
+                api_types::config_storage::OnChainConfig::from_str(T::TYPE_IDENTIFIER).unwrap(),
+                self.version,
+            )
             .ok_or_else(|| {
                 anyhow!(
                     "no config {} found in aptos root account state",
                     T::CONFIG_ID
                 )
             })?
-            .bytes()
             .clone();
+        // let bytes = self
+        //     .reader
+        //     .get_state_value_by_version(&StateKey::on_chain_config::<T>()?, self.version)?
+        //     .ok_or_else(|| {
+        //         anyhow!(
+        //             "no config {} found in aptos root account state",
+        //             T::CONFIG_ID
+        //         )
+        //     })?
+        //     .bytes()
+        //     .clone();
 
         T::deserialize_into_config(&bytes)
     }
