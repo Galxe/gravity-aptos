@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 
-#[derive(Hash, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Hash, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
 pub enum GravityEvent {
     NewEpoch(u64),
     JWK,
