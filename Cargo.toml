@@ -778,7 +778,6 @@ pretty = "0.10.0"
 pretty_assertions = "1.2.1"
 # We set default-features to false so we don't onboard the libpq dep. See more here:
 # https://github.com/aptos-labs/aptos-core/pull/12568
-# 这里面尼玛变相引入了aptos profiler导致了这个tikv jemalloc问题 日
 processor = { git = "https://github.com/Galxe/gravity-aptos-indexer-processors.git", rev = "2fbb3c47981421e1dbd15e736bb41cebaf638524", default-features = false }
 procfs = "0.14.1"
 proc-macro2 = "1.0.38"
