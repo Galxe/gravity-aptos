@@ -3,7 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::on_chain_config::OnChainConfig;
-use api_types::on_chain_config::{consensus_config::{ConsensusAlgorithmConfig, ConsensusConfigV1, LeaderReputationType, ProposerAndVoterConfig, ProposerElectionType, ValidatorTxnConfig, DEFAULT_WINDOW_SIZE}, *};
+pub use api_types::on_chain_config::{
+    consensus_config::{
+        ConsensusAlgorithmConfig, ConsensusConfigV1, LeaderReputationType,
+        ProposerAndVoterConfig, ProposerElectionType, ValidatorTxnConfig,
+        DEFAULT_WINDOW_SIZE
+    }, *
+};
 use anyhow::{format_err, Result};
 // use move_core_types::account_address::AccountAddress;
 use serde::{Deserialize, Serialize};
