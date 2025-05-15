@@ -84,7 +84,7 @@ pub struct EventSubscriptionService {
     // Internal subscription ID generator
     subscription_id_generator: U64IdGenerator,
 
-    gravity_storage: Option<Arc<dyn ConfigStorage>>,
+    gravity_config_storage: Option<Arc<dyn ConfigStorage>>,
 }
 
 impl EventSubscriptionService {
@@ -96,12 +96,12 @@ impl EventSubscriptionService {
             reconfig_subscriptions: HashMap::new(),
             storage,
             subscription_id_generator: U64IdGenerator::new(),
-            gravity_storage: None,
+            gravity_config_storage: None,
         }
     }
 
-    pub fn set_config_storage(&mut self, gravity_storage: Option<Arc<dyn ConfigStorage>>) {
-        self.gravity_storage = gravity_storage;
+    pub fn set_config_storage(&mut self, gravity_config_storage: Option<Arc<dyn ConfigStorage>>) {
+        self.gravity_config_storage = gravity_config_storage;
     }
 
     /// TODO(gravity_alex): gravity-sdk中暂时不会订阅任何事件，以后会订阅jwk
@@ -323,7 +323,7 @@ impl EventSubscriptionService {
 
         let mut config = DbBackedOnChainConfig::new(self.storage.read().reader.clone(), version);
 
-        config.set_config_storage(self.gravity_storage.clone());
+        config.set_config_storage(self.gravity_config_storage.clone());
         
         let payload = OnChainConfigPayload::new(
             epoch,
@@ -411,33 +411,20 @@ impl ReconfigSubscription {
 }
 
 
-/// 需要一个wrapper暂时保存version和config storage实例
-/// pub struct ConfigStorageWrapper {
-///     pub version: Version,
-///     pub config_storage: Arc<dyn ConfigStorage>,
-/// }
-/// 这样之后直接通过这个wrapper在请求的时候只传递conf name即可.
-/// 返回bytes让上层的范性自己负责反序列化就OK
-/// impl ConfigStorage for ConfigStorageWrapper {
-///     fn get_config(&self, name: &str) -> Result<bytes> {
-///         self.config_storage.get_config(name)
-///     }
-/// }
-
 #[derive(Clone)]
 pub struct DbBackedOnChainConfig {
     pub reader: Arc<dyn DbReader>,
     pub version: Version,
-    pub gravity_storage: Option<Arc<dyn ConfigStorage>>,
+    pub gravity_config_storage: Option<Arc<dyn ConfigStorage>>,
 }
 
 impl DbBackedOnChainConfig {
     pub fn new(reader: Arc<dyn DbReader>, version: Version) -> Self {
-        Self { reader, version, gravity_storage: None }
+        Self { reader, version, gravity_config_storage: None }
     }
 
-    fn set_config_storage(&mut self, gravity_storage: Option<Arc<dyn ConfigStorage>>) {
-        self.gravity_storage = gravity_storage;
+    fn set_config_storage(&mut self, gravity_config_storage: Option<Arc<dyn ConfigStorage>>) {
+        self.gravity_config_storage = gravity_config_storage;
     }
 }
 
@@ -445,8 +432,10 @@ impl DbBackedOnChainConfig {
 impl OnChainConfigProvider for DbBackedOnChainConfig {
     fn get<T: OnChainConfig>(&self) -> Result<T> {
         let bytes = self
-            .gravity_storage
+            .gravity_config_storage
+            .clone()
             .as_ref()
+            .clone()
             .unwrap()
             .fetch_config_bytes(
                 api_types::config_storage::OnChainConfig::from_str(T::TYPE_IDENTIFIER).unwrap(),
@@ -455,7 +444,7 @@ impl OnChainConfigProvider for DbBackedOnChainConfig {
             .ok_or_else(|| {
                 anyhow!(
                     "no config {} found in aptos root account state",
-                    T::CONFIG_ID
+                    T::TYPE_IDENTIFIER
                 )
             })?
             .clone();
