@@ -850,7 +850,6 @@ impl FakeExecutor {
                     TransactionPayload::ModuleBundle(..) => {
                         unreachable!("Module bundle payload has been removed")
                     },
-                    TransactionPayload::GTxnBytes(_) => todo!(),
                 };
                 gas_profiler
             },
