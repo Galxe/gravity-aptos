@@ -311,23 +311,24 @@ impl EventSubscriptionService {
         //     })?
         //     .epoch();
 
-        let epoch_bytes = self
-            .gravity_config_storage
-            .as_ref()
-            .unwrap()
-            .fetch_config_bytes(api_types::config_storage::OnChainConfig::Epoch, version)
-            .ok_or_else(|| anyhow!("no config epoch found in aptos root account state"))
-            .unwrap()
-            .clone();
+        // let epoch_bytes = self
+        //     .gravity_config_storage
+        //     .as_ref()
+        //     .unwrap()
+        //     .fetch_config_bytes(api_types::config_storage::OnChainConfig::Epoch, version)
+        //     .ok_or_else(|| anyhow!("no config epoch found in aptos root account state"))
+        //     .unwrap()
+        //     .clone();
 
-        let epoch = bcs::from_bytes::<u64>(&epoch_bytes).unwrap();
+        // let epoch = bcs::from_bytes::<u64>(&epoch_bytes).unwrap();
 
         let mut config = DbBackedOnChainConfig::new(self.storage.read().reader.clone(), version);
 
         config.set_config_storage(self.gravity_config_storage.clone());
 
         let payload = OnChainConfigPayload::new(
-            epoch,
+            // epoch,
+            0,
             config,
         );
 
