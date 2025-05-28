@@ -6,7 +6,17 @@ use std::str::FromStr;
 pub enum OnChainConfig {
     ConsensusConfig,
     ExecutionConfig,
-    ValidatorInfo,
+    ChainId,
+    Configuration,
+    ApprovedExecutionHashes,
+    Version,
+    GasSchedule,
+    JWKConsensusConfig,
+    RandomnessConfigSeqNum,
+    RandomnessConfig,
+    CurrentTimeMicroseconds,
+    PerBlockRandomness,
+    ValidatorSet,
 }
 
 // 实现 FromStr trait 用于从字符串转换为枚举
@@ -17,7 +27,13 @@ impl FromStr for OnChainConfig {
         match s {
             "ConsensusConfig" => Ok(OnChainConfig::ConsensusConfig),
             "ExecutionConfig" => Ok(OnChainConfig::ExecutionConfig),
-            "ValidatorInfo" => Ok(OnChainConfig::ValidatorInfo),
+            "ChainId" => Ok(OnChainConfig::ChainId),
+            "Configuration" => Ok(OnChainConfig::Configuration),
+            "ApprovedExecutionHashes" => Ok(OnChainConfig::ApprovedExecutionHashes),
+            "Version" => Ok(OnChainConfig::Version),
+            "GasSchedule" => Ok(OnChainConfig::GasSchedule),
+            "JWKConsensusConfig" => Ok(OnChainConfig::JWKConsensusConfig),
+            "ValidatorSet" => Ok(OnChainConfig::ValidatorSet),
             _ => Err(format!("Unknown OnChainConfig variant: {}", s)),
         }
     }
@@ -31,14 +47,6 @@ impl TryFrom<String> for OnChainConfig {
         // String 类型可以通过 .parse() 方法调用其 FromStr 实现
         // 或者直接调用 OnChainConfig::from_str(&value)
         value.parse() // 等价于 OnChainConfig::from_str(&value)
-        //
-        // 如果不想依赖 FromStr 的实现，也可以在这里重新实现匹配逻辑：
-        // match value.as_str() { // 注意需要转换为 &str 来匹配
-        //     "ConsensusConfig" => Ok(OnChainConfig::ConsensusConfig),
-        //     "ExecutionConfig" => Ok(OnChainConfig::ExecutionConfig),
-        //     "ValidatorInfo" => Ok(OnChainConfig::ValidatorInfo),
-        //     s => Err(format!("Invalid OnChainConfig variant from String: '{}'", s)),
-        // }
     }
 }
 
