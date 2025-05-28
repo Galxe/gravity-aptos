@@ -23,6 +23,7 @@ aptos-types = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
+bcs = { workspace = true }
 
 [dev-dependencies]
 aptos-crypto = { workspace = true }

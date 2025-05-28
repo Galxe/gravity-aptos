@@ -23,7 +23,13 @@ use aptos_types::{
 use futures::{channel::mpsc::SendError, stream::FusedStream, Stream};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet}, fmt, iter::FromIterator, pin::Pin, str::FromStr, sync::Arc, task::{Context, Poll}
+    collections::{HashMap, HashSet},
+    fmt,
+    iter::FromIterator,
+    pin::Pin,
+    str::FromStr,
+    sync::Arc,
+    task::{Context, Poll},
 };
 use thiserror::Error;
 
@@ -305,12 +311,23 @@ impl EventSubscriptionService {
         //     })?
         //     .epoch();
 
+        let epoch_bytes = self
+            .gravity_config_storage
+            .as_ref()
+            .unwrap()
+            .fetch_config_bytes(api_types::config_storage::OnChainConfig::Epoch, version)
+            .ok_or_else(|| anyhow!("no config epoch found in aptos root account state"))
+            .unwrap()
+            .clone();
+
+        let epoch = bcs::from_bytes::<u64>(&epoch_bytes).unwrap();
+
         let mut config = DbBackedOnChainConfig::new(self.storage.read().reader.clone(), version);
 
         config.set_config_storage(self.gravity_config_storage.clone());
-        
+
         let payload = OnChainConfigPayload::new(
-            0, // Actual epoch is not used in the current implementation. So we set it to 0
+            epoch,
             config,
         );
 
@@ -394,7 +411,6 @@ impl ReconfigSubscription {
     }
 }
 
-
 #[derive(Clone)]
 pub struct DbBackedOnChainConfig {
     pub reader: Arc<dyn DbReader>,
@@ -404,7 +420,11 @@ pub struct DbBackedOnChainConfig {
 
 impl DbBackedOnChainConfig {
     pub fn new(reader: Arc<dyn DbReader>, version: Version) -> Self {
-        Self { reader, version, gravity_config_storage: None }
+        Self {
+            reader,
+            version,
+            gravity_config_storage: None,
+        }
     }
 
     fn set_config_storage(&mut self, gravity_config_storage: Option<Arc<dyn ConfigStorage>>) {

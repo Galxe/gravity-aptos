@@ -17,6 +17,7 @@ pub enum OnChainConfig {
     CurrentTimeMicroseconds,
     PerBlockRandomness,
     ValidatorSet,
+    Epoch,
 }
 
 // 实现 FromStr trait 用于从字符串转换为枚举
@@ -34,6 +35,7 @@ impl FromStr for OnChainConfig {
             "GasSchedule" => Ok(OnChainConfig::GasSchedule),
             "JWKConsensusConfig" => Ok(OnChainConfig::JWKConsensusConfig),
             "ValidatorSet" => Ok(OnChainConfig::ValidatorSet),
+            "Epoch" => Ok(OnChainConfig::Epoch),
             _ => Err(format!("Unknown OnChainConfig variant: {}", s)),
         }
     }
