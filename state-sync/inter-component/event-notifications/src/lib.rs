@@ -287,30 +287,31 @@ impl EventSubscriptionService {
         version: Version,
     ) -> Result<OnChainConfigPayload<DbBackedOnChainConfig>, Error> {
         // 使用执行层提供的config storage的实例. 把version传递进去
-        let db_state_view = &self
-            .storage
-            .read()
-            .reader
-            .state_view_at_version(Some(version))
-            .map_err(|error| {
-                Error::UnexpectedErrorEncountered(format!(
-                    "Failed to create account state view {:?}",
-                    error
-                ))
-            })?;
-        let epoch = ConfigurationResource::fetch_config(&db_state_view)
-            .ok_or_else(|| {
-                Error::UnexpectedErrorEncountered("Configuration resource does not exist!".into())
-            })?
-            .epoch();
+        // let config_storage = ConfigStorageImpl::new(version);
+        // let db_state_view = &self
+        //     .storage
+        //     .read()
+        //     .reader
+        //     .state_view_at_version(Some(version))
+        //     .map_err(|error| {
+        //         Error::UnexpectedErrorEncountered(format!(
+        //             "Failed to create account state view {:?}",
+        //             error
+        //         ))
+        //     })?;
+        // let epoch = ConfigurationResource::fetch_config(&db_state_view)
+        //     .ok_or_else(|| {
+        //         Error::UnexpectedErrorEncountered("Configuration resource does not exist!".into())
+        //     })?
+        //     .epoch();
 
-        let config = DbBackedOnChainConfig::new(self.storage.read().reader.clone(), version);
+        let mut config = DbBackedOnChainConfig::new(self.storage.read().reader.clone(), version);
 
-        // config.set_config_storage(self.gravity_config_storage.clone());
+        config.set_config_storage(self.gravity_config_storage.clone());
         
         let payload = OnChainConfigPayload::new(
-            epoch, // Actual epoch is not used in the current implementation. So we set it to 0
-            config
+            0, // Actual epoch is not used in the current implementation. So we set it to 0
+            config,
         );
 
         // Return the new on-chain config payload (containing all found configs at this version).
@@ -414,33 +415,32 @@ impl DbBackedOnChainConfig {
 // TODO(gravity_alex): Pass config_storage_gravity here to replace the current impl
 impl OnChainConfigProvider for DbBackedOnChainConfig {
     fn get<T: OnChainConfig>(&self) -> Result<T> {
-        // TODO(gravity_alex): use gravity_config_storage when debug
-        // let bytes = self
-        //     .gravity_config_storage
-        //     .as_ref()
-        //     .unwrap()
-        //     .fetch_config_bytes(
-        //         api_types::config_storage::OnChainConfig::from_str(T::TYPE_IDENTIFIER).unwrap(),
-        //         self.version,
-        //     )
-        //     .ok_or_else(|| {
-        //         anyhow!(
-        //             "no config {} found in aptos root account state",
-        //             T::TYPE_IDENTIFIER
-        //         )
-        //     })?
-        //     .clone();
         let bytes = self
-            .reader
-            .get_state_value_by_version(&StateKey::on_chain_config::<T>()?, self.version)?
+            .gravity_config_storage
+            .as_ref()
+            .unwrap()
+            .fetch_config_bytes(
+                api_types::config_storage::OnChainConfig::from_str(T::TYPE_IDENTIFIER).unwrap(),
+                self.version,
+            )
             .ok_or_else(|| {
                 anyhow!(
                     "no config {} found in aptos root account state",
-                    T::CONFIG_ID
+                    T::TYPE_IDENTIFIER
                 )
             })?
-            .bytes()
             .clone();
+        // let bytes = self
+        //     .reader
+        //     .get_state_value_by_version(&StateKey::on_chain_config::<T>()?, self.version)?
+        //     .ok_or_else(|| {
+        //         anyhow!(
+        //             "no config {} found in aptos root account state",
+        //             T::CONFIG_ID
+        //         )
+        //     })?
+        //     .bytes()
+        //     .clone();
 
         T::deserialize_into_config(&bytes)
     }
