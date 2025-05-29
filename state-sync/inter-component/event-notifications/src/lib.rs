@@ -20,6 +20,7 @@ use aptos_types::{
     state_store::state_key::StateKey,
     transaction::Version,
 };
+use bytes::Bytes;
 use futures::{channel::mpsc::SendError, stream::FusedStream, Stream};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -311,24 +312,22 @@ impl EventSubscriptionService {
         //     })?
         //     .epoch();
 
-        // let epoch_bytes = self
-        //     .gravity_config_storage
-        //     .as_ref()
-        //     .unwrap()
-        //     .fetch_config_bytes(api_types::config_storage::OnChainConfig::Epoch, version)
-        //     .ok_or_else(|| anyhow!("no config epoch found in aptos root account state"))
-        //     .unwrap()
-        //     .clone();
+        let epoch_bytes = self
+            .gravity_config_storage
+            .as_ref()
+            .unwrap()
+            .fetch_config_bytes(api_types::config_storage::OnChainConfig::Epoch, version)
+            .ok_or_else(|| anyhow!("no config epoch found in aptos root account state"))
+            .unwrap();
 
-        // let epoch = bcs::from_bytes::<u64>(&epoch_bytes).unwrap();
+        let epoch = TryInto::<u64>::try_into(epoch_bytes).unwrap();
 
         let mut config = DbBackedOnChainConfig::new(self.storage.read().reader.clone(), version);
 
         config.set_config_storage(self.gravity_config_storage.clone());
 
         let payload = OnChainConfigPayload::new(
-            // epoch,
-            0,
+            epoch,
             config,
         );
 
@@ -449,8 +448,8 @@ impl OnChainConfigProvider for DbBackedOnChainConfig {
                     "no config {} found in aptos root account state",
                     T::TYPE_IDENTIFIER
                 )
-            })?
-            .clone();
+            })?;
+        let bytes = TryInto::<Bytes>::try_into(bytes).unwrap();
         // let bytes = self
         //     .reader
         //     .get_state_value_by_version(&StateKey::on_chain_config::<T>()?, self.version)?

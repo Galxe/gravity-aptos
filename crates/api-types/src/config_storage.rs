@@ -1,7 +1,5 @@
-
 use bytes::Bytes;
 use std::str::FromStr;
-
 
 pub enum OnChainConfig {
     ConsensusConfig,
@@ -20,9 +18,8 @@ pub enum OnChainConfig {
     Epoch,
 }
 
-// 实现 FromStr trait 用于从字符串转换为枚举
 impl FromStr for OnChainConfig {
-    type Err = String; // 定义错误类型，这里简单使用 String
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -42,18 +39,60 @@ impl FromStr for OnChainConfig {
 }
 
 impl TryFrom<String> for OnChainConfig {
-    type Error = String; // 通常和 FromStr 的错误类型保持一致
+    type Error = String;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        // 最简洁的方式是利用已经实现的 FromStr trait
-        // String 类型可以通过 .parse() 方法调用其 FromStr 实现
-        // 或者直接调用 OnChainConfig::from_str(&value)
-        value.parse() // 等价于 OnChainConfig::from_str(&value)
+        value.parse()
     }
 }
 
+#[derive(Debug)]
+pub struct OnChainConfigResType {
+    bytes: Bytes,
+    // TODO(Gravity_alex): add a type to indicate the type of the on-chain config
+}
+
+impl From<u64> for OnChainConfigResType {
+    fn from(value: u64) -> Self {
+        let serialized_bytes =
+            bcs::to_bytes(&value).expect("BCS serialization of u64 should not fail");
+
+        OnChainConfigResType {
+            bytes: Bytes::from(serialized_bytes),
+        }
+    }
+}
+
+impl From<Bytes> for OnChainConfigResType {
+    fn from(value: Bytes) -> Self {
+        OnChainConfigResType { bytes: value }
+    }
+}
+
+impl TryInto<u64> for OnChainConfigResType {
+    type Error = String;
+
+    fn try_into(self) -> Result<u64, Self::Error> {
+        let bytes = self.bytes.as_ref();
+        let value = bcs::from_bytes::<u64>(bytes)
+            .map_err(|e| format!("Failed to deserialize u64: {}", e))?;
+        Ok(value)
+    }
+}
+
+impl TryInto<Bytes> for OnChainConfigResType {
+    type Error = String;
+
+    fn try_into(self) -> Result<Bytes, Self::Error> {
+        Ok(self.bytes)
+    }
+}
 
 /// Trait to be implemented by a storage type from which to read on-chain configs
-pub trait ConfigStorage : Send + Sync + 'static {
-    fn fetch_config_bytes(&self, config_name: OnChainConfig, block_number: u64) -> Option<Bytes>;
+pub trait ConfigStorage: Send + Sync + 'static {
+    fn fetch_config_bytes(
+        &self,
+        config_name: OnChainConfig,
+        block_number: u64,
+    ) -> Option<OnChainConfigResType>;
 }

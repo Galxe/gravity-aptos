@@ -24,6 +24,7 @@ futures = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 bcs = { workspace = true }
+bytes = { workspace = true }
 
 [dev-dependencies]
 aptos-crypto = { workspace = true }
