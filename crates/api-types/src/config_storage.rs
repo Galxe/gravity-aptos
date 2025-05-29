@@ -34,6 +34,10 @@ impl FromStr for OnChainConfig {
             "JWKConsensusConfig" => Ok(OnChainConfig::JWKConsensusConfig),
             "ValidatorSet" => Ok(OnChainConfig::ValidatorSet),
             "Epoch" => Ok(OnChainConfig::Epoch),
+            "PerBlockRandomness" => Ok(OnChainConfig::PerBlockRandomness),
+            "RandomnessConfigSeqNum" => Ok(OnChainConfig::RandomnessConfigSeqNum),
+            "RandomnessConfig" => Ok(OnChainConfig::RandomnessConfig),
+            "CurrentTimeMicroseconds" => Ok(OnChainConfig::CurrentTimeMicroseconds),
             _ => Err(format!("Unknown OnChainConfig variant: {}", s)),
         }
     }
