@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use std::str::FromStr;
 
+#[derive(Debug)]
 pub enum OnChainConfig {
     ConsensusConfig,
     ExecutionConfig,
