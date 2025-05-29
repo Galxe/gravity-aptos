@@ -326,10 +326,7 @@ impl EventSubscriptionService {
 
         config.set_config_storage(self.gravity_config_storage.clone());
 
-        let payload = OnChainConfigPayload::new(
-            epoch,
-            config,
-        );
+        let payload = OnChainConfigPayload::new(epoch, config);
 
         // Return the new on-chain config payload (containing all found configs at this version).
         Ok(payload)
@@ -449,7 +446,10 @@ impl OnChainConfigProvider for DbBackedOnChainConfig {
                     T::TYPE_IDENTIFIER
                 )
             })?;
-        let bytes = TryInto::<Bytes>::try_into(bytes).unwrap();
+        let bytes = TryInto::<Bytes>::try_into(bytes).expect(&format!(
+            "Failed to convert type {} to Bytes",
+            T::TYPE_IDENTIFIER
+        ));
         // let bytes = self
         //     .reader
         //     .get_state_value_by_version(&StateKey::on_chain_config::<T>()?, self.version)?
