@@ -8,6 +8,7 @@ use api_types::config_storage::ConfigStorage;
 use aptos_channels::{aptos_channel, message_queues::QueueStyle};
 use aptos_id_generator::{IdGenerator, U64IdGenerator};
 use aptos_infallible::RwLock;
+use aptos_logger::info;
 use aptos_storage_interface::{
     state_store::state_view::db_state_view::DbStateViewAtVersion, DbReader, DbReaderWriter,
 };
@@ -312,6 +313,7 @@ impl EventSubscriptionService {
         //     })?
         //     .epoch();
 
+        info!("fetching epoch from on-chain for version: {}", version);
         let epoch_bytes = self
             .gravity_config_storage
             .as_ref()
@@ -321,6 +323,7 @@ impl EventSubscriptionService {
             .unwrap();
 
         let epoch = TryInto::<u64>::try_into(epoch_bytes).unwrap();
+        info!("OnChainConfigPayload for epoch: {}", epoch);
 
         let mut config = DbBackedOnChainConfig::new(self.storage.read().reader.clone(), version);
 

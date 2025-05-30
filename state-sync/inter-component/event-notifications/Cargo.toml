@@ -25,6 +25,7 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 bcs = { workspace = true }
 bytes = { workspace = true }
+aptos-logger = { workspace = true }
 
 [dev-dependencies]
 aptos-crypto = { workspace = true }
