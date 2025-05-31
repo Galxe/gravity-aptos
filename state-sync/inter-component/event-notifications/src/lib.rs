@@ -279,6 +279,7 @@ impl EventSubscriptionService {
         }
 
         let new_configs = self.read_on_chain_configs(version)?;
+        info!("notify_reconfiguration_subscribers: {}", version);
         for (_, reconfig_subscription) in self.reconfig_subscriptions.iter_mut() {
             reconfig_subscription.notify_subscriber_of_configs(version, new_configs.clone())?;
         }
@@ -344,6 +345,7 @@ impl EventNotificationSender for EventSubscriptionService {
 
         // Notify event subscribers and check if a reconfiguration event was processed
         let reconfig_event_processed = self.notify_event_subscribers(version, events)?;
+        info!("reconfig_event_processed: {}, version: {}", reconfig_event_processed, version);
 
         // If a reconfiguration event was found, also notify the reconfig subscribers
         // of the new configuration values.
