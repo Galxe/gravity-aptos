@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use std::str::FromStr;
+use std::{str::FromStr, sync::{Arc, OnceLock}};
 
 #[derive(Debug)]
 pub enum OnChainConfig {
@@ -101,3 +101,5 @@ pub trait ConfigStorage: Send + Sync + 'static {
         block_number: u64,
     ) -> Option<OnChainConfigResType>;
 }
+
+pub static GLOBAL_CONFIG_STORAGE: OnceLock<Arc<dyn ConfigStorage>> = OnceLock::new();
