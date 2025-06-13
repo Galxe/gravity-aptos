@@ -4,7 +4,7 @@
 
 #![forbid(unsafe_code)]
 use anyhow::{anyhow, Result};
-use api_types::config_storage::ConfigStorage;
+use api_types::config_storage::{ConfigStorage, GLOBAL_CONFIG_STORAGE};
 use aptos_channels::{aptos_channel, message_queues::QueueStyle};
 use aptos_id_generator::{IdGenerator, U64IdGenerator};
 use aptos_infallible::RwLock;
@@ -91,8 +91,6 @@ pub struct EventSubscriptionService {
 
     // Internal subscription ID generator
     subscription_id_generator: U64IdGenerator,
-
-    gravity_config_storage: Option<Arc<dyn ConfigStorage>>,
 }
 
 impl EventSubscriptionService {
@@ -104,12 +102,7 @@ impl EventSubscriptionService {
             reconfig_subscriptions: HashMap::new(),
             storage,
             subscription_id_generator: U64IdGenerator::new(),
-            gravity_config_storage: None,
         }
-    }
-
-    pub fn set_config_storage(&mut self, gravity_config_storage: Option<Arc<dyn ConfigStorage>>) {
-        self.gravity_config_storage = gravity_config_storage;
     }
 
     /// Returns an EventNotificationListener that can be monitored for
@@ -315,9 +308,8 @@ impl EventSubscriptionService {
         //     .epoch();
 
         info!("fetching epoch from on-chain for version: {}", version);
-        let epoch_bytes = self
-            .gravity_config_storage
-            .as_ref()
+        let gravity_config_storage = GLOBAL_CONFIG_STORAGE.get();
+        let epoch_bytes = gravity_config_storage
             .unwrap()
             .fetch_config_bytes(api_types::config_storage::OnChainConfig::Epoch, version)
             .ok_or_else(|| anyhow!("no config epoch found in aptos root account state"))
@@ -327,8 +319,6 @@ impl EventSubscriptionService {
         info!("OnChainConfigPayload for epoch: {}", epoch);
 
         let mut config = DbBackedOnChainConfig::new(self.storage.read().reader.clone(), version);
-
-        config.set_config_storage(self.gravity_config_storage.clone());
 
         let payload = OnChainConfigPayload::new(epoch, config);
 
@@ -417,7 +407,6 @@ impl ReconfigSubscription {
 pub struct DbBackedOnChainConfig {
     pub reader: Arc<dyn DbReader>,
     pub version: Version,
-    pub gravity_config_storage: Option<Arc<dyn ConfigStorage>>,
 }
 
 impl DbBackedOnChainConfig {
@@ -425,21 +414,15 @@ impl DbBackedOnChainConfig {
         Self {
             reader,
             version,
-            gravity_config_storage: None,
         }
-    }
-
-    fn set_config_storage(&mut self, gravity_config_storage: Option<Arc<dyn ConfigStorage>>) {
-        self.gravity_config_storage = gravity_config_storage;
     }
 }
 
 // TODO(gravity_alex): Pass config_storage_gravity here to replace the current impl
 impl OnChainConfigProvider for DbBackedOnChainConfig {
     fn get<T: OnChainConfig>(&self) -> Result<T> {
-        let bytes = self
-            .gravity_config_storage
-            .as_ref()
+        let gravity_config_storage = GLOBAL_CONFIG_STORAGE.get();
+        let bytes = gravity_config_storage
             .unwrap()
             .fetch_config_bytes(
                 api_types::config_storage::OnChainConfig::from_str(T::TYPE_IDENTIFIER).unwrap(),
