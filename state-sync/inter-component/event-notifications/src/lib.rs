@@ -91,8 +91,6 @@ pub struct EventSubscriptionService {
 
     // Internal subscription ID generator
     subscription_id_generator: U64IdGenerator,
-
-    gravity_config_storage: Option<Arc<dyn ConfigStorage>>,
 }
 
 impl EventSubscriptionService {
@@ -104,12 +102,7 @@ impl EventSubscriptionService {
             reconfig_subscriptions: HashMap::new(),
             storage,
             subscription_id_generator: U64IdGenerator::new(),
-            gravity_config_storage: None,
         }
-    }
-
-    pub fn set_config_storage(&mut self, gravity_config_storage: Option<Arc<dyn ConfigStorage>>) {
-        self.gravity_config_storage = gravity_config_storage;
     }
 
     /// Returns an EventNotificationListener that can be monitored for
@@ -297,38 +290,36 @@ impl EventSubscriptionService {
     ) -> Result<OnChainConfigPayload<DbBackedOnChainConfig>, Error> {
         // 使用执行层提供的config storage的实例. 把version传递进去
         // let config_storage = ConfigStorageImpl::new(version);
-        // let db_state_view = &self
-        //     .storage
-        //     .read()
-        //     .reader
-        //     .state_view_at_version(Some(version))
-        //     .map_err(|error| {
-        //         Error::UnexpectedErrorEncountered(format!(
-        //             "Failed to create account state view {:?}",
-        //             error
-        //         ))
-        //     })?;
-        // let epoch = ConfigurationResource::fetch_config(&db_state_view)
-        //     .ok_or_else(|| {
-        //         Error::UnexpectedErrorEncountered("Configuration resource does not exist!".into())
-        //     })?
-        //     .epoch();
+        let db_state_view = &self
+            .storage
+            .read()
+            .reader
+            .state_view_at_version(Some(version))
+            .map_err(|error| {
+                Error::UnexpectedErrorEncountered(format!(
+                    "Failed to create account state view {:?}",
+                    error
+                ))
+            })?;
+        let epoch = ConfigurationResource::fetch_config(&db_state_view)
+            .ok_or_else(|| {
+                Error::UnexpectedErrorEncountered("Configuration resource does not exist!".into())
+            })?
+            .epoch();
 
-        info!("fetching epoch from on-chain for version: {}", version);
-        let epoch_bytes = self
-            .gravity_config_storage
-            .as_ref()
-            .unwrap()
-            .fetch_config_bytes(api_types::config_storage::OnChainConfig::Epoch, version)
-            .ok_or_else(|| anyhow!("no config epoch found in aptos root account state"))
-            .unwrap();
+        // info!("fetching epoch from on-chain for version: {}", version);
+        // let epoch_bytes = self
+        //     .gravity_config_storage
+        //     .as_ref()
+        //     .unwrap()
+        //     .fetch_config_bytes(api_types::config_storage::OnChainConfig::Epoch, version)
+        //     .ok_or_else(|| anyhow!("no config epoch found in aptos root account state"))
+        //     .unwrap();
 
-        let epoch = TryInto::<u64>::try_into(epoch_bytes).unwrap();
-        info!("OnChainConfigPayload for epoch: {}", epoch);
+        // let epoch = TryInto::<u64>::try_into(epoch_bytes).unwrap();
+        // info!("OnChainConfigPayload for epoch: {}", epoch);
 
-        let mut config = DbBackedOnChainConfig::new(self.storage.read().reader.clone(), version);
-
-        config.set_config_storage(self.gravity_config_storage.clone());
+        let config = DbBackedOnChainConfig::new(self.storage.read().reader.clone(), version);
 
         let payload = OnChainConfigPayload::new(epoch, config);
 
@@ -428,44 +419,40 @@ impl DbBackedOnChainConfig {
             gravity_config_storage: None,
         }
     }
-
-    fn set_config_storage(&mut self, gravity_config_storage: Option<Arc<dyn ConfigStorage>>) {
-        self.gravity_config_storage = gravity_config_storage;
-    }
 }
 
 // TODO(gravity_alex): Pass config_storage_gravity here to replace the current impl
 impl OnChainConfigProvider for DbBackedOnChainConfig {
     fn get<T: OnChainConfig>(&self) -> Result<T> {
-        let bytes = self
-            .gravity_config_storage
-            .as_ref()
-            .unwrap()
-            .fetch_config_bytes(
-                api_types::config_storage::OnChainConfig::from_str(T::TYPE_IDENTIFIER).unwrap(),
-                self.version,
-            )
-            .ok_or_else(|| {
-                anyhow!(
-                    "no config {} found in aptos root account state",
-                    T::TYPE_IDENTIFIER
-                )
-            })?;
-        let bytes = TryInto::<Bytes>::try_into(bytes).expect(&format!(
-            "Failed to convert type {} to Bytes",
-            T::TYPE_IDENTIFIER
-        ));
         // let bytes = self
-        //     .reader
-        //     .get_state_value_by_version(&StateKey::on_chain_config::<T>()?, self.version)?
+        //     .gravity_config_storage
+        //     .as_ref()
+        //     .unwrap()
+        //     .fetch_config_bytes(
+        //         api_types::config_storage::OnChainConfig::from_str(T::TYPE_IDENTIFIER).unwrap(),
+        //         self.version,
+        //     )
         //     .ok_or_else(|| {
         //         anyhow!(
         //             "no config {} found in aptos root account state",
-        //             T::CONFIG_ID
+        //             T::TYPE_IDENTIFIER
         //         )
-        //     })?
-        //     .bytes()
-        //     .clone();
+        //     })?;
+        // let bytes = TryInto::<Bytes>::try_into(bytes).expect(&format!(
+        //     "Failed to convert type {} to Bytes",
+        //     T::TYPE_IDENTIFIER
+        // ));
+        let bytes = self
+            .reader
+            .get_state_value_by_version(&StateKey::on_chain_config::<T>()?, self.version)?
+            .ok_or_else(|| {
+                anyhow!(
+                    "no config {} found in aptos root account state",
+                    T::CONFIG_ID
+                )
+            })?
+            .bytes()
+            .clone();
 
         T::deserialize_into_config(&bytes)
     }
