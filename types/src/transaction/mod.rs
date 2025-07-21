@@ -37,6 +37,7 @@ use std::{
     convert::TryFrom,
     fmt::{self, Debug, Display, Formatter},
 };
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 pub mod analyzed_transaction;
 pub mod authenticator;
@@ -924,7 +925,11 @@ impl SignedTransaction {
     pub fn committed_hash(&self) -> HashValue {
         *self
             .committed_hash
-            .get_or_init(|| Transaction::UserTransaction(self.clone()).hash())
+            .get_or_init(|| {
+                let mut hasher = DefaultHasher::new();
+                self.raw_txn.hash(&mut hasher);
+                hasher.finish()
+        })
     }
 }
 
