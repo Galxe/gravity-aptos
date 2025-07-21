@@ -78,7 +78,7 @@ pub use script::{
 use serde::de::DeserializeOwned;
 use std::{
     collections::BTreeSet,
-    hash::{DefaultHasher, Hash, Hasher},
+    hash::Hash,
     ops::Deref,
     sync::{atomic::AtomicU64, Arc},
 };
@@ -922,13 +922,10 @@ impl SignedTransaction {
 
     /// Returns the hash when the transaction is committed onchain.
     pub fn committed_hash(&self) -> HashValue {
+        tracing::info!("lightman0721 {:?} {:?} {:?} {:?}", self.authenticator, self.authenticator_size, self.raw_txn_size, self.g_ext);
         *self
             .committed_hash
-            .get_or_init(|| {
-                let mut hasher = DefaultHasher::new();
-                self.raw_txn.hash(&mut hasher);
-                hasher.finish()
-        })
+            .get_or_init(|| Transaction::UserTransaction(self.clone()).hash())
     }
 }
 
