@@ -37,7 +37,6 @@ use std::{
     convert::TryFrom,
     fmt::{self, Debug, Display, Formatter},
 };
-use std::hash::{DefaultHasher, Hash, Hasher};
 
 pub mod analyzed_transaction;
 pub mod authenticator;
@@ -79,7 +78,7 @@ pub use script::{
 use serde::de::DeserializeOwned;
 use std::{
     collections::BTreeSet,
-    hash::Hash,
+    hash::{DefaultHasher, Hash, Hasher},
     ops::Deref,
     sync::{atomic::AtomicU64, Arc},
 };
