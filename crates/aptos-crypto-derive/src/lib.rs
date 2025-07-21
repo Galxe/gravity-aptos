@@ -459,7 +459,6 @@ pub fn bcs_crypto_hash_dispatch(input: TokenStream) -> TokenStream {
                 use aptos_crypto::hash::CryptoHasher;
 
                 let mut state = Self::Hasher::default();
-                tracing::info!("lightman0721 hasher {:?}", state);
                 bcs::serialize_into(&mut state, &self).expect(#error_msg);
                 state.finish()
             }

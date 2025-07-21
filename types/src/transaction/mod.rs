@@ -922,7 +922,7 @@ impl SignedTransaction {
 
     /// Returns the hash when the transaction is committed onchain.
     pub fn committed_hash(&self) -> HashValue {
-        tracing::info!("lightman0721 {:?}", self.raw_txn.payload);
+        tracing::info!("lightman0721 {:?}", self);
         *self
             .committed_hash
             .get_or_init(|| Transaction::UserTransaction(self.clone()).hash())
