@@ -17,6 +17,7 @@ pub enum OnChainConfig {
     PerBlockRandomness,
     ValidatorSet,
     Epoch,
+    ObservedJWKs,
 }
 
 impl FromStr for OnChainConfig {
@@ -38,6 +39,7 @@ impl FromStr for OnChainConfig {
             "RandomnessConfigSeqNum" => Ok(OnChainConfig::RandomnessConfigSeqNum),
             "RandomnessConfig" => Ok(OnChainConfig::RandomnessConfig),
             "CurrentTimeMicroseconds" => Ok(OnChainConfig::CurrentTimeMicroseconds),
+            "ObservedJWKs" => Ok(OnChainConfig::ObservedJWKs),
             _ => Err(format!("Unknown OnChainConfig variant: {}", s)),
         }
     }
