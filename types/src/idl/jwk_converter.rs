@@ -1,8 +1,7 @@
 use crate::{
-    jwks::{jwk::JWKMoveStruct, AllProvidersJWKs, ObservedJWKs, ProviderJWKs},
-    move_any::Any,
+    idl::JwkIdlError, jwks::{jwk::JWKMoveStruct, AllProvidersJWKs, ObservedJWKs, ProviderJWKs}, move_any::Any
 };
-
+use anyhow::{anyhow, format_err};
 pub fn convert_provider_jwks(
     origin_provider_jwks: api_types::on_chain_config::jwks::ProviderJWKs,
 ) -> ProviderJWKs {
@@ -38,10 +37,16 @@ pub fn convert_all_providers_jwks(
     }
 }
 
-pub fn construct_observed_jwks(
-    origin_all_providers_jwks: api_types::on_chain_config::jwks::AllProvidersJWKs,
+pub fn convert_observed_jwks(
+    origin_all_providers_jwks: api_types::on_chain_config::jwks::ObservedJWKs,
 ) -> ObservedJWKs {
     ObservedJWKs {
-        jwks: convert_all_providers_jwks(origin_all_providers_jwks),
+        jwks: convert_all_providers_jwks(origin_all_providers_jwks.jwks),
     }
+}
+
+pub fn construct_observed_jwks(bytes: &[u8]) -> Result<ObservedJWKs, JwkIdlError> {
+    let observed_jwks = bcs::from_bytes::<api_types::on_chain_config::jwks::ObservedJWKs>(bytes)
+        .map_err(|e| JwkIdlError::JsonDeserializationError(e.to_string()))?;
+    Ok(convert_observed_jwks(observed_jwks))
 }
