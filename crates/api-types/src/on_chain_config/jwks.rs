@@ -30,3 +30,9 @@ pub struct OIDCProvider {
     pub name: String,
     pub config_url: String,
 }
+
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct JWKConsensusConfig {
+    pub enabled: bool,
+    pub oidc_providers: Vec<OIDCProvider>,
+}
