@@ -24,3 +24,9 @@ pub struct AllProvidersJWKs {
 pub struct ObservedJWKs {
     pub jwks: AllProvidersJWKs,
 }
+
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct OIDCProvider {
+    pub name: String,
+    pub config_url: String,
+}

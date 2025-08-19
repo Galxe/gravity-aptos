@@ -87,6 +87,7 @@ impl OnChainConfig for OnChainJWKConsensusConfig {
 
     fn deserialize_into_config(bytes: &[u8]) -> anyhow::Result<Self> {
         let variant = bcs::from_bytes::<MoveAny>(bytes)?;
+        // TODO(gravity): How to simulate the move any?
         match variant.type_name.as_str() {
             ConfigOff::MOVE_TYPE_NAME => Ok(OnChainJWKConsensusConfig::Off),
             ConfigV1::MOVE_TYPE_NAME => {
