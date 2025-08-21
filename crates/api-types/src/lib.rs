@@ -5,6 +5,7 @@ pub mod compute_res;
 pub mod events;
 pub mod on_chain_config;
 pub mod config_storage;
+pub mod relayer;
 use crate::account::{ExternalAccountAddress, ExternalChainId};
 use crate::u256_define::HashValue;
 use compute_res::ComputeRes;
