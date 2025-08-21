@@ -56,6 +56,7 @@ pub struct ExternalBlock {
 pub enum ExecError {
     InternalError,
     DuplicateExecError,
+    Other(String),
 }
 
 pub enum ExecTxn {
