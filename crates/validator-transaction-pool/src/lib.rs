@@ -4,6 +4,7 @@
 use aptos_channels::aptos_channel;
 use aptos_crypto::{hash::CryptoHash, HashValue};
 use aptos_infallible::Mutex;
+use aptos_logger::info;
 use aptos_types::validator_txn::{Topic, ValidatorTransaction};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -65,11 +66,18 @@ impl VTxnPoolState {
         let seq_num = pool.next_seq_num;
         pool.next_seq_num += 1;
 
+        let txn_bytes = txn.size_in_bytes();
         pool.txn_queue.insert(seq_num, PoolItem {
             topic: topic.clone(),
             txn,
             pull_notification_tx,
         });
+        info!(
+            seq_num = seq_num,
+            txn_bytes = txn_bytes,
+            txn_pool_len = pool.txn_queue.len() + 1,
+            "txn added to pool"
+        );
 
         if let Some(old_seq_num) = pool.seq_nums_by_topic.insert(topic.clone(), seq_num) {
             pool.txn_queue.remove(&old_seq_num);
@@ -158,6 +166,14 @@ impl PoolStateInner {
     ) -> Vec<ValidatorTransaction> {
         let mut ret = vec![];
         let mut seq_num_lower_bound = 0;
+
+        info!(
+            deadline = deadline.elapsed().as_secs(),
+            max_items = max_items,
+            max_bytes = max_bytes,
+            txn_queue_len = self.txn_queue.len(),
+            "pulling txns from pool"
+        );
 
         // Check deadline at the end of every iteration to ensure validator txns get a chance no matter what current proposal delay is.
         while max_items >= 1 && max_bytes >= 1 {

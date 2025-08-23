@@ -19,6 +19,7 @@ aptos-infallible = { workspace = true }
 aptos-types = { workspace = true }
 futures-util = { workspace = true }
 tokio = { workspace = true }
+aptos-logger = { workspace = true }
 
 [dev-dependencies]
 aptos-types = { workspace = true, features = ["fuzzing"] }
