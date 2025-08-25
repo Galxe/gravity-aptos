@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Hash)]
 pub struct JWKStruct {
     pub type_name: String,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize, Hash)]
 pub struct ProviderJWKs {
     #[serde(with = "serde_bytes")]
     pub issuer: Vec<u8>,
