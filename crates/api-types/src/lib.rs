@@ -50,6 +50,7 @@ pub struct ExternalBlockMeta {
 pub struct ExternalBlock {
     pub block_meta: ExternalBlockMeta,
     pub txns: Vec<VerifiedTxn>,
+    pub jwks_extra_data: Vec<Vec<u8>>,
 }
 
 #[derive(Debug)]
