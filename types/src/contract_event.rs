@@ -466,7 +466,7 @@ impl TryFrom<&GravityEvent> for ContractEvent {
                 };
                 Ok(ContractEvent::V2(ContractEventV2::new(
                     TypeTag::Struct(Box::new(ObservedJWKsUpdated::struct_tag())),
-                    serde_json::to_vec(&data).unwrap(),
+                    bcs::to_bytes(&data).unwrap(),
                 )))
             },
             GravityEvent::DKG => todo!(),
