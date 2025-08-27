@@ -154,7 +154,6 @@ impl EventSubscriptionService {
 
         // Update the event v2 tag subscriptions to include the new subscription
         for event_tag in event_v2_tags {
-            info!("add event v2tag: {}", event_tag);
             self.event_v2_tag_subscriptions
                 .entry(event_tag)
                 .and_modify(|subscriptions| {
@@ -217,7 +216,6 @@ impl EventSubscriptionService {
     ) -> Result<bool, Error> {
         let mut reconfig_event_found = false;
         let mut event_subscription_ids_to_notify = HashSet::new();
-        info!("event_key_subscriptions: {:?}, event_v2_tag_subscriptions: {:?}, events: {:?}", self.event_key_subscriptions, self.event_v2_tag_subscriptions, events);
 
         for event in events.iter() {
             // Process all subscriptions for the current event
@@ -225,16 +223,13 @@ impl EventSubscriptionService {
                 ContractEvent::V1(evt) => self.event_key_subscriptions.get(evt.key()),
                 ContractEvent::V2(evt) => {
                     let tag = evt.type_tag().to_string();
-                    info!("the event v2tag: {}", tag);
                     self.event_v2_tag_subscriptions.get(&tag)
                 },
             };
-            info!("maybe_subscription_ids: {:?}", maybe_subscription_ids);
             if let Some(subscription_ids) = maybe_subscription_ids {
                 // Add the event to the subscription's pending event buffer
                 // and store the subscriptions that will need to notified once all
                 // events have been processed.
-                info!("subscription_ids: {:?}, event_subscription: {:?}", subscription_ids, self.subscription_id_to_event_subscription);
                 for subscription_id in subscription_ids.iter() {
                     if let Some(event_subscription) = self
                         .subscription_id_to_event_subscription
@@ -277,7 +272,6 @@ impl EventSubscriptionService {
         }
 
         let new_configs = self.read_on_chain_configs(version)?;
-        info!("notify_reconfiguration_subscribers: {}", version);
         for (_, reconfig_subscription) in self.reconfig_subscriptions.iter_mut() {
             reconfig_subscription.notify_subscriber_of_configs(version, new_configs.clone())?;
         }
@@ -377,7 +371,6 @@ impl EventSubscription {
             subscribed_events: self.event_buffer.drain(..).collect(),
             version,
         };
-        info!("notify_subscriber_of_events: {:?}, version: {:?}", event_notification, event_notification.version);
 
         self.notification_sender
             .push((), event_notification)

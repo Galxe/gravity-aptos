@@ -320,7 +320,6 @@ impl JWKManager {
             ConsensusState::InProgress { my_proposal, .. } => {
                 //TODO: counters
                 let txn = ValidatorTransaction::ObservedJWKUpdate(update.clone());
-                let txn_bytes = txn.size_in_bytes();
                 let vtxn_guard =
                     self.vtxn_pool
                         .put(Topic::JWK_CONSENSUS(issuer.clone()), Arc::new(txn), None);
@@ -333,7 +332,6 @@ impl JWKManager {
                     epoch = self.epoch_state.epoch,
                     issuer = String::from_utf8(issuer).ok(),
                     version = update.update.version,
-                    txn_bytes = txn_bytes,
                     "certified update accepted."
                 );
                 Ok(())
