@@ -107,9 +107,11 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
         let EventNotification {
             subscribed_events, ..
         } = notification;
+        info!("jwk epoch manager process_onchain_event: {:?}", subscribed_events);
         for event in subscribed_events {
             if let Ok(jwk_event) = ObservedJWKsUpdated::try_from(&event) {
                 if let Some(tx) = self.jwk_updated_event_txs.as_ref() {
+                    info!("jwk epoch manager push jwk_event for epoch: {:?}", jwk_event.epoch);
                     let _ = tx.push((), jwk_event);
                 }
             }
