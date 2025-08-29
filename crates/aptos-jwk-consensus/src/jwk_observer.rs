@@ -6,7 +6,7 @@ use anyhow::{anyhow, Result};
 use api_types::relayer::GLOBAL_RELAYER;
 use aptos_channels::aptos_channel;
 use aptos_jwk_utils::{fetch_jwks_from_jwks_uri, fetch_jwks_uri_from_openid_config};
-use aptos_logger::{debug, info};
+use aptos_logger::{debug, error, info};
 use aptos_types::jwks::{jwk::JWK, unsupported::UnsupportedJWK, Issuer};
 use futures::{FutureExt, StreamExt};
 use move_core_types::account_address::AccountAddress;
@@ -70,7 +70,16 @@ impl JWKObserver {
 
         if issuer.starts_with("gravity://") {
             let relayer = GLOBAL_RELAYER.get().unwrap();
-            relayer.add_uri(issuer.as_str(), open_id_config_url.as_str(), vec![]).await.unwrap();
+            let r = relayer
+                .add_uri(issuer.as_str(), open_id_config_url.as_str())
+                .await;
+            if r.is_err() {
+                error!(
+                    "Failed to add issuer to relayer with uri={:?}, error={:?}",
+                    open_id_config_url, r.unwrap_err(),
+                );
+                return;
+            }
         }
 
         loop {

@@ -4,8 +4,7 @@ use std::sync::{Arc, OnceLock};
 
 #[async_trait]
 pub trait Relayer: Send + Sync + 'static {
-    async fn add_uri(&self, uri: &str, rpc_url: &str, last_state: Vec<u8>)
-        -> Result<(), ExecError>;
+    async fn add_uri(&self, uri: &str, rpc_url: &str) -> Result<(), ExecError>;
 
     async fn get_last_state(&self, uri: &str) -> Result<Vec<u8>, ExecError>;
 }
