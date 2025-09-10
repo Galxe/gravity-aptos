@@ -118,7 +118,7 @@ async fn fetch_jwks_with_relayer(issuer: &str) -> Result<Vec<JWK>> {
     let relayer = GLOBAL_RELAYER.get().unwrap();
     let last_state = relayer.get_last_state(issuer).await.unwrap();
     let jwks = JWK::Unsupported(UnsupportedJWK {
-        id: issuer.as_bytes().to_vec(),
+        id: issuer.as_bytes().to_vec(), // <event_type>:<block_number>
         payload: last_state,
     });
     Ok(vec![jwks])
