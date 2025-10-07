@@ -486,7 +486,29 @@ impl TryFrom<&GravityEvent> for ContractEvent {
                     bcs::to_bytes(&data).unwrap(),
                 )))
             },
-            GravityEvent::DKG => todo!(),
+            GravityEvent::DKG(dkg) => {
+                let data = DKGStartEvent {
+                    session_metadata: crate::dkg::DKGSessionMetadata {
+                        dealer_epoch: dkg.session_metadata.dealer_epoch,
+                        randomness_config: crate::on_chain_config::OnChainRandomnessConfig::default_enabled().into(),
+                        dealer_validator_set: dkg.session_metadata.dealer_validator_set.clone().into_iter().map(|v| crate::validator_verifier::ValidatorConsensusInfo {
+                            address: crate::account_address::AccountAddress::from_bytes(&v.addr.bytes()).unwrap(),
+                            public_key: aptos_crypto::bls12381::PublicKey::try_from(v.pk_bytes.as_slice()).unwrap(),
+                            voting_power: v.voting_power,   
+                        }.into()).collect(),
+                        target_validator_set: dkg.session_metadata.target_validator_set.clone().into_iter().map(|v| crate::validator_verifier::ValidatorConsensusInfo {
+                            address: crate::account_address::AccountAddress::from_bytes(&v.addr.bytes()).unwrap(),
+                            public_key: aptos_crypto::bls12381::PublicKey::try_from(v.pk_bytes.as_slice()).unwrap(),
+                            voting_power: v.voting_power,
+                        }.into()).collect(),
+                    },
+                    start_time_us: dkg.start_time_us,
+                };
+                Ok(ContractEvent::V2(ContractEventV2::new(
+                    TypeTag::Struct(Box::new(crate::dkg::DKGStartEvent::struct_tag())),
+                    bcs::to_bytes(&dkg).unwrap(),
+                )))
+            },
         }
     }
 }
