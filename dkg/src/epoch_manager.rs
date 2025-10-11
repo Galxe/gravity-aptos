@@ -127,6 +127,7 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
         loop {
             let handling_result = tokio::select! {
                 notification = self.dkg_start_events.select_next_some() => {
+                    info!("lightman1010: dkg receive start_events");
                     self.on_dkg_start_notification(notification)
                 },
                 reconfig_notification = self.reconfig_events.select_next_some() => {
@@ -155,6 +156,7 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
     }
 
     async fn start_new_epoch(&mut self, payload: OnChainConfigPayload<P>) -> Result<()> {
+        info!("lightman1010: dkg start_new_epoch");
         let validator_set: ValidatorSet = payload
             .get()
             .expect("failed to get ValidatorSet from payload");
@@ -167,11 +169,14 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
             .get(&self.my_addr)
             .copied();
 
-        let onchain_randomness_config_seq_num = payload
-            .get::<RandomnessConfigSeqNum>()
-            .unwrap_or_else(|_| RandomnessConfigSeqNum::default_if_missing());
+        // TODO(gravity_lightman): mock randomness config seq num
+        // let onchain_randomness_config_seq_num = payload
+        //     .get::<RandomnessConfigSeqNum>()
+        //     .unwrap_or_else(|_| RandomnessConfigSeqNum::default_if_missing());
+        let onchain_randomness_config_seq_num = RandomnessConfigSeqNum { seq_num: 0 };
 
-        let randomness_config_move_struct = payload.get::<RandomnessConfigMoveStruct>();
+        // let randomness_config_move_struct = payload.get::<RandomnessConfigMoveStruct>();
+        let randomness_config_move_struct = OnChainRandomnessConfig::default_enabled().try_into();
 
         info!(
             epoch = epoch_state.epoch,
@@ -253,6 +258,7 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
                 dkg_manager_close_rx,
             ));
         };
+        info!("lightman1010: dkg start_new_epoch end");
         Ok(())
     }
 
