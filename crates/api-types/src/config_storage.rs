@@ -19,6 +19,7 @@ pub enum OnChainConfig {
     Epoch,
     ObservedJWKs,
     Features,
+    DKGState,
 }
 
 impl FromStr for OnChainConfig {
