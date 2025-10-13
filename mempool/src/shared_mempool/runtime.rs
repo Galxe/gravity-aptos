@@ -7,7 +7,7 @@ use crate::{
     network::MempoolSyncMsg,
     shared_mempool::{
         coordinator::{coordinator, gc_coordinator, snapshot_job},
-        types::{MempoolEventsReceiver, SharedMempool, SharedMempoolNotification},
+        types::{CoreMempoolTrait, GravityCoreMempool, MempoolEventsReceiver, SharedMempool, SharedMempoolNotification},
     },
     QuorumStoreRequest,
 };
@@ -35,7 +35,7 @@ use tokio::runtime::{Handle, Runtime};
 pub(crate) fn start_shared_mempool<TransactionValidator, ConfigProvider>(
     executor: &Handle,
     config: &NodeConfig,
-    mempool: Arc<Mutex<CoreMempool>>,
+    mempool: Arc<Mutex<Box<dyn CoreMempoolTrait>>>,
     network_client: NetworkClient<MempoolSyncMsg>,
     network_service_events: NetworkServiceEvents<MempoolSyncMsg>,
     client_events: MempoolEventsReceiver,
@@ -81,7 +81,7 @@ pub(crate) fn start_shared_mempool<TransactionValidator, ConfigProvider>(
 
     if aptos_logger::enabled!(Level::Trace) {
         executor.spawn(snapshot_job(
-            mempool,
+            mempool.clone(),
             config.mempool.mempool_snapshot_interval_secs,
         ));
     }
@@ -99,7 +99,7 @@ pub fn bootstrap(
     peers_and_metadata: Arc<PeersAndMetadata>,
 ) -> Runtime {
     let runtime = aptos_runtimes::spawn_named_runtime("shared-mem".into(), None);
-    let mempool = Arc::new(Mutex::new(CoreMempool::new(config)));
+    let mempool = Arc::new(Mutex::new(Box::new(GravityCoreMempool::from(CoreMempool::new(config))) as Box<dyn CoreMempoolTrait>));
     let vm_validator = Arc::new(RwLock::new(PooledVMValidator::new(
         Arc::clone(&db),
         num_cpus::get(),
