@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::Result;
 use aptos_config::{
-    config::{MempoolConfig, NodeType},
+    config::{MempoolConfig, NodeConfig, NodeType},
     network_id::PeerNetworkId,
 };
 use aptos_consensus_types::common::{
@@ -93,6 +93,13 @@ pub struct GravityCoreMempool(CoreMempool);
 impl From<CoreMempool> for GravityCoreMempool {
     fn from(core_mempool: CoreMempool) -> Self {
         GravityCoreMempool(core_mempool)
+    }
+
+}
+
+impl GravityCoreMempool {
+    pub fn from_config(config: &NodeConfig) -> Self {
+        GravityCoreMempool::from(CoreMempool::new(config))
     }
 }
 

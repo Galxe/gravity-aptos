@@ -97,9 +97,10 @@ pub fn bootstrap(
     mempool_listener: MempoolNotificationListener,
     mempool_reconfig_events: ReconfigNotificationListener<DbBackedOnChainConfig>,
     peers_and_metadata: Arc<PeersAndMetadata>,
+    mempool: Box<dyn CoreMempoolTrait>,
 ) -> Runtime {
     let runtime = aptos_runtimes::spawn_named_runtime("shared-mem".into(), None);
-    let mempool = Arc::new(Mutex::new(Box::new(GravityCoreMempool::from(CoreMempool::new(config))) as Box<dyn CoreMempoolTrait>));
+    let mempool = Arc::new(Mutex::new(mempool));
     let vm_validator = Arc::new(RwLock::new(PooledVMValidator::new(
         Arc::clone(&db),
         num_cpus::get(),
