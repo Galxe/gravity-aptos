@@ -8554,6 +8554,7 @@ dependencies = [
  "aptos-config",
  "aptos-consensus",
  "aptos-consensus-notifications",
+ "aptos-consensus-types",
  "aptos-crash-handler",
  "aptos-crypto",
  "aptos-crypto-derive",

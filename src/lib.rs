@@ -59,3 +59,4 @@ pub use aptos_jwk_consensus;
 pub use aptos_dkg;
 pub use aptos_dkg_runtime;
 pub use aptos_mempool;
+pub use aptos_consensus_types;
