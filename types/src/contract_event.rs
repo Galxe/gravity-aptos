@@ -17,6 +17,7 @@ use crate::{
 use anyhow::{bail, Error, Result};
 use api_types::events::contract_event::GravityEvent;
 use aptos_crypto_derive::{BCSCryptoHash, CryptoHasher};
+use hex;
 use move_core_types::{
     ident_str,
     language_storage::{StructTag, TypeTag, CORE_CODE_ADDRESS},
@@ -38,19 +39,31 @@ fn convert_validator_consensus_info(
             e
         })?;
     
-    // Check if pk_bytes has the correct length for BLS12381 (48 bytes)
-    if v.pk_bytes.len() != 48 {
-        return Err(anyhow::anyhow!(
-            "Invalid BLS12381 public key length: expected 48 bytes, got {} bytes. Bytes: {:?}", 
-            v.pk_bytes.len(), 
-            v.pk_bytes
-        ));
-    }
+    // Convert 96-character hex string to 48 bytes
+    let pk_bytes = match hex::decode(&v.pk_bytes) {
+        Ok(bytes) => {
+            if bytes.len() != 48 {
+                return Err(anyhow::anyhow!(
+                    "Invalid BLS12381 public key length after hex decode: expected 48 bytes, got {} bytes. Original hex: {:?}", 
+                    bytes.len(), 
+                    v.pk_bytes
+                ));
+            }
+            bytes
+        },
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "Failed to decode hex string: {:?}, error: {}", 
+                v.pk_bytes, 
+                e
+            ));
+        }
+    };
     
-    let public_key = aptos_crypto::bls12381::PublicKey::try_from(v.pk_bytes.as_slice())
+    let public_key = aptos_crypto::bls12381::PublicKey::try_from(pk_bytes.as_slice())
         .map_err(|e| {
             eprintln!("Failed to parse BLS12381 public key: pk_bytes length: {}, bytes: {:?}, error: {}", 
-                v.pk_bytes.len(), v.pk_bytes, e);
+                pk_bytes.len(), pk_bytes, e);
             e
         })?;
     
