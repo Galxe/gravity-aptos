@@ -227,7 +227,7 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
                 BoundedExecutor::new(8, tokio::runtime::Handle::current()),
             );
             let agg_trx_producer = AggTranscriptProducer::new(rb);
-
+            info!("lightman1010: dkg start_new_epoch: dkg_start_event_tx");
             let (dkg_start_event_tx, dkg_start_event_rx) =
                 aptos_channel::new(QueueStyle::KLAST, 1, None);
             self.dkg_start_event_tx = Some(dkg_start_event_tx);
