@@ -468,7 +468,7 @@ fn filter_transactions(
 /// Perfoms VM validation on the transactions and inserts those that passes
 /// validation into the mempool.
 #[cfg(not(feature = "consensus-only-perf-test"))]
-fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
+async fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
     transactions: Vec<(
         SignedTransaction,
         Option<u64>,
@@ -519,7 +519,7 @@ fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
                             client_submitted,
                             ready_time_at_sender,
                             priority.clone(),
-                        );
+                        ).await;
                         statuses.push((transaction, (mempool_status, None)));
                     },
                     Some(validation_status) => {
