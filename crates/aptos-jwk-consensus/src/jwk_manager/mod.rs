@@ -186,6 +186,7 @@ impl JWKManager {
         let state = self.states_by_issuer.entry(issuer.clone()).or_default();
         state.observed = Some(jwks.clone());
         if state.observed.as_ref() != state.on_chain.as_ref().map(ProviderJWKs::jwks) {
+            debug!("different onchain is {:?}, observed is {:?}", state.on_chain.as_ref().map(ProviderJWKs::jwks), state.observed.as_ref());
             let observed = ProviderJWKs {
                 issuer: issuer.clone(),
                 version: state.on_chain_version() + 1,
@@ -220,6 +221,7 @@ impl JWKManager {
             epoch = self.epoch_state.epoch,
             "reset_with_on_chain_state starting."
         );
+        info!("reset_with_on_chain_state on_chain_state is {:?}", on_chain_state);
         let onchain_issuer_set: HashSet<Issuer> = on_chain_state
             .entries
             .iter()
