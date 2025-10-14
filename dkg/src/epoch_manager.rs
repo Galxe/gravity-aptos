@@ -204,8 +204,9 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
         let consensus_config = onchain_consensus_config.unwrap_or_default();
 
         // Check both validator txn and randomness features are enabled
-        let randomness_enabled =
-            consensus_config.is_vtxn_enabled() && onchain_randomness_config.randomness_enabled();
+        // let randomness_enabled =
+        //     consensus_config.is_vtxn_enabled() && onchain_randomness_config.randomness_enabled();
+        let randomness_enabled = true;
         if let (true, Some(my_index)) = (randomness_enabled, my_index) {
             let DKGState {
                 in_progress: in_progress_session,
