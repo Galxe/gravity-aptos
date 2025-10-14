@@ -30,7 +30,7 @@ use std::{convert::TryFrom, ops::Deref, str::FromStr};
 
 /// Helper function to convert ValidatorConsensusInfoMoveStruct to ValidatorConsensusInfo
 fn convert_validator_consensus_info(
-    v: &api_types::events::contract_event::ValidatorConsensusInfoMoveStruct,
+    v: &api_types::on_chain_config::dkg::ValidatorConsensusInfoMoveStruct,
 ) -> Result<ValidatorConsensusInfo, Error> {
     let addr = crate::account_address::AccountAddress::from_bytes(&v.addr.bytes())
         .map_err(|e| {
