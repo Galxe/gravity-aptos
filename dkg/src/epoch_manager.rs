@@ -112,6 +112,7 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
             } = notification;
             for event in subscribed_events {
                 if let Ok(dkg_start_event) = DKGStartEvent::try_from(&event) {
+                    info!("lightman1010: dkg on_dkg_start_notification: dkg start event: {:?}", dkg_start_event);
                     let _ = tx.push((), dkg_start_event);
                     return Ok(());
                 } else {
