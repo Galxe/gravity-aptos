@@ -549,7 +549,7 @@ impl TryFrom<&GravityEvent> for ContractEvent {
                 };
                 Ok(ContractEvent::V2(ContractEventV2::new(
                     TypeTag::Struct(Box::new(crate::dkg::DKGStartEvent::struct_tag())),
-                    bcs::to_bytes(&dkg).unwrap(),
+                    bcs::to_bytes(&data).unwrap(),
                 )))
             },
         }
