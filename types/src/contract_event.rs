@@ -12,6 +12,7 @@ use crate::{
     jwks::{jwk::JWKMoveStruct, rsa::RSA_JWK, unsupported::UnsupportedJWK, AllProvidersJWKs, ObservedJWKsUpdated, ProviderJWKs},
     move_any::{Any, AsMoveAny},
     transaction::Version,
+    validator_verifier::ValidatorConsensusInfo,
 };
 use anyhow::{bail, Error, Result};
 use api_types::events::contract_event::GravityEvent;
@@ -26,6 +27,39 @@ use once_cell::sync::Lazy;
 use proptest_derive::Arbitrary;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{convert::TryFrom, ops::Deref, str::FromStr};
+
+/// Helper function to convert ValidatorConsensusInfoMoveStruct to ValidatorConsensusInfo
+fn convert_validator_consensus_info(
+    v: &api_types::events::contract_event::ValidatorConsensusInfoMoveStruct,
+) -> Result<ValidatorConsensusInfo, Error> {
+    let addr = crate::account_address::AccountAddress::from_bytes(&v.addr.bytes())
+        .map_err(|e| {
+            eprintln!("Failed to parse address: {:?}, error: {}", v.addr, e);
+            e
+        })?;
+    
+    // Check if pk_bytes has the correct length for BLS12381 (48 bytes)
+    if v.pk_bytes.len() != 48 {
+        return Err(anyhow::anyhow!(
+            "Invalid BLS12381 public key length: expected 48 bytes, got {} bytes. Bytes: {:?}", 
+            v.pk_bytes.len(), 
+            v.pk_bytes
+        ));
+    }
+    
+    let public_key = aptos_crypto::bls12381::PublicKey::try_from(v.pk_bytes.as_slice())
+        .map_err(|e| {
+            eprintln!("Failed to parse BLS12381 public key: pk_bytes length: {}, bytes: {:?}, error: {}", 
+                v.pk_bytes.len(), v.pk_bytes, e);
+            e
+        })?;
+    
+    Ok(ValidatorConsensusInfo {
+        address: addr,
+        public_key,
+        voting_power: v.voting_power,
+    })
+}
 
 pub static FEE_STATEMENT_EVENT_TYPE: Lazy<TypeTag> = Lazy::new(|| {
     TypeTag::Struct(Box::new(StructTag {
@@ -491,16 +525,12 @@ impl TryFrom<&GravityEvent> for ContractEvent {
                     session_metadata: crate::dkg::DKGSessionMetadata {
                         dealer_epoch: dkg.session_metadata.dealer_epoch,
                         randomness_config: crate::on_chain_config::OnChainRandomnessConfig::default_enabled().into(),
-                        dealer_validator_set: dkg.session_metadata.dealer_validator_set.clone().into_iter().map(|v| crate::validator_verifier::ValidatorConsensusInfo {
-                            address: crate::account_address::AccountAddress::from_bytes(&v.addr.bytes()).unwrap(),
-                            public_key: aptos_crypto::bls12381::PublicKey::try_from(v.pk_bytes.as_slice()).unwrap(),
-                            voting_power: v.voting_power,   
-                        }.into()).collect(),
-                        target_validator_set: dkg.session_metadata.target_validator_set.clone().into_iter().map(|v| crate::validator_verifier::ValidatorConsensusInfo {
-                            address: crate::account_address::AccountAddress::from_bytes(&v.addr.bytes()).unwrap(),
-                            public_key: aptos_crypto::bls12381::PublicKey::try_from(v.pk_bytes.as_slice()).unwrap(),
-                            voting_power: v.voting_power,
-                        }.into()).collect(),
+                        dealer_validator_set: dkg.session_metadata.dealer_validator_set.clone().into_iter()
+                            .map(|v| convert_validator_consensus_info(&v).map(|info| info.into()))
+                            .collect::<Result<Vec<_>, _>>()?,
+                        target_validator_set: dkg.session_metadata.target_validator_set.clone().into_iter()
+                            .map(|v| convert_validator_consensus_info(&v).map(|info| info.into()))
+                            .collect::<Result<Vec<_>, _>>()?,
                     },
                     start_time_us: dkg.start_time_us,
                 };
