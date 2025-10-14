@@ -106,6 +106,7 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
     }
 
     fn on_dkg_start_notification(&mut self, notification: EventNotification) -> Result<()> {
+        info!("lightman1010: dkg on_dkg_start_notification");
         if let Some(tx) = self.dkg_start_event_tx.as_ref() {
             let EventNotification {
                 subscribed_events, ..
@@ -120,6 +121,7 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
                 }
             }
         }
+        info!("lightman1010: dkg on_dkg_start_notification end");
         Ok(())
     }
 
