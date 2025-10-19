@@ -70,8 +70,18 @@ impl JWKObserver {
 
         if issuer.starts_with("gravity://") {
             let relayer = GLOBAL_RELAYER.get().unwrap();
+            let active_providers = relayer.get_active_providers().await;
+            let onchain_block_number = active_providers.iter().find(|p| p.name == issuer);
+            if onchain_block_number.is_none() {
+                error!(
+                    "Issuer {:?} is not active",
+                    issuer
+                );
+                return;
+            }
+            let onchain_block_number = onchain_block_number.unwrap().onchain_block_number.unwrap_or(0);
             let r = relayer
-                .add_uri(issuer.as_str(), open_id_config_url.as_str())
+                .add_uri(issuer.as_str(), open_id_config_url.as_str(), onchain_block_number)
                 .await;
             if r.is_err() {
                 error!(
