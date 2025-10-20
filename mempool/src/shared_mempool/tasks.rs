@@ -136,7 +136,7 @@ pub(crate) async fn process_client_transaction_submission<NetworkClient, Transac
             vec![(transaction, None, Some(BroadcastPeerPriority::Primary))],
             timeline_state,
             true,
-        );
+        ).await;
     log_txn_process_results(&statuses, None);
 
     if let Some(status) = statuses.first() {
@@ -213,7 +213,7 @@ pub(crate) async fn process_transaction_broadcast<NetworkClient, TransactionVali
 {
     timer.stop_and_record();
     let _timer = counters::process_txn_submit_latency_timer(peer.network_id());
-    let results = process_incoming_transactions(&smp, transactions, timeline_state, false);
+    let results = process_incoming_transactions(&smp, transactions, timeline_state, false).await;
     log_txn_process_results(&results, Some(peer));
 
     let ack_response = gen_ack_response(message_id, results, &peer);
@@ -287,7 +287,7 @@ pub(crate) fn update_ack_counter(
 
 /// Submits a list of SignedTransaction to the local mempool
 /// and returns a vector containing [SubmissionStatusBundle].
-pub(crate) fn process_incoming_transactions<NetworkClient, TransactionValidator>(
+pub(crate) async fn process_incoming_transactions<NetworkClient, TransactionValidator>(
     smp: &SharedMempool<NetworkClient, TransactionValidator>,
     transactions: Vec<(
         SignedTransaction,
@@ -365,7 +365,7 @@ where
         timeline_state,
         &mut statuses,
         client_submitted,
-    );
+    ).await;
     notify_subscribers(SharedMempoolNotification::NewTransactions, &smp.subscribers);
     statuses
 }
