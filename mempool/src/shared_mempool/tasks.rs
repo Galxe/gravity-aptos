@@ -389,36 +389,37 @@ async fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
     TransactionValidator: TransactionValidation,
 {
     // Track latency: VM validation
-    let vm_validation_timer = counters::PROCESS_TXN_BREAKDOWN_LATENCY
-        .with_label_values(&[counters::VM_VALIDATION_LABEL])
-        .start_timer();
-    let validation_results = VALIDATION_POOL.install(|| {
-        transactions
-            .par_iter()
-            .map(|t| {
-                let result = smp.validator.read().validate_transaction(t.0.clone());
-                // Pre-compute the hash and length if the transaction is valid, before locking mempool
-                if result.is_ok() {
-                    t.0.committed_hash();
-                    t.0.txn_bytes_len();
-                }
-                result
-            })
-            .collect::<Vec<_>>()
-    });
-    vm_validation_timer.stop_and_record();
+    // let vm_validation_timer = counters::PROCESS_TXN_BREAKDOWN_LATENCY
+    //     .with_label_values(&[counters::VM_VALIDATION_LABEL])
+    //     .start_timer();
+    // let validation_results = VALIDATION_POOL.install(|| {
+    //     transactions
+    //         .par_iter()
+    //         .map(|t| {
+    //             let result = smp.validator.read().validate_transaction(t.0.clone());
+    //             // Pre-compute the hash and length if the transaction is valid, before locking mempool
+    //             if result.is_ok() {
+    //                 t.0.committed_hash();
+    //                 t.0.txn_bytes_len();
+    //             }
+    //             result
+    //         })
+    //         .collect::<Vec<_>>()
+    // });
+    // vm_validation_timer.stop_and_record();
     {
         let mut mempool = smp.mempool.lock();
         for (idx, (transaction, sequence_info, ready_time_at_sender, priority)) in
             transactions.into_iter().enumerate()
         {
-            if let Ok(validation_result) = &validation_results[idx] {
-                match validation_result.status() {
-                    None => {
-                        let ranking_score = validation_result.score();
+            // if let Ok(validation_result) = &validation_results[idx] {
+            //     match validation_result.status() {
+            //         None => {
+            //             let ranking_score = validation_result.score();
+                        
                         let mempool_status = mempool.add_txn(
                             transaction.clone(),
-                            ranking_score,
+                            0,
                             sequence_info,
                             timeline_state,
                             client_submitted,
@@ -426,26 +427,26 @@ async fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
                             priority.clone(),
                         ).await;
                         statuses.push((transaction, (mempool_status, None)));
-                    },
-                    Some(validation_status) => {
-                        statuses.push((
-                            transaction.clone(),
-                            (
-                                MempoolStatus::new(MempoolStatusCode::VmError),
-                                Some(validation_status),
-                            ),
-                        ));
-                    },
-                }
-            } else {
-                statuses.push((
-                    transaction.clone(),
-                    (
-                        MempoolStatus::new(MempoolStatusCode::VmError),
-                        Some(DiscardedVMStatus::UNKNOWN_STATUS),
-                    ),
-                ));
-            }
+            //         },
+            //         Some(validation_status) => {
+            //             statuses.push((
+            //                 transaction.clone(),
+            //                 (
+            //                     MempoolStatus::new(MempoolStatusCode::VmError),
+            //                     Some(validation_status),
+            //                 ),
+            //             ));
+            //         },
+            //     }
+            // } else {
+            //     statuses.push((
+            //         transaction.clone(),
+            //         (
+            //             MempoolStatus::new(MempoolStatusCode::VmError),
+            //             Some(DiscardedVMStatus::UNKNOWN_STATUS),
+            //         ),
+            //     ));
+            // }
         }
     }
 }
