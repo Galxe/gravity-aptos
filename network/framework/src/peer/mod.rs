@@ -358,7 +358,7 @@ where
             loop {
                 futures::select! {
                     message = stream.select_next_some() => {
-                        trace!("Sending message to peer: {:?}, message: {:?}", remote_peer_id, message);
+                        info!("Writer task: Sending message to peer: {:?}, message: {:?}", remote_peer_id, message);
                         if let Err(err) = timeout(transport::TRANSPORT_TIMEOUT,writer.send(&message)).await {
                             warn!(
                                 log_context,
