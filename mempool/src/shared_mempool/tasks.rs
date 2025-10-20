@@ -365,7 +365,7 @@ where
         timeline_state,
         &mut statuses,
         client_submitted,
-    ).await;
+    );
     notify_subscribers(SharedMempoolNotification::NewTransactions, &smp.subscribers);
     statuses
 }
@@ -373,7 +373,7 @@ where
 /// Perfoms VM validation on the transactions and inserts those that passes
 /// validation into the mempool.
 #[cfg(not(feature = "consensus-only-perf-test"))]
-async fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
+fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
     transactions: Vec<(
         SignedTransaction,
         u64,
@@ -426,7 +426,7 @@ async fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
                             client_submitted,
                             ready_time_at_sender,
                             priority.clone(),
-                        ).await;
+                        );
                         statuses.push((transaction, (mempool_status, None)));
             //         },
             //         Some(validation_status) => {
