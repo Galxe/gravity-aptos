@@ -301,6 +301,7 @@ where
     NetworkClient: NetworkClientInterface<MempoolSyncMsg>,
     TransactionValidator: TransactionValidation,
 {
+    info!("process_incoming_transactions start {} ", transactions.len());
     let mut statuses = vec![];
 
     let start_storage_read = Instant::now();
@@ -322,12 +323,12 @@ where
             })
             .collect::<Vec<_>>()
     });
+    info!("process_incoming_transactions seq numbers: {:?}", seq_numbers);
     // Track latency for storage read fetching sequence number
     let storage_read_latency = start_storage_read.elapsed();
     counters::PROCESS_TXN_BREAKDOWN_LATENCY
         .with_label_values(&[counters::FETCH_SEQ_NUM_LABEL])
         .observe(storage_read_latency.as_secs_f64() / transactions.len() as f64);
-    info!("process received transactions: {:?}", transactions.len());
     let transactions: Vec<_> = transactions
         .into_iter()
         .enumerate()
