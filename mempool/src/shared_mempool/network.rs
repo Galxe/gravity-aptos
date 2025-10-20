@@ -576,7 +576,7 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
                 transactions: transactions.into_iter().map(|(txn, _, _)| txn).collect(),
             }
         };
-
+        info!("Sending batch to peer: {:?}, request: {:?}", peer, request);
         if let Err(e) = self.network_client.send_to_peer(request, peer) {
             counters::network_send_fail_inc(counters::BROADCAST_TXNS);
             return Err(BroadcastError::NetworkError(peer, e.into()));

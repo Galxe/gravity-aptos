@@ -228,7 +228,7 @@ impl<Message: NetworkMessageTrait> NetworkClientInterface<Message> for NetworkCl
     }
 
     fn send_to_peer(&self, message: Message, peer: PeerNetworkId) -> Result<(), Error> {
-        info!("Sending message to peer: {:?} with message: {:?}", peer, message);
+        info!("Sending message to peer: {:?}", peer);
         let network_sender = self.get_sender_for_network_id(&peer.network_id())?;
         let direct_send_protocol_id = self
             .get_preferred_protocol_for_peer(&peer, &self.direct_send_protocols_and_preferences)?;
