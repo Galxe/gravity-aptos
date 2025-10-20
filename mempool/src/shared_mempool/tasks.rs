@@ -408,6 +408,7 @@ async fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
     // });
     // vm_validation_timer.stop_and_record();
     {
+        info!("lock share mempool");
         let mut mempool = smp.mempool.lock();
         for (idx, (transaction, sequence_info, ready_time_at_sender, priority)) in
             transactions.into_iter().enumerate()
@@ -416,7 +417,7 @@ async fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
             //     match validation_result.status() {
             //         None => {
             //             let ranking_score = validation_result.score();
-                        
+                        info!("add txn to mempool");
                         let mempool_status = mempool.add_txn(
                             transaction.clone(),
                             0,
