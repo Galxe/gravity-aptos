@@ -517,6 +517,7 @@ where
             request
         );
         self.sample_connected_peers();
+        info!("Handling outbound request: {:?}", request);
         let (peer_id, protocol_id, peer_request) = match request {
             PeerManagerRequest::SendDirectSend(peer_id, msg) => {
                 (peer_id, msg.protocol_id(), PeerRequest::SendDirectSend(msg))
@@ -527,6 +528,7 @@ where
         };
 
         if let Some((conn_metadata, sender)) = self.active_peers.get_mut(&peer_id) {
+            info!("Sending message to peer: {:?}, message: {:?}", conn_metadata.addr, peer_request);
             if let Err(err) = sender.push(protocol_id, peer_request) {
                 info!(
                     NetworkSchema::new(&self.network_context).connection_metadata(conn_metadata),
