@@ -327,7 +327,7 @@ where
     counters::PROCESS_TXN_BREAKDOWN_LATENCY
         .with_label_values(&[counters::FETCH_SEQ_NUM_LABEL])
         .observe(storage_read_latency.as_secs_f64() / transactions.len() as f64);
-
+    info!("process received transactions: {:?}", transactions.len());
     let transactions: Vec<_> = transactions
         .into_iter()
         .enumerate()
@@ -357,7 +357,7 @@ where
             None
         })
         .collect();
-
+    info!("process valid transactions: {:?}", transactions.len());
     validate_and_add_transactions(
         transactions,
         smp,
