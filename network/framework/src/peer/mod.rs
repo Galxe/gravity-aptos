@@ -358,6 +358,7 @@ where
             loop {
                 futures::select! {
                     message = stream.select_next_some() => {
+                        trace!("Sending message to peer: {:?}, message: {:?}", remote_peer_id, message);
                         if let Err(err) = timeout(transport::TRANSPORT_TIMEOUT,writer.send(&message)).await {
                             warn!(
                                 log_context,
@@ -449,6 +450,7 @@ where
         &mut self,
         message: NetworkMessage,
     ) -> Result<(), PeerManagerError> {
+        info!("Received direct send message: {:?}", message);
         match &message {
             NetworkMessage::DirectSendMsg(direct) => {
                 let data_len = direct.raw_msg.len();
