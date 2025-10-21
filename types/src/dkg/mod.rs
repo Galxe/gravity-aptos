@@ -108,6 +108,83 @@ impl DKGSessionMetadata {
     pub fn randomness_config_derived(&self) -> Option<OnChainRandomnessConfig> {
         OnChainRandomnessConfig::try_from(self.randomness_config.clone()).ok()
     }
+
+    /// Convert from api_types DKGSessionMetadata to types DKGSessionMetadata
+    pub fn from_api_types(api_metadata: api_types::on_chain_config::dkg::DKGSessionMetadata) -> Result<Self> {
+        // Convert validator sets
+        let dealer_validator_set = api_metadata.dealer_validator_set
+            .into_iter()
+            .map(|v| DKGSessionMetadata::convert_validator_consensus_info_from_api(v))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format_err!("Failed to convert dealer validator set: {}", e))?;
+
+        let target_validator_set = api_metadata.target_validator_set
+            .into_iter()
+            .map(|v| DKGSessionMetadata::convert_validator_consensus_info_from_api(v))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format_err!("Failed to convert target validator set: {}", e))?;
+
+        // Use default randomness config since api_types doesn't include it
+        let randomness_config = RandomnessConfigMoveStruct::from(OnChainRandomnessConfig::default_enabled());
+
+        Ok(DKGSessionMetadata {
+            dealer_epoch: api_metadata.dealer_epoch,
+            randomness_config,
+            dealer_validator_set,
+            target_validator_set,
+        })
+    }
+
+    /// Convert from types DKGSessionMetadata to api_types DKGSessionMetadata
+    pub fn to_api_types(&self) -> Result<api_types::on_chain_config::dkg::DKGSessionMetadata> {
+        // Convert validator sets
+        let dealer_validator_set = self.dealer_validator_set
+            .iter()
+            .map(|v| DKGSessionMetadata::convert_validator_consensus_info_to_api(v))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format_err!("Failed to convert dealer validator set: {}", e))?;
+
+        let target_validator_set = self.target_validator_set
+            .iter()
+            .map(|v| DKGSessionMetadata::convert_validator_consensus_info_to_api(v))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format_err!("Failed to convert target validator set: {}", e))?;
+
+        Ok(api_types::on_chain_config::dkg::DKGSessionMetadata {
+            dealer_epoch: self.dealer_epoch,
+            dealer_validator_set,
+            target_validator_set,
+        })
+    }
+
+    /// Helper function to convert api_types ValidatorConsensusInfoMoveStruct to types ValidatorConsensusInfoMoveStruct
+    fn convert_validator_consensus_info_from_api(
+        api_validator: api_types::on_chain_config::dkg::ValidatorConsensusInfoMoveStruct,
+    ) -> Result<ValidatorConsensusInfoMoveStruct> {
+        // Convert ExternalAccountAddress to AccountAddress
+        let addr = AccountAddress::from_bytes(&api_validator.addr.bytes())
+            .map_err(|e| format_err!("Failed to convert address: {}", e))?;
+
+        Ok(ValidatorConsensusInfoMoveStruct {
+            addr,
+            pk_bytes: api_validator.pk_bytes,
+            voting_power: api_validator.voting_power,
+        })
+    }
+
+    /// Helper function to convert types ValidatorConsensusInfoMoveStruct to api_types ValidatorConsensusInfoMoveStruct
+    fn convert_validator_consensus_info_to_api(
+        validator: &ValidatorConsensusInfoMoveStruct,
+    ) -> Result<api_types::on_chain_config::dkg::ValidatorConsensusInfoMoveStruct> {
+        // Convert AccountAddress to ExternalAccountAddress
+        let addr = api_types::account::ExternalAccountAddress::new(validator.addr.into_bytes());
+
+        Ok(api_types::on_chain_config::dkg::ValidatorConsensusInfoMoveStruct {
+            addr,
+            pk_bytes: validator.pk_bytes.clone(),
+            voting_power: validator.voting_power,
+        })
+    }
 }
 
 impl MayHaveRoundingSummary for DKGSessionMetadata {
@@ -128,6 +205,28 @@ impl DKGSessionState {
     pub fn target_epoch(&self) -> u64 {
         self.metadata.dealer_epoch + 1
     }
+
+    /// Convert from api_types DKGSessionState to types DKGSessionState
+    pub fn from_api_types(api_session: api_types::on_chain_config::dkg::DKGSessionState) -> Result<Self> {
+        let metadata = DKGSessionMetadata::from_api_types(api_session.metadata)?;
+        
+        Ok(DKGSessionState {
+            metadata,
+            start_time_us: api_session.start_time_us,
+            transcript: api_session.transcript,
+        })
+    }
+
+    /// Convert from types DKGSessionState to api_types DKGSessionState
+    pub fn to_api_types(&self) -> Result<api_types::on_chain_config::dkg::DKGSessionState> {
+        let metadata = self.metadata.to_api_types()?;
+        
+        Ok(api_types::on_chain_config::dkg::DKGSessionState {
+            metadata,
+            start_time_us: self.start_time_us,
+            transcript: self.transcript.clone(),
+        })
+    }
 }
 /// Reflection of Move type `0x1::dkg::DKGState`.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -147,6 +246,46 @@ impl DKGState {
     pub fn last_complete(&self) -> &DKGSessionState {
         self.last_completed.as_ref().unwrap()
     }
+
+    /// Convert from api_types DKGState to types DKGState
+    pub fn from_api_types(api_state: api_types::on_chain_config::dkg::DKGState) -> Result<Self> {
+        let last_completed = if let Some(api_session) = api_state.last_completed {
+            Some(DKGSessionState::from_api_types(api_session)?)
+        } else {
+            None
+        };
+
+        let in_progress = if let Some(api_session) = api_state.in_progress {
+            Some(DKGSessionState::from_api_types(api_session)?)
+        } else {
+            None
+        };
+
+        Ok(DKGState {
+            last_completed,
+            in_progress,
+        })
+    }
+
+    /// Convert from types DKGState to api_types DKGState
+    pub fn to_api_types(&self) -> Result<api_types::on_chain_config::dkg::DKGState> {
+        let last_completed = if let Some(session) = &self.last_completed {
+            Some(session.to_api_types()?)
+        } else {
+            None
+        };
+
+        let in_progress = if let Some(session) = &self.in_progress {
+            Some(session.to_api_types()?)
+        } else {
+            None
+        };
+
+        Ok(api_types::on_chain_config::dkg::DKGState {
+            last_completed,
+            in_progress,
+        })
+    }
 }
 
 impl OnChainConfig for DKGState {
@@ -154,11 +293,14 @@ impl OnChainConfig for DKGState {
     const TYPE_IDENTIFIER: &'static str = "DKGState";
 
     fn deserialize_into_config(bytes: &[u8]) -> Result<Self> {
-        // let raw_bytes: Vec<u8> = bcs::from_bytes(bytes)?;
-        // TODO(gravity_alex): Some diff for aptos and gravity, need to check
-        let raw_bytes = bytes;
-        bcs::from_bytes(&raw_bytes)
-            .map_err(|e| format_err!("[dkg state config] Failed to deserialize into config: {}", e))
+        // Deserialize from api_types DKGState format
+        let api_dkg_state = bcs::from_bytes::<api_types::on_chain_config::dkg::DKGState>(bytes)
+            .map_err(|e| format_err!("[dkg state config] Failed to deserialize api_types DKGState: {}", e))?;
+        
+        // Convert api_types DKGState to types DKGState
+        let dkg_state = Self::from_api_types(api_dkg_state)?;
+        
+        Ok(dkg_state)
     }
 }
 
