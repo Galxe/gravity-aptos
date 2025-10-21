@@ -7,7 +7,7 @@ use crate::{
     on_chain_config::{OnChainConfig, OnChainRandomnessConfig, RandomnessConfigMoveStruct},
     validator_verifier::{ValidatorConsensusInfo, ValidatorConsensusInfoMoveStruct},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{format_err, Result};
 use aptos_crypto::Uniform;
 use aptos_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use move_core_types::{
