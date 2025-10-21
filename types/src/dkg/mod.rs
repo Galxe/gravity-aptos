@@ -124,8 +124,8 @@ impl DKGSessionMetadata {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format_err!("Failed to convert target validator set: {}", e))?;
 
-        // Use default randomness config since api_types doesn't include it
-        let randomness_config = RandomnessConfigMoveStruct::from(OnChainRandomnessConfig::default_enabled());
+        // Convert randomness config from api_types format
+        let randomness_config = Self::convert_randomness_config_from_api(&api_metadata.randomness_config)?;
 
         Ok(DKGSessionMetadata {
             dealer_epoch: api_metadata.dealer_epoch,
@@ -150,16 +150,20 @@ impl DKGSessionMetadata {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format_err!("Failed to convert target validator set: {}", e))?;
 
+        // Convert randomness config to api_types format
+        let randomness_config = Self::convert_randomness_config_to_api(&self.randomness_config)?;
+
         Ok(api_types::on_chain_config::dkg::DKGSessionMetadata {
             dealer_epoch: self.dealer_epoch,
+            randomness_config,
             dealer_validator_set,
             target_validator_set,
         })
     }
 
-    /// Helper function to convert api_types ValidatorConsensusInfoMoveStruct to types ValidatorConsensusInfoMoveStruct
+    /// Helper function to convert api_types ValidatorConsensusInfo to types ValidatorConsensusInfoMoveStruct
     fn convert_validator_consensus_info_from_api(
-        api_validator: api_types::on_chain_config::dkg::ValidatorConsensusInfoMoveStruct,
+        api_validator: api_types::on_chain_config::dkg::ValidatorConsensusInfo,
     ) -> Result<ValidatorConsensusInfoMoveStruct> {
         // Convert ExternalAccountAddress to AccountAddress
         let addr = AccountAddress::from_bytes(&api_validator.addr.bytes())
@@ -172,18 +176,169 @@ impl DKGSessionMetadata {
         })
     }
 
-    /// Helper function to convert types ValidatorConsensusInfoMoveStruct to api_types ValidatorConsensusInfoMoveStruct
+    /// Helper function to convert types ValidatorConsensusInfoMoveStruct to api_types ValidatorConsensusInfo
     fn convert_validator_consensus_info_to_api(
         validator: &ValidatorConsensusInfoMoveStruct,
-    ) -> Result<api_types::on_chain_config::dkg::ValidatorConsensusInfoMoveStruct> {
+    ) -> Result<api_types::on_chain_config::dkg::ValidatorConsensusInfo> {
         // Convert AccountAddress to ExternalAccountAddress
         let addr = api_types::account::ExternalAccountAddress::new(validator.addr.into_bytes());
 
-        Ok(api_types::on_chain_config::dkg::ValidatorConsensusInfoMoveStruct {
+        Ok(api_types::on_chain_config::dkg::ValidatorConsensusInfo {
             addr,
             pk_bytes: validator.pk_bytes.clone(),
             voting_power: validator.voting_power,
         })
+    }
+
+    /// Helper function to convert api_types RandomnessConfigData to types RandomnessConfigMoveStruct
+    fn convert_randomness_config_from_api(
+        api_config: &api_types::on_chain_config::dkg::RandomnessConfigData,
+    ) -> Result<RandomnessConfigMoveStruct> {
+        
+        
+        let on_chain_config = match api_config.variant {
+            api_types::on_chain_config::dkg::ConfigVariant::V1 => {
+                let config_v1 = &api_config.configV1;
+                let secrecy_threshold = DKGSessionMetadata::convert_fixed_point_from_api(&config_v1.secrecyThreshold)?;
+                let reconstruction_threshold = DKGSessionMetadata::convert_fixed_point_from_api(&config_v1.reconstructionThreshold)?;
+                
+                // Convert u128 values to percentages for OnChainRandomnessConfig::new_v1
+                let secrecy_percentage = Self::fixed_point_to_percentage(&secrecy_threshold)?;
+                let reconstruction_percentage = Self::fixed_point_to_percentage(&reconstruction_threshold)?;
+                
+                OnChainRandomnessConfig::new_v1(secrecy_percentage, reconstruction_percentage)
+            },
+            api_types::on_chain_config::dkg::ConfigVariant::V2 => {
+                let config_v2 = &api_config.configV2;
+                let secrecy_threshold = DKGSessionMetadata::convert_fixed_point_from_api(&config_v2.secrecyThreshold)?;
+                let reconstruction_threshold = DKGSessionMetadata::convert_fixed_point_from_api(&config_v2.reconstructionThreshold)?;
+                let fast_path_secrecy_threshold = DKGSessionMetadata::convert_fixed_point_from_api(&config_v2.fastPathSecrecyThreshold)?;
+                
+                // Convert u128 values to percentages for OnChainRandomnessConfig::new_v2
+                let secrecy_percentage = Self::fixed_point_to_percentage(&secrecy_threshold)?;
+                let reconstruction_percentage = Self::fixed_point_to_percentage(&reconstruction_threshold)?;
+                let fast_path_secrecy_percentage = Self::fixed_point_to_percentage(&fast_path_secrecy_threshold)?;
+                
+                OnChainRandomnessConfig::new_v2(secrecy_percentage, reconstruction_percentage, fast_path_secrecy_percentage)
+            },
+        };
+        
+        Ok(RandomnessConfigMoveStruct::from(on_chain_config))
+    }
+
+    /// Helper function to convert types RandomnessConfigMoveStruct to api_types RandomnessConfigData
+    fn convert_randomness_config_to_api(
+        config: &RandomnessConfigMoveStruct,
+    ) -> Result<api_types::on_chain_config::dkg::RandomnessConfigData> {
+        use api_types::on_chain_config::dkg::{ConfigVariant, ConfigV1, ConfigV2, FixedPoint64};
+        
+        // Convert RandomnessConfigMoveStruct to OnChainRandomnessConfig
+        let on_chain_config = OnChainRandomnessConfig::try_from(config.clone())
+            .map_err(|e| format_err!("Failed to convert RandomnessConfigMoveStruct: {}", e))?;
+        
+        match on_chain_config {
+            OnChainRandomnessConfig::Off => {
+                // For Off config, return a default V1 config with zero values
+                let config_v1 = ConfigV1 {
+                    secrecyThreshold: FixedPoint64 { value: 0 },
+                    reconstructionThreshold: FixedPoint64 { value: 0 },
+                };
+                
+                let config_v2 = ConfigV2 {
+                    secrecyThreshold: FixedPoint64 { value: 0 },
+                    reconstructionThreshold: FixedPoint64 { value: 0 },
+                    fastPathSecrecyThreshold: FixedPoint64 { value: 0 },
+                };
+                
+                Ok(api_types::on_chain_config::dkg::RandomnessConfigData {
+                    variant: ConfigVariant::V1,
+                    configV1: config_v1,
+                    configV2: config_v2,
+                })
+            },
+            OnChainRandomnessConfig::V1(config_v1) => {
+                let secrecy_threshold = DKGSessionMetadata::convert_fixed_point_to_api(&config_v1.secrecy_threshold)?;
+                let reconstruction_threshold = DKGSessionMetadata::convert_fixed_point_to_api(&config_v1.reconstruction_threshold)?;
+                
+                let api_config_v1 = ConfigV1 {
+                    secrecyThreshold: secrecy_threshold,
+                    reconstructionThreshold: reconstruction_threshold,
+                };
+                
+                let config_v2 = ConfigV2 {
+                    secrecyThreshold: FixedPoint64 { value: 0 },
+                    reconstructionThreshold: FixedPoint64 { value: 0 },
+                    fastPathSecrecyThreshold: FixedPoint64 { value: 0 },
+                };
+                
+                Ok(api_types::on_chain_config::dkg::RandomnessConfigData {
+                    variant: ConfigVariant::V1,
+                    configV1: api_config_v1,
+                    configV2: config_v2,
+                })
+            },
+            OnChainRandomnessConfig::V2(config_v2) => {
+                let secrecy_threshold = DKGSessionMetadata::convert_fixed_point_to_api(&config_v2.secrecy_threshold)?;
+                let reconstruction_threshold = DKGSessionMetadata::convert_fixed_point_to_api(&config_v2.reconstruction_threshold)?;
+                let fast_path_secrecy_threshold = DKGSessionMetadata::convert_fixed_point_to_api(&config_v2.fast_path_secrecy_threshold)?;
+                
+                let config_v1 = ConfigV1 {
+                    secrecyThreshold: FixedPoint64 { value: 0 },
+                    reconstructionThreshold: FixedPoint64 { value: 0 },
+                };
+                
+                let api_config_v2 = ConfigV2 {
+                    secrecyThreshold: secrecy_threshold,
+                    reconstructionThreshold: reconstruction_threshold,
+                    fastPathSecrecyThreshold: fast_path_secrecy_threshold,
+                };
+                
+                Ok(api_types::on_chain_config::dkg::RandomnessConfigData {
+                    variant: ConfigVariant::V2,
+                    configV1: config_v1,
+                    configV2: api_config_v2,
+                })
+            },
+        }
+    }
+
+    /// Helper function to convert api_types FixedPoint64 to types FixedPoint64MoveStruct
+    fn convert_fixed_point_from_api(
+        api_fixed_point: &api_types::on_chain_config::dkg::FixedPoint64,
+    ) -> Result<crate::move_fixed_point::FixedPoint64MoveStruct> {
+        use crate::move_fixed_point::FixedPoint64MoveStruct;
+        use fixed::types::U64F64;
+        
+        // Convert u128 value to U64F64, then to FixedPoint64MoveStruct
+        let u64f64 = U64F64::from_bits(api_fixed_point.value);
+        Ok(FixedPoint64MoveStruct::from_u64f64(u64f64))
+    }
+
+    /// Helper function to convert types FixedPoint64MoveStruct to api_types FixedPoint64
+    fn convert_fixed_point_to_api(
+        fixed_point: &crate::move_fixed_point::FixedPoint64MoveStruct,
+    ) -> Result<api_types::on_chain_config::dkg::FixedPoint64> {
+        use fixed::types::U64F64;
+        
+        // Convert FixedPoint64MoveStruct to U64F64, then to u128
+        let u64f64 = fixed_point.as_u64f64();
+        Ok(api_types::on_chain_config::dkg::FixedPoint64 {
+            value: u64f64.to_bits(),
+        })
+    }
+
+    /// Helper function to convert FixedPoint64MoveStruct to percentage (u64)
+    fn fixed_point_to_percentage(
+        fixed_point: &crate::move_fixed_point::FixedPoint64MoveStruct,
+    ) -> Result<u64> {
+        use fixed::types::U64F64;
+        
+        // Convert FixedPoint64MoveStruct to U64F64, then multiply by 100 to get percentage
+        let u64f64 = fixed_point.as_u64f64();
+        let percentage = u64f64 * U64F64::from_num(100);
+        
+        // Convert to u64, rounding to nearest integer
+        Ok(percentage.to_num::<u64>())
     }
 }
 
