@@ -7,7 +7,7 @@ use crate::{
     on_chain_config::{OnChainConfig, OnChainRandomnessConfig, RandomnessConfigMoveStruct},
     validator_verifier::{ValidatorConsensusInfo, ValidatorConsensusInfoMoveStruct},
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use aptos_crypto::Uniform;
 use aptos_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use move_core_types::{
@@ -150,8 +150,16 @@ impl DKGState {
 }
 
 impl OnChainConfig for DKGState {
-    const MODULE_IDENTIFIER: &'static str = "dkg";
+    const MODULE_IDENTIFIER: &'static str = "dkg_state";
     const TYPE_IDENTIFIER: &'static str = "DKGState";
+
+    fn deserialize_into_config(bytes: &[u8]) -> Result<Self> {
+        // let raw_bytes: Vec<u8> = bcs::from_bytes(bytes)?;
+        // TODO(gravity_alex): Some diff for aptos and gravity, need to check
+        let raw_bytes = bytes;
+        bcs::from_bytes(&raw_bytes)
+            .map_err(|e| format_err!("[dkg state config] Failed to deserialize into config: {}", e))
+    }
 }
 
 #[derive(Clone, Debug, Default)]
