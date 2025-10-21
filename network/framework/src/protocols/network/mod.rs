@@ -275,7 +275,6 @@ fn unix_micros() -> u64 {
 fn received_message_to_event<TMessage: Message>(
     message: ReceivedMessage,
 ) -> Option<Event<TMessage>> {
-    info!("Received message: {:?}", message);
     let peer_id = message.sender.peer_id();
     let ReceivedMessage {
         message,
@@ -411,7 +410,6 @@ impl<TMessage: Message + Send + 'static> NetworkSender<TMessage> {
         protocol: ProtocolId,
         message: Bytes,
     ) -> Result<(), NetworkError> {
-        info!("Sending raw message to peer: {:?}, protocol: {:?}, message: {:?}", recipient, protocol, message);
         self.peer_mgr_reqs_tx
             .send_to(recipient, protocol, message)?;
         Ok(())

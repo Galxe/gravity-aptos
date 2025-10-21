@@ -301,7 +301,6 @@ where
     NetworkClient: NetworkClientInterface<MempoolSyncMsg>,
     TransactionValidator: TransactionValidation,
 {
-    info!("process_incoming_transactions start {} ", transactions.len());
     let mut statuses = vec![];
 
     let start_storage_read = Instant::now();
@@ -358,7 +357,6 @@ where
             // None
         })
         .collect();
-    info!("process valid transactions: {:?}", transactions.len());
     validate_and_add_transactions(
         transactions,
         smp,
@@ -408,7 +406,6 @@ fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
     // });
     // vm_validation_timer.stop_and_record();
     {
-        info!("lock share mempool");
         let mut mempool = smp.mempool.lock();
         for (idx, (transaction, sequence_info, ready_time_at_sender, priority)) in
             transactions.into_iter().enumerate()

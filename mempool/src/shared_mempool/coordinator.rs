@@ -354,7 +354,6 @@ async fn handle_network_event<NetworkClient, TransactionValidator>(
 {
     match event {
         Event::Message(peer_id, msg) => {
-            info!("Received Mempool message: {:?}", msg);
             counters::shared_mempool_event_inc("message");
             match msg {
                 MempoolSyncMsg::BroadcastTransactionsRequest {
