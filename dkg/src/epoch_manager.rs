@@ -117,7 +117,7 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
                     let _ = tx.push((), dkg_start_event);
                     return Ok(());
                 } else {
-                    info!("[DKG] on_dkg_start_notification: failed in converting a contract event to a dkg start event!");
+                    debug!("[DKG] on_dkg_start_notification: failed in converting a contract event to a dkg start event!");
                 }
             }
         }
@@ -172,12 +172,13 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
             .get(&self.my_addr)
             .copied();
 
-        // TODO(gravity_lightman): mock randomness config seq num
+        // TODO(gravity_lightman_dkg): mock randomness config seq num
         // let onchain_randomness_config_seq_num = payload
         //     .get::<RandomnessConfigSeqNum>()
         //     .unwrap_or_else(|_| RandomnessConfigSeqNum::default_if_missing());
         let onchain_randomness_config_seq_num = RandomnessConfigSeqNum { seq_num: 0 };
 
+        // TODO(gravity_lightman_dkg): payload get randomness config
         // let randomness_config_move_struct = payload.get::<RandomnessConfigMoveStruct>();
         let randomness_config_move_struct = OnChainRandomnessConfig::default_enabled().try_into();
 
