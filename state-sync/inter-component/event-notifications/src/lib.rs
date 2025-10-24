@@ -420,7 +420,6 @@ impl DbBackedOnChainConfig {
 impl OnChainConfigProvider for DbBackedOnChainConfig {
     fn get<T: OnChainConfig>(&self) -> Result<T> {
         let gravity_config_storage = GLOBAL_CONFIG_STORAGE.get();
-        info!("lightman1010: DbBackedOnChainConfig get: {:?}", T::TYPE_IDENTIFIER);
         let bytes = gravity_config_storage
             .ok_or_else(|| Error::UnexpectedErrorEncountered("gravity config storage is not available".to_string()))?
             .fetch_config_bytes(

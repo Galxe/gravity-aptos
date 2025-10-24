@@ -162,7 +162,6 @@ impl<DKG: DKGTrait> DKGManager<DKG> {
         while !self.stopped {
             let handling_result = tokio::select! {
                 dkg_start_event = dkg_start_event_rx.select_next_some() => {
-                    info!("lightman1010: dkg process dkg_start_event");
                     self.process_dkg_start_event(dkg_start_event)
                         .await
                         .map_err(|e|anyhow!("[DKG] process_dkg_start_event failed: {e}"))

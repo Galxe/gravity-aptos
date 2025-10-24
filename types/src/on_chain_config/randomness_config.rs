@@ -203,12 +203,11 @@ impl OnChainRandomnessConfig {
     }
 
     pub fn randomness_enabled(&self) -> bool {
-        true
-        // match self {
-        //     OnChainRandomnessConfig::Off => false,
-        //     OnChainRandomnessConfig::V1(_) => true,
-        //     OnChainRandomnessConfig::V2(_) => true,
-        // }
+        match self {
+            OnChainRandomnessConfig::Off => false,
+            OnChainRandomnessConfig::V1(_) => true,
+            OnChainRandomnessConfig::V2(_) => true,
+        }
     }
 
     pub fn fast_randomness_enabled(&self) -> bool {

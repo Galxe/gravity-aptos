@@ -106,13 +106,11 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
     }
 
     fn on_dkg_start_notification(&mut self, notification: EventNotification) -> Result<()> {
-        info!("lightman1010: dkg on_dkg_start_notification");
         if let Some(tx) = self.dkg_start_event_tx.as_ref() {
             let EventNotification {
                 subscribed_events, ..
             } = notification;
             for event in subscribed_events {
-                info!("lightman1010: dkg on_dkg_start_notification: dkg start event: {:?}", event);
                 if let Ok(dkg_start_event) = DKGStartEvent::try_from(&event) {
                     let _ = tx.push((), dkg_start_event);
                     return Ok(());
@@ -121,7 +119,6 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
                 }
             }
         }
-        info!("lightman1010: dkg on_dkg_start_notification end");
         Ok(())
     }
 
@@ -130,7 +127,6 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
         loop {
             let handling_result = tokio::select! {
                 notification = self.dkg_start_events.select_next_some() => {
-                    info!("lightman1010: dkg receive start_events");
                     self.on_dkg_start_notification(notification)
                 },
                 reconfig_notification = self.reconfig_events.select_next_some() => {
@@ -159,7 +155,6 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
     }
 
     async fn start_new_epoch(&mut self, payload: OnChainConfigPayload<P>) -> Result<()> {
-        info!("lightman1010: dkg start_new_epoch");
         let validator_set: ValidatorSet = payload
             .get()
             .expect("failed to get ValidatorSet from payload");
@@ -205,9 +200,8 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
         let consensus_config = onchain_consensus_config.unwrap_or_default();
 
         // Check both validator txn and randomness features are enabled
-        // let randomness_enabled =
-        //     consensus_config.is_vtxn_enabled() && onchain_randomness_config.randomness_enabled();
-        let randomness_enabled = true;
+        let randomness_enabled =
+            consensus_config.is_vtxn_enabled() && onchain_randomness_config.randomness_enabled();
         if let (true, Some(my_index)) = (randomness_enabled, my_index) {
             let DKGState {
                 in_progress: in_progress_session,
@@ -229,7 +223,6 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
                 BoundedExecutor::new(8, tokio::runtime::Handle::current()),
             );
             let agg_trx_producer = AggTranscriptProducer::new(rb);
-            info!("lightman1010: dkg start_new_epoch: dkg_start_event_tx");
             let (dkg_start_event_tx, dkg_start_event_rx) =
                 aptos_channel::new(QueueStyle::KLAST, 1, None);
             self.dkg_start_event_tx = Some(dkg_start_event_tx);
@@ -263,7 +256,6 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
                 dkg_manager_close_rx,
             ));
         };
-        info!("lightman1010: dkg start_new_epoch end");
         Ok(())
     }
 
