@@ -146,7 +146,7 @@ impl OnChainRandomnessConfig {
         } else {
             onchain_raw_config
                 .and_then(|onchain_raw| OnChainRandomnessConfig::try_from(onchain_raw).ok())
-                .unwrap_or_else(OnChainRandomnessConfig::default_if_missing)
+                .unwrap_or_else(OnChainRandomnessConfig::default_for_genesis)
         }
     }
 }
