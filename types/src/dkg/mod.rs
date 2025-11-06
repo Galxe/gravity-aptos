@@ -444,7 +444,7 @@ impl DKGState {
 }
 
 impl OnChainConfig for DKGState {
-    const MODULE_IDENTIFIER: &'static str = "dkg_state";
+    const MODULE_IDENTIFIER: &'static str = "dkg";
     const TYPE_IDENTIFIER: &'static str = "DKGState";
 
     fn deserialize_into_config(bytes: &[u8]) -> Result<Self> {
