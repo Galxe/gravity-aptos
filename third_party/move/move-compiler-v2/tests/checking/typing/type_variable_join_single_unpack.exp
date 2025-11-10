@@ -1,4 +1,4 @@
-// -- Model dump before bytecode pipeline
+// -- Model dump before first bytecode pipeline
 module 0x8675309::M {
     struct Box<T> {
         f1: T,
@@ -22,7 +22,7 @@ module 0x8675309::M {
     }
 } // end 0x8675309::M
 
-// -- Sourcified model before bytecode pipeline
+// -- Sourcified model before first bytecode pipeline
 module 0x8675309::M {
     struct Box<T> has drop {
         f1: T,
@@ -32,10 +32,10 @@ module 0x8675309::M {
         abort 0
     }
     fun t0() {
-        let Box<u64>{f1: f1,f2: f2} = new<u64>();
+        let Box<u64>{f1: f1, f2: f2} = new<u64>();
         f1;
         f2;
-        let Box<Box<u64>>{f1: f1,f2: f2} = new<Box<u64>>();
+        let Box<Box<u64>>{f1: f1, f2: f2} = new<Box<u64>>();
         f1;
         f2;
     }

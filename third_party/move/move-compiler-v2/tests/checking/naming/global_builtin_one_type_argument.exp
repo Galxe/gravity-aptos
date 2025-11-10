@@ -1,4 +1,4 @@
-// -- Model dump before bytecode pipeline
+// -- Model dump before first bytecode pipeline
 module 0x8675309::M {
     struct R {
         dummy_field: bool,
@@ -25,17 +25,17 @@ module 0x8675309::M {
     }
 } // end 0x8675309::M
 
-// -- Sourcified model before bytecode pipeline
+// -- Sourcified model before first bytecode pipeline
 module 0x8675309::M {
     struct R has key {
     }
     fun t(account: &signer)
         acquires R
     {
-        let _ = exists<R>(0x0);
-        let () = move_to<R>(account, R{});
-        let _ = borrow_global<R>(0x0);
-        let _ = borrow_global_mut<R>(0x0);
-        let R{} = move_from<R>(0x0);
+        let _ = exists<R>(@0x0);
+        let () = move_to<R>(R{}, account);
+        let _ = borrow_global<R>(@0x0);
+        let _ = borrow_global_mut<R>(@0x0);
+        let R{} = move_from<R>(@0x0);
     }
 }

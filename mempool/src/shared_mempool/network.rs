@@ -90,6 +90,20 @@ pub enum BroadcastError {
     TooManyPendingBroadcasts(PeerNetworkId),
 }
 
+impl BroadcastError {
+    /// Returns a summary label for the error
+    pub fn get_label(&self) -> &'static str {
+        match self {
+            Self::NetworkError(_, _) => "network_error",
+            Self::NoTransactions(_) => "no_transactions",
+            Self::PeerNotFound(_) => "peer_not_found",
+            Self::PeerNotPrioritized(_, _) => "peer_not_prioritized",
+            Self::PeerNotScheduled(_) => "peer_not_scheduled",
+            Self::TooManyPendingBroadcasts(_) => "too_many_pending_broadcasts",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub enum BroadcastPeerPriority {
     Primary,
@@ -507,7 +521,6 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
                             std::cmp::Ordering::Greater
                         }
                     });
-
                     let max_txns = self.mempool_config.shared_mempool_batch_size;
                     let mut output_txns = vec![];
                     let mut output_updates = vec![];
@@ -541,7 +554,6 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
                                 .push((sender_bucket, (old_timeline_id.clone(), new_timeline_id)));
                         }
                     }
-
                     (
                         MempoolMessageId::from_timeline_ids(output_updates),
                         output_txns,

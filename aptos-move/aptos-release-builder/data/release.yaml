@@ -1,18 +1,20 @@
 ---
-remote_endpoint: https://fullnode.mainnet.aptoslabs.com
+remote_endpoint: https://fullnode.testnet.aptoslabs.com
 # replace with below for actual release, compat test needs concrete URL above:
 # remote_endpoint: ~
-name: "v1.28.0"
+name: "v1.36.1"
 proposals:
   - name: proposal_1_upgrade_framework
     metadata:
-      title: "Multi-step proposal to upgrade mainnet framework, version v1.28.0"
-      description: "This includes changes in https://github.com/aptos-labs/aptos-core/releases/tag/aptos-node-v1.28.0"
+      title: "Multi-step proposal to upgrade mainnet framework, version v1.36.1"
+      description: "This includes changes in https://github.com/aptos-labs/aptos-core/releases/tag/aptos-node-v1.36.1"
     execution_mode: MultiStep
     update_sequence:
       - Gas:
-          old: https://raw.githubusercontent.com/aptos-labs/aptos-networks/main/gas/v1.27.0.json
-          new: https://raw.githubusercontent.com/aptos-labs/aptos-networks/main/gas/v1.28.0.json
+          #          new: current
+          # replace with below for actual release, above "current" is needed for compat tests:
+          old: https://raw.githubusercontent.com/aptos-labs/aptos-networks/main/gas/v1.35.1.json
+          new: https://raw.githubusercontent.com/aptos-labs/aptos-networks/main/gas/v1.36.1.json
       - Framework:
           bytecode_version: 7
           git_hash: ~

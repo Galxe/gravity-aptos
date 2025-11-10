@@ -1,0 +1,10 @@
+[package]
+<<<<<<<< HEAD:aptos-move/e2e-move-tests/src/tests/federated_keyless_init_config.data/pack/Move.toml
+name = 'FederatedKeylessInitConfig'
+========
+name = "two_signer_cmp"
+>>>>>>>> aptos-node-v1.36.8-hotfix:aptos-move/e2e-move-tests/src/tests/cmp_generic.data/script/Move.toml
+version = "0.0.0"
+
+[dependencies]
+AptosFramework = { local = "../../../../../framework/aptos-framework" }

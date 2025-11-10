@@ -25,6 +25,7 @@ use aptos_config::network_id::NetworkId;
 use aptos_consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalRequestV1, BlockRetrievalResponse},
     common::Author,
+    opt_proposal_msg::OptProposalMsg,
     order_vote_msg::OrderVoteMsg,
     pipeline::{commit_decision::CommitDecision, commit_vote::CommitVote},
     proof_of_store::{ProofOfStore, ProofOfStoreMsg, SignedBatchInfo, SignedBatchInfoMsg},
@@ -155,7 +156,6 @@ pub enum IncomingRpcRequest {
     DAGRequest(IncomingDAGRequest),
     CommitRequest(IncomingCommitRequest),
     RandGenRequest(IncomingRandGenRequest),
-    #[allow(dead_code)]
     BlockRetrieval(IncomingBlockRetrievalRequest),
 }
 
@@ -267,6 +267,8 @@ impl NetworkSender {
             ConsensusMsg::BlockRetrievalResponse(resp) => *resp,
             _ => return Err(anyhow!("Invalid response to request")),
         };
+
+        // Verify response against retrieval request
         response
             .verify(retrieval_request, &self.validators)
             .map_err(|e| {
@@ -337,6 +339,18 @@ impl NetworkSender {
             error!("Error broadcasting to self: {:?}", err);
         }
 
+        #[cfg(feature = "failpoints")]
+        {
+            let msg_ref = &msg;
+            fail_point!("consensus::send::broadcast_self_only", |maybe_msg_name| {
+                if let Some(msg_name) = maybe_msg_name {
+                    if msg_ref.name() != &msg_name {
+                        self.broadcast_without_self(msg_ref.clone());
+                    }
+                }
+            });
+        }
+
         self.broadcast_without_self(msg);
     }
 
@@ -394,6 +408,12 @@ impl NetworkSender {
         self.broadcast(msg).await
     }
 
+    pub async fn broadcast_opt_proposal(&self, proposal_msg: OptProposalMsg) {
+        fail_point!("consensus::send::broadcast_opt_proposal", |_| ());
+        let msg = ConsensusMsg::OptProposalMsg(Box::new(proposal_msg));
+        self.broadcast(msg).await
+    }
+
     pub async fn broadcast_sync_info(&self, sync_info_msg: SyncInfo) {
         fail_point!("consensus::send::broadcast_sync_info", |_| ());
         let msg = ConsensusMsg::SyncInfo(Box::new(sync_info_msg));
@@ -440,6 +460,12 @@ impl NetworkSender {
     pub async fn broadcast_order_vote(&self, order_vote_msg: OrderVoteMsg) {
         fail_point!("consensus::send::order_vote", |_| ());
         let msg = ConsensusMsg::OrderVoteMsg(Box::new(order_vote_msg));
+        self.broadcast(msg).await
+    }
+
+    pub async fn broadcast_commit_vote(&self, commit_vote_msg: CommitVote) {
+        fail_point!("consensus::send::commit_vote", |_| ());
+        let msg = ConsensusMsg::CommitVoteMsg(Box::new(commit_vote_msg));
         self.broadcast(msg).await
     }
 
@@ -508,6 +534,7 @@ impl QuorumStoreSender for NetworkSender {
         recipient: Author,
         timeout: Duration,
     ) -> anyhow::Result<BatchResponse> {
+        fail_point!("consensus::send::request_batch", |_| Err(anyhow!("failed")));
         let request_digest = request.digest();
         let msg = ConsensusMsg::BatchRequestMsg(Box::new(request));
         let response = self.send_rpc(recipient, msg, timeout).await?;
@@ -780,6 +807,7 @@ impl NetworkTask {
                             };
                         },
                         consensus_msg @ (ConsensusMsg::ProposalMsg(_)
+                        | ConsensusMsg::OptProposalMsg(_)
                         | ConsensusMsg::VoteMsg(_)
                         | ConsensusMsg::RoundTimeoutMsg(_)
                         | ConsensusMsg::OrderVoteMsg(_)
@@ -796,6 +824,23 @@ impl NetworkTask {
                                         .remote_peer(peer_id),
                                     block_round = proposal.proposal().round(),
                                     block_hash = proposal.proposal().id(),
+                                );
+                            }
+                            if let ConsensusMsg::OptProposalMsg(proposal) = &consensus_msg {
+                                observe_block(
+                                    proposal.timestamp_usecs(),
+                                    BlockStage::NETWORK_RECEIVED,
+                                );
+                                observe_block(
+                                    proposal.timestamp_usecs(),
+                                    BlockStage::NETWORK_RECEIVED_OPT_PROPOSAL,
+                                );
+                                info!(
+                                    LogSchema::new(LogEvent::NetworkReceiveOptProposal)
+                                        .remote_peer(peer_id),
+                                    block_author = proposal.proposer(),
+                                    block_epoch = proposal.epoch(),
+                                    block_round = proposal.round(),
                                 );
                             }
                             Self::push_msg(peer_id, consensus_msg, &self.consensus_messages_tx);
@@ -828,6 +873,7 @@ impl NetworkTask {
                         .with_label_values(&[msg.name()])
                         .inc();
                     let req = match msg {
+                        // TODO @bchocho @hariria revisit deprecation later once BlockRetrievalRequest enum is released
                         ConsensusMsg::DeprecatedBlockRetrievalRequest(request) => {
                             debug!(
                                 remote_peer = peer_id,
@@ -842,6 +888,19 @@ impl NetworkTask {
                                     response_sender: callback,
                                 },
                             )
+                        },
+                        ConsensusMsg::BlockRetrievalRequest(request) => {
+                            debug!(
+                                remote_peer = peer_id,
+                                event = LogEvent::ReceiveBlockRetrieval,
+                                "{:?}",
+                                request
+                            );
+                            IncomingRpcRequest::BlockRetrieval(IncomingBlockRetrievalRequest {
+                                req: *request,
+                                protocol,
+                                response_sender: callback,
+                            })
                         },
                         ConsensusMsg::BatchRequestMsg(request) => {
                             debug!(

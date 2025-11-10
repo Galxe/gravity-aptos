@@ -954,6 +954,7 @@ The flag the existence of which indicates the primary fungible store is created 
 
 
 <pre><code>#[resource_group_member(#[group = <a href="object.md#0x1_object_ObjectGroup">0x1::object::ObjectGroup</a>])]
+#[deprecated]
 <b>struct</b> <a href="coin.md#0x1_coin_MigrationFlag">MigrationFlag</a> <b>has</b> key
 </code></pre>
 
@@ -1054,6 +1055,15 @@ Not enough coins to complete transaction
 
 
 
+<a id="0x1_coin_MAX_DECIMALS"></a>
+
+
+
+<pre><code><b>const</b> <a href="coin.md#0x1_coin_MAX_DECIMALS">MAX_DECIMALS</a>: u8 = 32;
+</code></pre>
+
+
+
 <a id="0x1_coin_EAGGREGATABLE_COIN_VALUE_TOO_LARGE"></a>
 
 The value of aggregatable coin used for transaction fees redistribution does not fit in u64.
@@ -1100,6 +1110,16 @@ The coin converison map is not created yet.
 
 
 <pre><code><b>const</b> <a href="coin.md#0x1_coin_ECOIN_CONVERSION_MAP_NOT_FOUND">ECOIN_CONVERSION_MAP_NOT_FOUND</a>: u64 = 27;
+</code></pre>
+
+
+
+<a id="0x1_coin_ECOIN_DECIMALS_TOO_LARGE"></a>
+
+The decimals of the coin is too large.
+
+
+<pre><code><b>const</b> <a href="coin.md#0x1_coin_ECOIN_DECIMALS_TOO_LARGE">ECOIN_DECIMALS_TOO_LARGE</a>: u64 = 29;
 </code></pre>
 
 
@@ -1991,9 +2011,7 @@ Return the <code>BurnRef</code> with the hot potato receipt.
 <summary>Implementation</summary>
 
 
-<pre><code>inline <b>fun</b> <a href="coin.md#0x1_coin_borrow_paired_burn_ref">borrow_paired_burn_ref</a>&lt;CoinType&gt;(
-    _: &<a href="coin.md#0x1_coin_BurnCapability">BurnCapability</a>&lt;CoinType&gt;
-): &BurnRef <b>acquires</b> <a href="coin.md#0x1_coin_CoinConversionMap">CoinConversionMap</a>, <a href="coin.md#0x1_coin_PairedFungibleAssetRefs">PairedFungibleAssetRefs</a> {
+<pre><code>inline <b>fun</b> <a href="coin.md#0x1_coin_borrow_paired_burn_ref">borrow_paired_burn_ref</a>&lt;CoinType&gt;(_: &<a href="coin.md#0x1_coin_BurnCapability">BurnCapability</a>&lt;CoinType&gt;): &BurnRef  {
     <b>let</b> metadata = <a href="coin.md#0x1_coin_assert_paired_metadata_exists">assert_paired_metadata_exists</a>&lt;CoinType&gt;();
     <b>let</b> metadata_addr = object_address(&metadata);
     <b>assert</b>!(<b>exists</b>&lt;<a href="coin.md#0x1_coin_PairedFungibleAssetRefs">PairedFungibleAssetRefs</a>&gt;(metadata_addr), <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error_internal">error::internal</a>(<a href="coin.md#0x1_coin_EPAIRED_FUNGIBLE_ASSET_REFS_NOT_FOUND">EPAIRED_FUNGIBLE_ASSET_REFS_NOT_FOUND</a>));
@@ -2091,44 +2109,45 @@ or disallow upgradability of total supply.
     <b>if</b> (!<a href="../../aptos-stdlib/../move-stdlib/doc/features.md#0x1_features_coin_to_fungible_asset_migration_feature_enabled">features::coin_to_fungible_asset_migration_feature_enabled</a>()) {
         <b>abort</b> <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error_unavailable">error::unavailable</a>(<a href="coin.md#0x1_coin_ECOIN_TO_FUNGIBLE_ASSET_FEATURE_NOT_ENABLED">ECOIN_TO_FUNGIBLE_ASSET_FEATURE_NOT_ENABLED</a>)
     };
-    <b>assert</b>!(<a href="coin.md#0x1_coin_is_coin_initialized">is_coin_initialized</a>&lt;CoinType&gt;(), <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error_invalid_argument">error::invalid_argument</a>(<a href="coin.md#0x1_coin_ECOIN_INFO_NOT_PUBLISHED">ECOIN_INFO_NOT_PUBLISHED</a>));
-
-    <b>let</b> metadata = <a href="coin.md#0x1_coin_ensure_paired_metadata">ensure_paired_metadata</a>&lt;CoinType&gt;();
-    <b>let</b> store = <a href="primary_fungible_store.md#0x1_primary_fungible_store_ensure_primary_store_exists">primary_fungible_store::ensure_primary_store_exists</a>(<a href="account.md#0x1_account">account</a>, metadata);
-    <b>let</b> store_address = <a href="object.md#0x1_object_object_address">object::object_address</a>(&store);
     <b>if</b> (<b>exists</b>&lt;<a href="coin.md#0x1_coin_CoinStore">CoinStore</a>&lt;CoinType&gt;&gt;(<a href="account.md#0x1_account">account</a>)) {
-        <b>let</b> <a href="coin.md#0x1_coin_CoinStore">CoinStore</a>&lt;CoinType&gt; { <a href="coin.md#0x1_coin">coin</a>, frozen, deposit_events, withdraw_events } = <b>move_from</b>&lt;<a href="coin.md#0x1_coin_CoinStore">CoinStore</a>&lt;CoinType&gt;&gt;(
-            <a href="account.md#0x1_account">account</a>
-        );
-        <a href="event.md#0x1_event_emit">event::emit</a>(
-            <a href="coin.md#0x1_coin_CoinStoreDeletion">CoinStoreDeletion</a> {
+        <b>let</b> <a href="coin.md#0x1_coin_CoinStore">CoinStore</a>&lt;CoinType&gt; { <a href="coin.md#0x1_coin">coin</a>, frozen, deposit_events, withdraw_events } =
+            <b>move_from</b>&lt;<a href="coin.md#0x1_coin_CoinStore">CoinStore</a>&lt;CoinType&gt;&gt;(<a href="account.md#0x1_account">account</a>);
+        <b>if</b> (<a href="coin.md#0x1_coin_is_coin_initialized">is_coin_initialized</a>&lt;CoinType&gt;() && <a href="coin.md#0x1_coin">coin</a>.value &gt; 0) {
+            <b>let</b> metadata = <a href="coin.md#0x1_coin_ensure_paired_metadata">ensure_paired_metadata</a>&lt;CoinType&gt;();
+            <b>let</b> store = <a href="primary_fungible_store.md#0x1_primary_fungible_store_ensure_primary_store_exists">primary_fungible_store::ensure_primary_store_exists</a>(<a href="account.md#0x1_account">account</a>, metadata);
+
+            <a href="event.md#0x1_event_emit">event::emit</a>(<a href="coin.md#0x1_coin_CoinStoreDeletion">CoinStoreDeletion</a> {
                 coin_type: <a href="../../aptos-stdlib/doc/type_info.md#0x1_type_info_type_name">type_info::type_name</a>&lt;CoinType&gt;(),
                 event_handle_creation_address: <a href="guid.md#0x1_guid_creator_address">guid::creator_address</a>(
                     <a href="event.md#0x1_event_guid">event::guid</a>(&deposit_events)
                 ),
                 deleted_deposit_event_handle_creation_number: <a href="guid.md#0x1_guid_creation_num">guid::creation_num</a>(<a href="event.md#0x1_event_guid">event::guid</a>(&deposit_events)),
                 deleted_withdraw_event_handle_creation_number: <a href="guid.md#0x1_guid_creation_num">guid::creation_num</a>(<a href="event.md#0x1_event_guid">event::guid</a>(&withdraw_events))
+            });
+
+            <b>if</b> (<a href="coin.md#0x1_coin">coin</a>.value == 0) {
+                <a href="coin.md#0x1_coin_destroy_zero">destroy_zero</a>(<a href="coin.md#0x1_coin">coin</a>);
+            } <b>else</b> {
+                <a href="fungible_asset.md#0x1_fungible_asset_unchecked_deposit_with_no_events">fungible_asset::unchecked_deposit_with_no_events</a>(
+                    object_address(&store),
+                    <a href="coin.md#0x1_coin_coin_to_fungible_asset">coin_to_fungible_asset</a>(<a href="coin.md#0x1_coin">coin</a>)
+                );
+            };
+
+            // Note:
+            // It is possible the primary fungible store may already exist before this function call.
+            // In this case, <b>if</b> the <a href="account.md#0x1_account">account</a> owns a frozen <a href="coin.md#0x1_coin_CoinStore">CoinStore</a> and an unfrozen primary fungible store, this
+            // function would convert and deposit the rest <a href="coin.md#0x1_coin">coin</a> into the primary store and <b>freeze</b> it <b>to</b> make the
+            // `frozen` semantic <b>as</b> consistent <b>as</b> possible.
+            <b>if</b> (frozen != <a href="fungible_asset.md#0x1_fungible_asset_is_frozen">fungible_asset::is_frozen</a>(store)) {
+                <a href="fungible_asset.md#0x1_fungible_asset_set_frozen_flag_internal">fungible_asset::set_frozen_flag_internal</a>(store, frozen);
             }
-        );
-        <b>if</b> (<a href="coin.md#0x1_coin">coin</a>.value == 0) {
-            <a href="coin.md#0x1_coin_destroy_zero">destroy_zero</a>(<a href="coin.md#0x1_coin">coin</a>);
         } <b>else</b> {
-            <a href="fungible_asset.md#0x1_fungible_asset_unchecked_deposit_with_no_events">fungible_asset::unchecked_deposit_with_no_events</a>(object_address(&store), <a href="coin.md#0x1_coin_coin_to_fungible_asset">coin_to_fungible_asset</a>(<a href="coin.md#0x1_coin">coin</a>));
+            <a href="coin.md#0x1_coin_destroy_zero">destroy_zero</a>(<a href="coin.md#0x1_coin">coin</a>);
         };
         <a href="event.md#0x1_event_destroy_handle">event::destroy_handle</a>(deposit_events);
         <a href="event.md#0x1_event_destroy_handle">event::destroy_handle</a>(withdraw_events);
-        // Note:
-        // It is possible the primary fungible store may already exist before this function call.
-        // In this case, <b>if</b> the <a href="account.md#0x1_account">account</a> owns a frozen <a href="coin.md#0x1_coin_CoinStore">CoinStore</a> and an unfrozen primary fungible store, this
-        // function would convert and deposit the rest <a href="coin.md#0x1_coin">coin</a> into the primary store and <b>freeze</b> it <b>to</b> make the
-        // `frozen` semantic <b>as</b> consistent <b>as</b> possible.
-        <b>if</b> (frozen != <a href="fungible_asset.md#0x1_fungible_asset_is_frozen">fungible_asset::is_frozen</a>(store)) {
-            <a href="fungible_asset.md#0x1_fungible_asset_set_frozen_flag_internal">fungible_asset::set_frozen_flag_internal</a>(store, frozen);
-        }
     };
-    <b>if</b> (!<b>exists</b>&lt;<a href="coin.md#0x1_coin_MigrationFlag">MigrationFlag</a>&gt;(store_address)) {
-        <b>move_to</b>(&<a href="create_signer.md#0x1_create_signer_create_signer">create_signer::create_signer</a>(store_address), <a href="coin.md#0x1_coin_MigrationFlag">MigrationFlag</a> {});
-    }
 }
 </code></pre>
 
@@ -2217,7 +2236,7 @@ Migrate to fungible store for <code>CoinType</code> if not yet.
 <pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x1_coin_migrate_coin_store_to_fungible_store">migrate_coin_store_to_fungible_store</a>&lt;CoinType&gt;(
     accounts: <a href="../../aptos-stdlib/../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;
 ) <b>acquires</b> <a href="coin.md#0x1_coin_CoinStore">CoinStore</a>, <a href="coin.md#0x1_coin_CoinConversionMap">CoinConversionMap</a>, <a href="coin.md#0x1_coin_CoinInfo">CoinInfo</a> {
-    <b>if</b> (<a href="../../aptos-stdlib/../move-stdlib/doc/features.md#0x1_features_new_accounts_default_to_fa_apt_store_enabled">features::new_accounts_default_to_fa_apt_store_enabled</a>()) {
+    <b>if</b> (<a href="../../aptos-stdlib/../move-stdlib/doc/features.md#0x1_features_new_accounts_default_to_fa_store_enabled">features::new_accounts_default_to_fa_store_enabled</a>() || <a href="../../aptos-stdlib/../move-stdlib/doc/features.md#0x1_features_new_accounts_default_to_fa_apt_store_enabled">features::new_accounts_default_to_fa_apt_store_enabled</a>()) {
         std::vector::for_each(accounts, |<a href="account.md#0x1_account">account</a>| {
             <a href="coin.md#0x1_coin_maybe_convert_to_fungible_store">maybe_convert_to_fungible_store</a>&lt;CoinType&gt;(<a href="account.md#0x1_account">account</a>);
         });
@@ -2399,7 +2418,7 @@ Returns <code><b>true</b></code> is account_addr has frozen the CoinStore or if 
 
 <pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x1_coin_is_coin_store_frozen">is_coin_store_frozen</a>&lt;CoinType&gt;(
     account_addr: <b>address</b>
-): bool <b>acquires</b> <a href="coin.md#0x1_coin_CoinStore">CoinStore</a>, <a href="coin.md#0x1_coin_CoinConversionMap">CoinConversionMap</a> {
+): bool <b>acquires</b> <a href="coin.md#0x1_coin_CoinStore">CoinStore</a>, <a href="coin.md#0x1_coin_CoinConversionMap">CoinConversionMap</a>, <a href="coin.md#0x1_coin_CoinInfo">CoinInfo</a> {
     <b>if</b> (!<a href="coin.md#0x1_coin_is_account_registered">is_account_registered</a>&lt;CoinType&gt;(account_addr)) {
         <b>return</b> <b>true</b>
     };
@@ -2430,15 +2449,13 @@ Returns <code><b>true</b></code> if <code>account_addr</code> is registered to r
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x1_coin_is_account_registered">is_account_registered</a>&lt;CoinType&gt;(account_addr: <b>address</b>): bool <b>acquires</b> <a href="coin.md#0x1_coin_CoinConversionMap">CoinConversionMap</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x1_coin_is_account_registered">is_account_registered</a>&lt;CoinType&gt;(account_addr: <b>address</b>): bool <b>acquires</b> <a href="coin.md#0x1_coin_CoinConversionMap">CoinConversionMap</a>, <a href="coin.md#0x1_coin_CoinInfo">CoinInfo</a> {
     <b>assert</b>!(<a href="coin.md#0x1_coin_is_coin_initialized">is_coin_initialized</a>&lt;CoinType&gt;(), <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error_invalid_argument">error::invalid_argument</a>(<a href="coin.md#0x1_coin_ECOIN_INFO_NOT_PUBLISHED">ECOIN_INFO_NOT_PUBLISHED</a>));
     <b>if</b> (<b>exists</b>&lt;<a href="coin.md#0x1_coin_CoinStore">CoinStore</a>&lt;CoinType&gt;&gt;(account_addr)) {
         <b>true</b>
     } <b>else</b> {
-        <b>let</b> paired_metadata_opt = <a href="coin.md#0x1_coin_paired_metadata">paired_metadata</a>&lt;CoinType&gt;();
-        (<a href="../../aptos-stdlib/../move-stdlib/doc/option.md#0x1_option_is_some">option::is_some</a>(
-            &paired_metadata_opt
-        ) && <a href="coin.md#0x1_coin_can_receive_paired_fungible_asset">can_receive_paired_fungible_asset</a>(account_addr, <a href="../../aptos-stdlib/../move-stdlib/doc/option.md#0x1_option_destroy_some">option::destroy_some</a>(paired_metadata_opt)))
+        <b>let</b> paired_metadata = <a href="coin.md#0x1_coin_ensure_paired_metadata">ensure_paired_metadata</a>&lt;CoinType&gt;();
+        <a href="coin.md#0x1_coin_can_receive_paired_fungible_asset">can_receive_paired_fungible_asset</a>(account_addr, paired_metadata)
     }
 }
 </code></pre>
@@ -2755,11 +2772,8 @@ Deposit the coin balance into the recipient's account and emit an event.
             );
         <a href="coin.md#0x1_coin_merge">merge</a>(&<b>mut</b> coin_store.<a href="coin.md#0x1_coin">coin</a>, <a href="coin.md#0x1_coin">coin</a>);
     } <b>else</b> {
-        <b>let</b> metadata = <a href="coin.md#0x1_coin_paired_metadata">paired_metadata</a>&lt;CoinType&gt;();
-        <b>if</b> (<a href="../../aptos-stdlib/../move-stdlib/doc/option.md#0x1_option_is_some">option::is_some</a>(&metadata) && <a href="coin.md#0x1_coin_can_receive_paired_fungible_asset">can_receive_paired_fungible_asset</a>(
-            account_addr,
-            <a href="../../aptos-stdlib/../move-stdlib/doc/option.md#0x1_option_destroy_some">option::destroy_some</a>(metadata)
-        )) {
+        <b>let</b> metadata = <a href="coin.md#0x1_coin_ensure_paired_metadata">ensure_paired_metadata</a>&lt;CoinType&gt;();
+        <b>if</b> (<a href="coin.md#0x1_coin_can_receive_paired_fungible_asset">can_receive_paired_fungible_asset</a>( account_addr, metadata)) {
             <a href="primary_fungible_store.md#0x1_primary_fungible_store_deposit">primary_fungible_store::deposit</a>(account_addr, <a href="coin.md#0x1_coin_coin_to_fungible_asset">coin_to_fungible_asset</a>(<a href="coin.md#0x1_coin">coin</a>));
         } <b>else</b> {
             <b>abort</b> <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error_not_found">error::not_found</a>(<a href="coin.md#0x1_coin_ECOIN_STORE_NOT_PUBLISHED">ECOIN_STORE_NOT_PUBLISHED</a>)
@@ -2828,11 +2842,13 @@ Deposit the coin balance into the recipient's account and emit an event.
     account_address: <b>address</b>,
     metadata: Object&lt;Metadata&gt;
 ): bool {
-    <b>let</b> primary_store_address = <a href="primary_fungible_store.md#0x1_primary_fungible_store_primary_store_address">primary_fungible_store::primary_store_address</a>&lt;Metadata&gt;(account_address, metadata);
-    <a href="fungible_asset.md#0x1_fungible_asset_store_exists">fungible_asset::store_exists</a>(primary_store_address) && (
-        // migration flag is needed, until we start defaulting new accounts <b>to</b> APT PFS
-        <a href="../../aptos-stdlib/../move-stdlib/doc/features.md#0x1_features_new_accounts_default_to_fa_apt_store_enabled">features::new_accounts_default_to_fa_apt_store_enabled</a>() || <b>exists</b>&lt;<a href="coin.md#0x1_coin_MigrationFlag">MigrationFlag</a>&gt;(primary_store_address)
-    )
+    <a href="../../aptos-stdlib/../move-stdlib/doc/features.md#0x1_features_new_accounts_default_to_fa_store_enabled">features::new_accounts_default_to_fa_store_enabled</a>() || (<a href="../../aptos-stdlib/../move-stdlib/doc/features.md#0x1_features_new_accounts_default_to_fa_apt_store_enabled">features::new_accounts_default_to_fa_apt_store_enabled</a>() && <a href="object.md#0x1_object_object_address">object::object_address</a>(&metadata) == @0xa) || {
+        <b>let</b> primary_store_address = <a href="primary_fungible_store.md#0x1_primary_fungible_store_primary_store_address">primary_fungible_store::primary_store_address</a>&lt;Metadata&gt;(
+            account_address,
+            metadata
+        );
+        <a href="fungible_asset.md#0x1_fungible_asset_store_exists">fungible_asset::store_exists</a>(primary_store_address)
+    }
 }
 </code></pre>
 
@@ -2865,14 +2881,14 @@ This is for internal use only and doesn't emit an DepositEvent.
         <b>let</b> coin_store = <b>borrow_global_mut</b>&lt;<a href="coin.md#0x1_coin_CoinStore">CoinStore</a>&lt;CoinType&gt;&gt;(account_addr);
         <a href="coin.md#0x1_coin_merge">merge</a>(&<b>mut</b> coin_store.<a href="coin.md#0x1_coin">coin</a>, <a href="coin.md#0x1_coin">coin</a>);
     } <b>else</b> {
-        <b>let</b> metadata = <a href="coin.md#0x1_coin_paired_metadata">paired_metadata</a>&lt;CoinType&gt;();
-        <b>if</b> (<a href="../../aptos-stdlib/../move-stdlib/doc/option.md#0x1_option_is_some">option::is_some</a>(&metadata) && <a href="coin.md#0x1_coin_can_receive_paired_fungible_asset">can_receive_paired_fungible_asset</a>(
+        <b>let</b> metadata = <a href="coin.md#0x1_coin_ensure_paired_metadata">ensure_paired_metadata</a>&lt;CoinType&gt;();
+        <b>if</b> (<a href="coin.md#0x1_coin_can_receive_paired_fungible_asset">can_receive_paired_fungible_asset</a>(
             account_addr,
-            <a href="../../aptos-stdlib/../move-stdlib/doc/option.md#0x1_option_destroy_some">option::destroy_some</a>(metadata)
+            metadata
         )) {
             <b>let</b> fa = <a href="coin.md#0x1_coin_coin_to_fungible_asset">coin_to_fungible_asset</a>(<a href="coin.md#0x1_coin">coin</a>);
             <b>let</b> metadata = <a href="fungible_asset.md#0x1_fungible_asset_asset_metadata">fungible_asset::asset_metadata</a>(&fa);
-            <b>let</b> store = <a href="primary_fungible_store.md#0x1_primary_fungible_store_primary_store">primary_fungible_store::primary_store</a>(account_addr, metadata);
+            <b>let</b> store = <a href="primary_fungible_store.md#0x1_primary_fungible_store_ensure_primary_store_exists">primary_fungible_store::ensure_primary_store_exists</a>(account_addr, metadata);
             <a href="fungible_asset.md#0x1_fungible_asset_unchecked_deposit_with_no_events">fungible_asset::unchecked_deposit_with_no_events</a>(<a href="object.md#0x1_object_object_address">object::object_address</a>(&store), fa);
         } <b>else</b> {
             <b>abort</b> <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error_not_found">error::not_found</a>(<a href="coin.md#0x1_coin_ECOIN_STORE_NOT_PUBLISHED">ECOIN_STORE_NOT_PUBLISHED</a>)
@@ -3171,6 +3187,7 @@ Same as <code>initialize</code> but supply can be initialized to parallelizable 
 
     <b>assert</b>!(<a href="../../aptos-stdlib/../move-stdlib/doc/string.md#0x1_string_length">string::length</a>(&name) &lt;= <a href="coin.md#0x1_coin_MAX_COIN_NAME_LENGTH">MAX_COIN_NAME_LENGTH</a>, <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error_invalid_argument">error::invalid_argument</a>(<a href="coin.md#0x1_coin_ECOIN_NAME_TOO_LONG">ECOIN_NAME_TOO_LONG</a>));
     <b>assert</b>!(<a href="../../aptos-stdlib/../move-stdlib/doc/string.md#0x1_string_length">string::length</a>(&symbol) &lt;= <a href="coin.md#0x1_coin_MAX_COIN_SYMBOL_LENGTH">MAX_COIN_SYMBOL_LENGTH</a>, <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error_invalid_argument">error::invalid_argument</a>(<a href="coin.md#0x1_coin_ECOIN_SYMBOL_TOO_LONG">ECOIN_SYMBOL_TOO_LONG</a>));
+    <b>assert</b>!(<a href="coin.md#0x1_coin_decimals">decimals</a> &lt;= <a href="coin.md#0x1_coin_MAX_DECIMALS">MAX_DECIMALS</a>, <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error_invalid_argument">error::invalid_argument</a>(<a href="coin.md#0x1_coin_ECOIN_DECIMALS_TOO_LARGE">ECOIN_DECIMALS_TOO_LARGE</a>));
 
     <b>let</b> coin_info = <a href="coin.md#0x1_coin_CoinInfo">CoinInfo</a>&lt;CoinType&gt; {
         name,
@@ -3989,13 +4006,15 @@ Get address by reflection.
 <a id="0x1_coin_spec_is_account_registered"></a>
 
 
-<pre><code><b>fun</b> <a href="coin.md#0x1_coin_spec_is_account_registered">spec_is_account_registered</a>&lt;CoinType&gt;(account_addr: <b>address</b>): bool {
-   <b>let</b> paired_metadata_opt = <a href="coin.md#0x1_coin_spec_paired_metadata">spec_paired_metadata</a>&lt;CoinType&gt;();
-   <b>exists</b>&lt;<a href="coin.md#0x1_coin_CoinStore">CoinStore</a>&lt;CoinType&gt;&gt;(account_addr) || <a href="../../aptos-stdlib/../move-stdlib/doc/features.md#0x1_features_spec_new_accounts_default_to_fa_apt_store_enabled">features::spec_new_accounts_default_to_fa_apt_store_enabled</a>(
-   ) || (<a href="../../aptos-stdlib/../move-stdlib/doc/option.md#0x1_option_spec_is_some">option::spec_is_some</a>(
-       paired_metadata_opt
-   ) && <a href="primary_fungible_store.md#0x1_primary_fungible_store_spec_primary_store_exists">primary_fungible_store::spec_primary_store_exists</a>(account_addr, <a href="../../aptos-stdlib/../move-stdlib/doc/option.md#0x1_option_spec_borrow">option::spec_borrow</a>(paired_metadata_opt)))
-}
+<pre><code><b>fun</b> <a href="coin.md#0x1_coin_spec_is_account_registered">spec_is_account_registered</a>&lt;CoinType&gt;(account_addr:<b>address</b>): bool;
+</code></pre>
+
+
+
+
+<pre><code><b>pragma</b> aborts_if_is_partial;
+<b>aborts_if</b> <b>false</b>;
+<b>ensures</b> [abstract] result == <a href="coin.md#0x1_coin_spec_is_account_registered">spec_is_account_registered</a>&lt;CoinType&gt;(account_addr);
 </code></pre>
 
 

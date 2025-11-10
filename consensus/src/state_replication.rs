@@ -3,19 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    error::StateSyncError, payload_manager::TPayloadManager,
-    pipeline::pipeline_phase::CountedRequest, state_computer::StateComputeResultFut,
+    error::StateSyncError, network::NetworkSender, payload_manager::TPayloadManager,
     transaction_deduper::TransactionDeduper, transaction_shuffler::TransactionShuffler,
 };
 use anyhow::Result;
-use aptos_consensus_types::{
-    block::Block, pipelined_block::PipelinedBlock, quorum_cert::QuorumCert,
-};
-use aptos_crypto::HashValue;
-use aptos_executor_types::ExecutorResult;
+use aptos_consensus_types::pipelined_block::PipelinedBlock;
 use aptos_types::{
     block_executor::config::BlockExecutorConfigFromOnchain, epoch_state::EpochState,
-    ledger_info::LedgerInfoWithSignatures, randomness::Randomness,
+    ledger_info::LedgerInfoWithSignatures, on_chain_config::OnChainConsensusConfig,
 };
 use std::{sync::Arc, time::Duration};
 
@@ -27,26 +22,14 @@ pub type StateComputerCommitCallBackType =
 /// StateComputer is using proposed block ids for identifying the transactions.
 #[async_trait::async_trait]
 pub trait StateComputer: Send + Sync {
-    async fn schedule_compute(
+    /// Best effort state synchronization for the specified duration.
+    /// This function returns the latest synced ledger info after state syncing.
+    /// Note: it is possible that state sync may run longer than the specified
+    /// duration (e.g., if the node is very far behind).
+    async fn sync_for_duration(
         &self,
-        // The block that will be computed.
-        _block: &Block,
-        // The parent block root hash.
-        _parent_block_id: HashValue,
-        _randomness: Option<Randomness>,
-        _block_qc: Option<Arc<QuorumCert>>,
-        _lifetime_guard: CountedRequest<()>,
-    ) -> StateComputeResultFut {
-        unimplemented!();
-    }
-
-    /// Send a successful commit. A future is fulfilled when the state is finalized.
-    async fn commit(
-        &self,
-        blocks: &[Arc<PipelinedBlock>],
-        finality_proof: LedgerInfoWithSignatures,
-        callback: StateComputerCommitCallBackType,
-    ) -> ExecutorResult<()>;
+        duration: Duration,
+    ) -> Result<LedgerInfoWithSignatures, StateSyncError>;
 
     /// Best effort state synchronization for the specified duration.
     /// This function returns the latest synced ledger info after state syncing.
@@ -72,6 +55,9 @@ pub trait StateComputer: Send + Sync {
         block_executor_onchain_config: BlockExecutorConfigFromOnchain,
         transaction_deduper: Arc<dyn TransactionDeduper>,
         randomness_enabled: bool,
+        consensus_onchain_config: OnChainConsensusConfig,
+        persisted_auxiliary_info_version: u8,
+        network_sender: Arc<NetworkSender>,
     );
 
     // Reconfigure to clear epoch state at end of epoch.

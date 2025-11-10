@@ -4,11 +4,13 @@
 
 //! Objects used by/related to shared mempool
 use crate::{
-    core_mempool::{CoreMempool, TimelineState}, logging::TxnsLog, network::{BroadcastPeerPriority, MempoolNetworkInterface, MempoolSyncMsg}, shared_mempool::use_case_history::UseCaseHistory
+    core_mempool::{CoreMempool, TimelineId},
+    network::{MempoolNetworkInterface, MempoolSyncMsg},
+    shared_mempool::use_case_history::UseCaseHistory,
 };
 use anyhow::Result;
 use aptos_config::{
-    config::{MempoolConfig, NodeConfig, NodeType},
+    config::{MempoolConfig, NodeType, TransactionFilterConfig},
     network_id::PeerNetworkId,
 };
 use aptos_consensus_types::common::{
@@ -19,7 +21,7 @@ use aptos_infallible::{Mutex, RwLock};
 use aptos_network::application::interface::NetworkClientInterface;
 use aptos_storage_interface::DbReader;
 use aptos_types::{
-    account_address::AccountAddress, mempool_status::MempoolStatus, transaction::{use_case::UseCaseKey, SignedTransaction},
+    account_address::AccountAddress, mempool_status::MempoolStatus, transaction::SignedTransaction,
     vm_status::DiscardedVMStatus,
 };
 use aptos_vm_validator::vm_validator::TransactionValidation;
@@ -187,6 +189,7 @@ pub(crate) struct SharedMempool<NetworkClient, TransactionValidator> {
     pub subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
     pub broadcast_within_validator_network: Arc<RwLock<bool>>,
     pub use_case_history: Arc<Mutex<UseCaseHistory>>,
+    pub transaction_filter_config: TransactionFilterConfig,
 }
 
 impl<
@@ -197,6 +200,7 @@ impl<
     pub fn new(
         mempool: Arc<Mutex<Box<dyn CoreMempoolTrait>>>,
         config: MempoolConfig,
+        transaction_filter_config: TransactionFilterConfig,
         network_client: NetworkClient,
         db: Arc<dyn DbReader>,
         validator: Arc<RwLock<TransactionValidator>>,
@@ -218,6 +222,7 @@ impl<
             subscribers,
             broadcast_within_validator_network: Arc::new(RwLock::new(true)),
             use_case_history: Arc::new(Mutex::new(use_case_history)),
+            transaction_filter_config,
         }
     }
 
@@ -434,7 +439,7 @@ impl Ord for BatchId {
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct MultiBucketTimelineIndexIds {
-    pub id_per_bucket: Vec<u64>,
+    pub id_per_bucket: Vec<TimelineId>,
 }
 
 impl MultiBucketTimelineIndexIds {
@@ -444,7 +449,10 @@ impl MultiBucketTimelineIndexIds {
         }
     }
 
-    pub(crate) fn update(&mut self, start_end_pairs: HashMap<TimelineIndexIdentifier, (u64, u64)>) {
+    pub(crate) fn update(
+        &mut self,
+        start_end_pairs: HashMap<TimelineIndexIdentifier, (TimelineId, TimelineId)>,
+    ) {
         if self.id_per_bucket.len() != start_end_pairs.len() {
             return;
         }
@@ -463,7 +471,7 @@ impl MultiBucketTimelineIndexIds {
 }
 
 impl From<Vec<u64>> for MultiBucketTimelineIndexIds {
-    fn from(timeline_ids: Vec<u64>) -> Self {
+    fn from(timeline_ids: Vec<TimelineId>) -> Self {
         Self {
             id_per_bucket: timeline_ids,
         }
@@ -504,8 +512,8 @@ impl MempoolMessageId {
                             assert!(timeline_index_identifier < 128);
                             assert!(sender_bucket < 128);
                             (
-                                sender_bucket << 56 | timeline_index_identifier << 48 | old,
-                                sender_bucket << 56 | timeline_index_identifier << 48 | new,
+                                (sender_bucket << 56) | (timeline_index_identifier << 48) | old,
+                                (sender_bucket << 56) | (timeline_index_identifier << 48) | new,
                             )
                         })
                 })
@@ -519,7 +527,7 @@ impl MempoolMessageId {
         let mut result = HashMap::new();
         for (start, end) in self.0.iter() {
             let sender_bucket = (start >> 56) as MempoolSenderBucket;
-            let timeline_index_identifier = (start >> 48 & 0xFF) as TimelineIndexIdentifier;
+            let timeline_index_identifier = ((start >> 48) & 0xFF) as TimelineIndexIdentifier;
             // Remove the leading two bytes that indicates the sender bucket.
             let start = start & 0x0000FFFFFFFFFFFF;
             let end = end & 0x0000FFFFFFFFFFFF;

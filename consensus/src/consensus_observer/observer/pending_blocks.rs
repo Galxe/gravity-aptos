@@ -7,11 +7,19 @@ use crate::consensus_observer::{
         metrics,
     },
     network::observer_message::OrderedBlock,
+<<<<<<< HEAD
     observer::payload_store::BlockPayloadStore,
 };
 use aptos_config::{config::ConsensusObserverConfig, network_id::PeerNetworkId};
 use aptos_infallible::Mutex;
 use aptos_logger::{info, warn};
+=======
+    observer::{execution_pool::ObservedOrderedBlock, payload_store::BlockPayloadStore},
+};
+use aptos_config::{config::ConsensusObserverConfig, network_id::PeerNetworkId};
+use aptos_crypto::HashValue;
+use aptos_logger::{error, info, warn};
+>>>>>>> aptos-node-v1.36.8-hotfix
 use aptos_types::block_info::Round;
 use std::{
     collections::{btree_map::Entry, BTreeMap},
@@ -24,6 +32,7 @@ use std::{
 pub struct PendingBlockWithMetadata {
     peer_network_id: PeerNetworkId, // The peer network ID of the block sender
     block_receipt_time: Instant,    // The time the block was received
+<<<<<<< HEAD
     ordered_block: OrderedBlock,    // The ordered block
 }
 
@@ -46,12 +55,42 @@ impl PendingBlockWithMetadata {
             self.peer_network_id,
             self.block_receipt_time,
             self.ordered_block,
+=======
+    observed_ordered_block: ObservedOrderedBlock, // The observed ordered block
+}
+
+impl PendingBlockWithMetadata {
+    pub fn new_with_arc(
+        peer_network_id: PeerNetworkId,
+        block_receipt_time: Instant,
+        observed_ordered_block: ObservedOrderedBlock,
+    ) -> Arc<Self> {
+        let pending_block_with_metadata = Self {
+            peer_network_id,
+            block_receipt_time,
+            observed_ordered_block,
+        };
+        Arc::new(pending_block_with_metadata)
+    }
+
+    /// Unpacks the block with metadata into its components.
+    /// Note: this will copy/clone all components.
+    pub fn unpack(&self) -> (PeerNetworkId, Instant, ObservedOrderedBlock) {
+        (
+            self.peer_network_id,
+            self.block_receipt_time,
+            self.observed_ordered_block.clone(),
+>>>>>>> aptos-node-v1.36.8-hotfix
         )
     }
 
     /// Returns a reference to the ordered block
     pub fn ordered_block(&self) -> &OrderedBlock {
+<<<<<<< HEAD
         &self.ordered_block
+=======
+        self.observed_ordered_block.ordered_block()
+>>>>>>> aptos-node-v1.36.8-hotfix
     }
 }
 
@@ -62,7 +101,16 @@ pub struct PendingBlockStore {
 
     // A map of ordered blocks that are without payloads. The key is
     // the (epoch, round) of the first block in the ordered block.
+<<<<<<< HEAD
     blocks_without_payloads: BTreeMap<(u64, Round), PendingBlockWithMetadata>,
+=======
+    blocks_without_payloads: BTreeMap<(u64, Round), Arc<PendingBlockWithMetadata>>,
+
+    // A map of ordered blocks that are without payloads. The key is
+    // the hash of the first block in the ordered block.
+    // Note: this is the same as blocks_without_payloads, but with a different key.
+    blocks_without_payloads_by_hash: BTreeMap<HashValue, Arc<PendingBlockWithMetadata>>,
+>>>>>>> aptos-node-v1.36.8-hotfix
 }
 
 impl PendingBlockStore {
@@ -70,12 +118,20 @@ impl PendingBlockStore {
         Self {
             consensus_observer_config,
             blocks_without_payloads: BTreeMap::new(),
+<<<<<<< HEAD
+=======
+            blocks_without_payloads_by_hash: BTreeMap::new(),
+>>>>>>> aptos-node-v1.36.8-hotfix
         }
     }
 
     /// Clears all missing blocks from the store
     pub fn clear_missing_blocks(&mut self) {
         self.blocks_without_payloads.clear();
+<<<<<<< HEAD
+=======
+        self.blocks_without_payloads_by_hash.clear();
+>>>>>>> aptos-node-v1.36.8-hotfix
     }
 
     /// Returns true iff the store contains an entry for the given ordered block
@@ -84,11 +140,16 @@ impl PendingBlockStore {
         let first_block = ordered_block.first_block();
         let first_block_epoch_round = (first_block.epoch(), first_block.round());
 
+<<<<<<< HEAD
         // Check if the block is already in the store
+=======
+        // Check if the block is already in the store by epoch and round
+>>>>>>> aptos-node-v1.36.8-hotfix
         self.blocks_without_payloads
             .contains_key(&first_block_epoch_round)
     }
 
+<<<<<<< HEAD
     /// Inserts a pending block (without payloads) into the store
     pub fn insert_pending_block(&mut self, pending_block_with_metadata: PendingBlockWithMetadata) {
         // Get the epoch and round of the first block
@@ -96,6 +157,25 @@ impl PendingBlockStore {
         let first_block_epoch_round = (first_block.epoch(), first_block.round());
 
         // Insert the block into the store using the round of the first block
+=======
+    /// Returns the pending block with the given hash (if it exists)
+    pub fn get_pending_block_by_hash(
+        &self,
+        block_hash: HashValue,
+    ) -> Option<Arc<PendingBlockWithMetadata>> {
+        self.blocks_without_payloads_by_hash
+            .get(&block_hash)
+            .cloned()
+    }
+
+    /// Inserts a pending block (without payloads) into the store
+    pub fn insert_pending_block(&mut self, pending_block: Arc<PendingBlockWithMetadata>) {
+        // Get the first block in the ordered blocks
+        let first_block = pending_block.ordered_block().first_block();
+
+        // Insert the block into the store using the epoch round of the first block
+        let first_block_epoch_round = (first_block.epoch(), first_block.round());
+>>>>>>> aptos-node-v1.36.8-hotfix
         match self.blocks_without_payloads.entry(first_block_epoch_round) {
             Entry::Occupied(_) => {
                 // The block is already in the store
@@ -108,7 +188,29 @@ impl PendingBlockStore {
             },
             Entry::Vacant(entry) => {
                 // Insert the block into the store
+<<<<<<< HEAD
                 entry.insert(pending_block_with_metadata);
+=======
+                entry.insert(pending_block.clone());
+            },
+        }
+
+        // Insert the block into the hash store using the hash of the first block
+        let first_block_hash = first_block.id();
+        match self.blocks_without_payloads_by_hash.entry(first_block_hash) {
+            Entry::Occupied(_) => {
+                // The block is already in the hash store
+                warn!(
+                    LogSchema::new(LogEntry::ConsensusObserver).message(&format!(
+                        "A pending block was already found for the given block hash: {:?}",
+                        first_block_hash
+                    ))
+                );
+            },
+            Entry::Vacant(entry) => {
+                // Insert the block into the hash store
+                entry.insert(pending_block);
+>>>>>>> aptos-node-v1.36.8-hotfix
             },
         }
 
@@ -119,32 +221,73 @@ impl PendingBlockStore {
     /// Garbage collects the pending blocks store by removing
     /// the oldest blocks if the store is too large.
     fn garbage_collect_pending_blocks(&mut self) {
+<<<<<<< HEAD
         // Calculate the number of blocks to remove
         let num_pending_blocks = self.blocks_without_payloads.len() as u64;
+=======
+        // Verify that both stores have the same number of entries.
+        // If not, log an error as this should never happen.
+        let num_pending_blocks = self.blocks_without_payloads.len() as u64;
+        let num_pending_blocks_by_hash = self.blocks_without_payloads_by_hash.len() as u64;
+        if num_pending_blocks != num_pending_blocks_by_hash {
+            error!(
+                LogSchema::new(LogEntry::ConsensusObserver).message(&format!(
+                    "The pending block stores have different numbers of entries: {} and {} (by hash)",
+                    num_pending_blocks, num_pending_blocks_by_hash
+                ))
+            );
+        }
+
+        // Calculate the number of blocks to remove
+>>>>>>> aptos-node-v1.36.8-hotfix
         let max_pending_blocks = self.consensus_observer_config.max_num_pending_blocks;
         let num_blocks_to_remove = num_pending_blocks.saturating_sub(max_pending_blocks);
 
         // Remove the oldest blocks if the store is too large
         for _ in 0..num_blocks_to_remove {
+<<<<<<< HEAD
             if let Some((oldest_epoch_round, _)) = self.blocks_without_payloads.pop_first() {
+=======
+            if let Some((oldest_epoch_round, pending_block)) =
+                self.blocks_without_payloads.pop_first()
+            {
+                // Log a warning message for the removed block
+>>>>>>> aptos-node-v1.36.8-hotfix
                 warn!(
                     LogSchema::new(LogEntry::ConsensusObserver).message(&format!(
                         "The pending block store is too large: {:?} blocks. Removing the block for the oldest epoch and round: {:?}",
                         num_pending_blocks, oldest_epoch_round
                     ))
                 );
+<<<<<<< HEAD
+=======
+
+                // Remove the block from the hash store
+                let first_block = pending_block.ordered_block().first_block();
+                self.blocks_without_payloads_by_hash
+                    .remove(&first_block.id());
+>>>>>>> aptos-node-v1.36.8-hotfix
             }
         }
     }
 
     /// Removes and returns the block from the store that is now ready
     /// to be processed (after the new payload has been received).
+<<<<<<< HEAD
+=======
+    // TODO: identify how this will work with execution pool blocks!
+>>>>>>> aptos-node-v1.36.8-hotfix
     pub fn remove_ready_block(
         &mut self,
         received_payload_epoch: u64,
         received_payload_round: Round,
+<<<<<<< HEAD
         block_payload_store: Arc<Mutex<BlockPayloadStore>>,
     ) -> Option<PendingBlockWithMetadata> {
+=======
+        block_payload_store: &mut BlockPayloadStore,
+    ) -> Option<Arc<PendingBlockWithMetadata>> {
+>>>>>>> aptos-node-v1.36.8-hotfix
         // Calculate the round at which to split the blocks
         let split_round = received_payload_round.saturating_add(1);
 
@@ -156,6 +299,7 @@ impl PendingBlockStore {
         // Check if the last block is ready (this should be the only ready block).
         // Any earlier blocks are considered out-of-date and will be dropped.
         let mut ready_block = None;
+<<<<<<< HEAD
         if let Some((epoch_and_round, pending_block_with_metadata)) =
             self.blocks_without_payloads.pop_last()
         {
@@ -173,11 +317,26 @@ impl PendingBlockStore {
                     .round();
                 if last_pending_block_round > received_payload_round {
                     blocks_at_higher_rounds.insert(epoch_and_round, pending_block_with_metadata);
+=======
+        if let Some((epoch_and_round, pending_block)) = self.blocks_without_payloads.pop_last() {
+            // If all payloads exist for the block, then the block is ready
+            if block_payload_store.all_payloads_exist(pending_block.ordered_block().blocks()) {
+                ready_block = Some(pending_block);
+            } else {
+                // Otherwise, check if we're still waiting for higher payloads for the block
+                let last_pending_block_round = pending_block.ordered_block().last_block().round();
+                if last_pending_block_round > received_payload_round {
+                    blocks_at_higher_rounds.insert(epoch_and_round, pending_block);
+>>>>>>> aptos-node-v1.36.8-hotfix
                 }
             }
         }
 
+<<<<<<< HEAD
         // Check if any out-of-date blocks were dropped
+=======
+        // Check if any out-of-date blocks are going to be dropped
+>>>>>>> aptos-node-v1.36.8-hotfix
         if !self.blocks_without_payloads.is_empty() {
             info!(
                 LogSchema::new(LogEntry::ConsensusObserver).message(&format!(
@@ -188,8 +347,23 @@ impl PendingBlockStore {
             );
         }
 
+<<<<<<< HEAD
         // Update the pending blocks to only include the blocks at higher rounds
         self.blocks_without_payloads = blocks_at_higher_rounds;
+=======
+        // TODO: optimize this flow!
+
+        // Clear all blocks from the pending block stores
+        self.clear_missing_blocks();
+
+        // Update the pending block stores to only include the blocks at higher rounds
+        self.blocks_without_payloads = blocks_at_higher_rounds;
+        for pending_block in self.blocks_without_payloads.values() {
+            let first_block = pending_block.ordered_block().first_block();
+            self.blocks_without_payloads_by_hash
+                .insert(first_block.id(), pending_block.clone());
+        }
+>>>>>>> aptos-node-v1.36.8-hotfix
 
         // Return the ready block (if one exists)
         ready_block
@@ -205,6 +379,17 @@ impl PendingBlockStore {
             num_entries,
         );
 
+<<<<<<< HEAD
+=======
+        // Update the number of pending block by hash entries
+        let num_entries_by_hash = self.blocks_without_payloads_by_hash.len() as u64;
+        metrics::set_gauge_with_label(
+            &metrics::OBSERVER_NUM_PROCESSED_BLOCKS,
+            metrics::PENDING_BLOCK_ENTRIES_BY_HASH_LABEL,
+            num_entries_by_hash,
+        );
+
+>>>>>>> aptos-node-v1.36.8-hotfix
         // Update the total number of pending blocks
         let num_pending_blocks = self
             .blocks_without_payloads
@@ -217,6 +402,21 @@ impl PendingBlockStore {
             num_pending_blocks,
         );
 
+<<<<<<< HEAD
+=======
+        // Update the total number of pending blocks by hash
+        let num_pending_blocks_by_hash = self
+            .blocks_without_payloads_by_hash
+            .values()
+            .map(|block| block.ordered_block().blocks().len() as u64)
+            .sum();
+        metrics::set_gauge_with_label(
+            &metrics::OBSERVER_NUM_PROCESSED_BLOCKS,
+            metrics::PENDING_BLOCKS_BY_HASH_LABEL,
+            num_pending_blocks_by_hash,
+        );
+
+>>>>>>> aptos-node-v1.36.8-hotfix
         // Update the highest round for the pending blocks
         let highest_pending_round = self
             .blocks_without_payloads
@@ -241,10 +441,18 @@ mod test {
     use aptos_consensus_types::{
         block::Block,
         block_data::{BlockData, BlockType},
+<<<<<<< HEAD
         pipelined_block::PipelinedBlock,
         quorum_cert::QuorumCert,
     };
     use aptos_crypto::HashValue;
+=======
+        pipelined_block::{OrderedBlockWindow, PipelinedBlock},
+        quorum_cert::QuorumCert,
+    };
+    use aptos_crypto::HashValue;
+    use aptos_infallible::Mutex;
+>>>>>>> aptos-node-v1.36.8-hotfix
     use aptos_types::{
         aggregate_signature::AggregateSignature,
         block_info::BlockInfo,
@@ -290,6 +498,15 @@ mod test {
             .lock()
             .blocks_without_payloads
             .is_empty());
+<<<<<<< HEAD
+=======
+
+        // Verify that the hash store is now empty
+        assert!(pending_block_store
+            .lock()
+            .blocks_without_payloads_by_hash
+            .is_empty());
+>>>>>>> aptos-node-v1.36.8-hotfix
     }
 
     #[test]
@@ -317,6 +534,7 @@ mod test {
 
         // Verify that all blocks were inserted correctly
         for pending_block in &pending_blocks {
+<<<<<<< HEAD
             assert!(pending_block_store
                 .lock()
                 .existing_pending_block(pending_block));
@@ -328,12 +546,35 @@ mod test {
         )));
         let second_block = pending_blocks[1].clone();
         insert_payloads_for_ordered_block(block_payload_store.clone(), &second_block);
+=======
+            // Verify that the block is in the store
+            assert!(pending_block_store
+                .lock()
+                .existing_pending_block(pending_block));
+
+            // Verify that the block is in the store by hash
+            let block_hash = pending_block.first_block().id();
+            assert!(pending_block_store
+                .lock()
+                .get_pending_block_by_hash(block_hash)
+                .is_some());
+        }
+
+        // Create a new block payload store and insert payloads for the second block
+        let mut block_payload_store = BlockPayloadStore::new(consensus_observer_config);
+        let second_block = pending_blocks[1].clone();
+        insert_payloads_for_ordered_block(&mut block_payload_store, &second_block);
+>>>>>>> aptos-node-v1.36.8-hotfix
 
         // Remove the second block (which is now ready)
         let payload_round = second_block.first_block().round();
         let ready_block = pending_block_store
             .lock()
+<<<<<<< HEAD
             .remove_ready_block(current_epoch, payload_round, block_payload_store.clone())
+=======
+            .remove_ready_block(current_epoch, payload_round, &mut block_payload_store)
+>>>>>>> aptos-node-v1.36.8-hotfix
             .unwrap();
         assert_eq!(ready_block.ordered_block().clone(), second_block);
 
@@ -346,9 +587,98 @@ mod test {
 
         // Verify that the first and second blocks are no longer in the store
         for pending_block in &pending_blocks[..2] {
+<<<<<<< HEAD
             assert!(!pending_block_store
                 .lock()
                 .existing_pending_block(pending_block));
+=======
+            // Verify that the block is not in the store
+            assert!(!pending_block_store
+                .lock()
+                .existing_pending_block(pending_block));
+
+            // Verify that the block is not in the store by hash
+            let block_hash = pending_block.first_block().id();
+            assert!(pending_block_store
+                .lock()
+                .get_pending_block_by_hash(block_hash)
+                .is_none());
+        }
+    }
+
+    #[test]
+    fn test_get_pending_block_by_hash() {
+        // Create a new pending block store
+        let max_num_pending_blocks = 50;
+        let consensus_observer_config = ConsensusObserverConfig {
+            max_num_pending_blocks: max_num_pending_blocks as u64,
+            ..ConsensusObserverConfig::default()
+        };
+        let pending_block_store = Arc::new(Mutex::new(PendingBlockStore::new(
+            consensus_observer_config,
+        )));
+
+        // Insert the maximum number of blocks into the store
+        let current_epoch = 10;
+        let starting_round = 100;
+        let pending_blocks = create_and_add_pending_blocks(
+            pending_block_store.clone(),
+            max_num_pending_blocks,
+            current_epoch,
+            starting_round,
+            5,
+        );
+
+        // Verify that all blocks were inserted correctly
+        for pending_block in &pending_blocks {
+            let pending_block_by_hash = pending_block_store
+                .lock()
+                .get_pending_block_by_hash(pending_block.first_block().id())
+                .unwrap();
+            assert_eq!(
+                pending_block_by_hash.observed_ordered_block.ordered_block(),
+                pending_block
+            );
+        }
+
+        // Remove the first and second blocks manually
+        for block in &pending_blocks[..2] {
+            pending_block_store
+                .lock()
+                .blocks_without_payloads_by_hash
+                .remove(&block.first_block().id());
+        }
+
+        // Verify that the first and second blocks are no longer in the store
+        for pending_block in &pending_blocks[..2] {
+            assert!(pending_block_store
+                .lock()
+                .get_pending_block_by_hash(pending_block.first_block().id())
+                .is_none());
+        }
+
+        // Verify that the remaining blocks are still in the store by hash
+        for pending_block in &pending_blocks[2..] {
+            let pending_block_by_hash = pending_block_store
+                .lock()
+                .get_pending_block_by_hash(pending_block.first_block().id())
+                .unwrap();
+            assert_eq!(
+                pending_block_by_hash.observed_ordered_block.ordered_block(),
+                pending_block
+            );
+        }
+
+        // Clear the blocks from the store
+        pending_block_store.lock().clear_missing_blocks();
+
+        // Verify that all blocks are no longer in the store by hash
+        for pending_block in &pending_blocks {
+            assert!(pending_block_store
+                .lock()
+                .get_pending_block_by_hash(pending_block.first_block().id())
+                .is_none());
+>>>>>>> aptos-node-v1.36.8-hotfix
         }
     }
 
@@ -468,6 +798,7 @@ mod test {
                 &new_pending_block,
             );
 
+<<<<<<< HEAD
             // Get the round of the oldest block (that was garbage collected)
             let oldest_block = pending_blocks.remove(0);
             let oldest_block_round = oldest_block.first_block().round();
@@ -476,6 +807,24 @@ mod test {
             let blocks_without_payloads =
                 pending_block_store.lock().blocks_without_payloads.clone();
             assert!(!blocks_without_payloads.contains_key(&(current_epoch, oldest_block_round)));
+=======
+            // Get the oldest block (that was garbage collected)
+            let oldest_block = pending_blocks.remove(0);
+
+            // Verify that the oldest block was garbage collected
+            let oldest_block_round = oldest_block.first_block().round();
+            let blocks_without_payloads =
+                pending_block_store.lock().blocks_without_payloads.clone();
+            assert!(!blocks_without_payloads.contains_key(&(current_epoch, oldest_block_round)));
+
+            // Verify that the oldest block was garbage collected by hash
+            let oldest_block_hash = oldest_block.first_block().id();
+            let blocks_without_payloads_by_hash = pending_block_store
+                .lock()
+                .blocks_without_payloads_by_hash
+                .clone();
+            assert!(!blocks_without_payloads_by_hash.contains_key(&oldest_block_hash));
+>>>>>>> aptos-node-v1.36.8-hotfix
         }
 
         // Insert multiple blocks into the store (for the next epoch) and
@@ -499,6 +848,7 @@ mod test {
                 &new_pending_block,
             );
 
+<<<<<<< HEAD
             // Get the round of the oldest block (that was garbage collected)
             let oldest_block = pending_blocks.remove(0);
             let oldest_block_round = oldest_block.first_block().round();
@@ -507,6 +857,24 @@ mod test {
             let blocks_without_payloads =
                 pending_block_store.lock().blocks_without_payloads.clone();
             assert!(!blocks_without_payloads.contains_key(&(current_epoch, oldest_block_round)));
+=======
+            // Get the oldest block (that was garbage collected)
+            let oldest_block = pending_blocks.remove(0);
+
+            // Verify that the oldest block was garbage collected
+            let oldest_block_round = oldest_block.first_block().round();
+            let blocks_without_payloads =
+                pending_block_store.lock().blocks_without_payloads.clone();
+            assert!(!blocks_without_payloads.contains_key(&(current_epoch, oldest_block_round)));
+
+            // Verify that the oldest block was garbage collected by hash
+            let oldest_block_hash = oldest_block.first_block().id();
+            let blocks_without_payloads_by_hash = pending_block_store
+                .lock()
+                .blocks_without_payloads_by_hash
+                .clone();
+            assert!(!blocks_without_payloads_by_hash.contains_key(&oldest_block_hash));
+>>>>>>> aptos-node-v1.36.8-hotfix
         }
     }
 
@@ -525,6 +893,7 @@ mod test {
         // Insert the maximum number of pending blocks into the store
         let mut pending_blocks_with_metadata = vec![];
         for i in 0..max_num_pending_blocks {
+<<<<<<< HEAD
             // Create an ordered block
             let ordered_block = create_ordered_block(0, 0, 1, i);
 
@@ -533,6 +902,17 @@ mod test {
                 PeerNetworkId::random(),
                 Instant::now(),
                 ordered_block.clone(),
+=======
+            // Create an observed ordered block
+            let ordered_block = create_ordered_block(0, 0, 1, i);
+            let observed_ordered_block = ObservedOrderedBlock::new(ordered_block.clone());
+
+            // Create a pending block with metadata
+            let pending_block_with_metadata = PendingBlockWithMetadata::new_with_arc(
+                PeerNetworkId::random(),
+                Instant::now(),
+                observed_ordered_block.clone(),
+>>>>>>> aptos-node-v1.36.8-hotfix
             );
 
             // Insert the ordered block into the pending block store
@@ -545,12 +925,19 @@ mod test {
         }
 
         // Create a new block payload store and insert payloads for all pending blocks
+<<<<<<< HEAD
         let block_payload_store = Arc::new(Mutex::new(BlockPayloadStore::new(
             consensus_observer_config,
         )));
         for pending_block_with_metadata in &pending_blocks_with_metadata {
             insert_payloads_for_ordered_block(
                 block_payload_store.clone(),
+=======
+        let mut block_payload_store = BlockPayloadStore::new(consensus_observer_config);
+        for pending_block_with_metadata in &pending_blocks_with_metadata {
+            insert_payloads_for_ordered_block(
+                &mut block_payload_store,
+>>>>>>> aptos-node-v1.36.8-hotfix
                 pending_block_with_metadata.ordered_block(),
             );
         }
@@ -559,6 +946,7 @@ mod test {
         for expected_block_with_metadata in pending_blocks_with_metadata {
             // Unpack the expected block with metadata into its components
             let (expected_peer_network_id, expected_block_receipt_time, expected_ordered_block) =
+<<<<<<< HEAD
                 expected_block_with_metadata.into_parts();
 
             // Remove the pending block from the store
@@ -568,6 +956,18 @@ mod test {
                     expected_ordered_block.first_block().epoch(),
                     expected_ordered_block.first_block().round(),
                     block_payload_store.clone(),
+=======
+                expected_block_with_metadata.unpack();
+
+            // Remove the pending block from the store
+            let first_block = expected_ordered_block.ordered_block().first_block();
+            let removed_block_with_metadata = pending_block_store
+                .lock()
+                .remove_ready_block(
+                    first_block.epoch(),
+                    first_block.round(),
+                    &mut block_payload_store,
+>>>>>>> aptos-node-v1.36.8-hotfix
                 )
                 .unwrap();
 
@@ -581,8 +981,13 @@ mod test {
                 expected_block_receipt_time
             );
             assert_eq!(
+<<<<<<< HEAD
                 removed_block_with_metadata.ordered_block().clone(),
                 expected_ordered_block
+=======
+                removed_block_with_metadata.ordered_block(),
+                expected_ordered_block.ordered_block()
+>>>>>>> aptos-node-v1.36.8-hotfix
             );
         }
     }
@@ -611,17 +1016,27 @@ mod test {
         );
 
         // Create a new block payload store and insert payloads for the second block
+<<<<<<< HEAD
         let block_payload_store = Arc::new(Mutex::new(BlockPayloadStore::new(
             consensus_observer_config,
         )));
         let second_block = pending_blocks[1].clone();
         insert_payloads_for_ordered_block(block_payload_store.clone(), &second_block);
+=======
+        let mut block_payload_store = BlockPayloadStore::new(consensus_observer_config);
+        let second_block = pending_blocks[1].clone();
+        insert_payloads_for_ordered_block(&mut block_payload_store, &second_block);
+>>>>>>> aptos-node-v1.36.8-hotfix
 
         // Remove the second block (which is now ready)
         let payload_round = second_block.first_block().round();
         let ready_block = pending_block_store
             .lock()
+<<<<<<< HEAD
             .remove_ready_block(current_epoch, payload_round, block_payload_store.clone())
+=======
+            .remove_ready_block(current_epoch, payload_round, &mut block_payload_store)
+>>>>>>> aptos-node-v1.36.8-hotfix
             .unwrap();
         assert_eq!(ready_block.ordered_block().clone(), second_block);
 
@@ -634,13 +1049,21 @@ mod test {
 
         // Insert payloads for the last block
         let last_block = pending_blocks.last().unwrap().clone();
+<<<<<<< HEAD
         insert_payloads_for_ordered_block(block_payload_store.clone(), &last_block);
+=======
+        insert_payloads_for_ordered_block(&mut block_payload_store, &last_block);
+>>>>>>> aptos-node-v1.36.8-hotfix
 
         // Remove the last block (which is now ready)
         let payload_round = last_block.first_block().round();
         let ready_block = pending_block_store
             .lock()
+<<<<<<< HEAD
             .remove_ready_block(current_epoch, payload_round, block_payload_store.clone())
+=======
+            .remove_ready_block(current_epoch, payload_round, &mut block_payload_store)
+>>>>>>> aptos-node-v1.36.8-hotfix
             .unwrap();
 
         // Verify that the last block was removed
@@ -674,9 +1097,13 @@ mod test {
         );
 
         // Create an empty block payload store
+<<<<<<< HEAD
         let block_payload_store = Arc::new(Mutex::new(BlockPayloadStore::new(
             consensus_observer_config,
         )));
+=======
+        let mut block_payload_store = BlockPayloadStore::new(consensus_observer_config);
+>>>>>>> aptos-node-v1.36.8-hotfix
 
         // Incrementally insert and process each payload for the first block
         let first_block = pending_blocks.first().unwrap().clone();
@@ -684,16 +1111,24 @@ mod test {
             // Insert the block
             let block_payload =
                 BlockPayload::new(block.block_info(), BlockTransactionPayload::empty());
+<<<<<<< HEAD
             block_payload_store
                 .lock()
                 .insert_block_payload(block_payload, true);
+=======
+            block_payload_store.insert_block_payload(block_payload, true);
+>>>>>>> aptos-node-v1.36.8-hotfix
 
             // Attempt to remove the block (which might not be ready)
             let payload_round = block.round();
             let ready_block = pending_block_store.lock().remove_ready_block(
                 current_epoch,
                 payload_round,
+<<<<<<< HEAD
                 block_payload_store.clone(),
+=======
+                &mut block_payload_store,
+>>>>>>> aptos-node-v1.36.8-hotfix
             );
 
             // If the block is ready, verify that it was removed.
@@ -730,16 +1165,24 @@ mod test {
             if payload_round != last_block.first_block().round() {
                 let block_payload =
                     BlockPayload::new(block.block_info(), BlockTransactionPayload::empty());
+<<<<<<< HEAD
                 block_payload_store
                     .lock()
                     .insert_block_payload(block_payload, true);
+=======
+                block_payload_store.insert_block_payload(block_payload, true);
+>>>>>>> aptos-node-v1.36.8-hotfix
             }
 
             // Attempt to remove the block (which might not be ready)
             let ready_block = pending_block_store.lock().remove_ready_block(
                 current_epoch,
                 payload_round,
+<<<<<<< HEAD
                 block_payload_store.clone(),
+=======
+                &mut block_payload_store,
+>>>>>>> aptos-node-v1.36.8-hotfix
             );
 
             // The block should not be ready
@@ -781,17 +1224,27 @@ mod test {
         );
 
         // Create a new block payload store and insert payloads for the first block
+<<<<<<< HEAD
         let block_payload_store = Arc::new(Mutex::new(BlockPayloadStore::new(
             consensus_observer_config,
         )));
         let first_block = pending_blocks.first().unwrap().clone();
         insert_payloads_for_ordered_block(block_payload_store.clone(), &first_block);
+=======
+        let mut block_payload_store = BlockPayloadStore::new(consensus_observer_config);
+        let first_block = pending_blocks.first().unwrap().clone();
+        insert_payloads_for_ordered_block(&mut block_payload_store, &first_block);
+>>>>>>> aptos-node-v1.36.8-hotfix
 
         // Remove the first block (which is now ready)
         let payload_round = first_block.first_block().round();
         let ready_block = pending_block_store
             .lock()
+<<<<<<< HEAD
             .remove_ready_block(current_epoch, payload_round, block_payload_store.clone())
+=======
+            .remove_ready_block(current_epoch, payload_round, &mut block_payload_store)
+>>>>>>> aptos-node-v1.36.8-hotfix
             .unwrap();
         assert_eq!(ready_block.ordered_block().clone(), first_block);
 
@@ -804,13 +1257,21 @@ mod test {
 
         // Insert payloads for the second block
         let second_block = pending_blocks[1].clone();
+<<<<<<< HEAD
         insert_payloads_for_ordered_block(block_payload_store.clone(), &second_block);
+=======
+        insert_payloads_for_ordered_block(&mut block_payload_store, &second_block);
+>>>>>>> aptos-node-v1.36.8-hotfix
 
         // Remove the second block (which is now ready)
         let payload_round = second_block.first_block().round();
         let ready_block = pending_block_store
             .lock()
+<<<<<<< HEAD
             .remove_ready_block(current_epoch, payload_round, block_payload_store.clone())
+=======
+            .remove_ready_block(current_epoch, payload_round, &mut block_payload_store)
+>>>>>>> aptos-node-v1.36.8-hotfix
             .unwrap();
         assert_eq!(ready_block.ordered_block().clone(), second_block);
 
@@ -823,13 +1284,21 @@ mod test {
 
         // Insert payloads for the last block
         let last_block = pending_blocks.last().unwrap().clone();
+<<<<<<< HEAD
         insert_payloads_for_ordered_block(block_payload_store.clone(), &last_block);
+=======
+        insert_payloads_for_ordered_block(&mut block_payload_store, &last_block);
+>>>>>>> aptos-node-v1.36.8-hotfix
 
         // Remove the last block (which is now ready)
         let payload_round = last_block.first_block().round();
         let ready_block = pending_block_store
             .lock()
+<<<<<<< HEAD
             .remove_ready_block(current_epoch, payload_round, block_payload_store.clone())
+=======
+            .remove_ready_block(current_epoch, payload_round, &mut block_payload_store)
+>>>>>>> aptos-node-v1.36.8-hotfix
             .unwrap();
 
         // Verify that the last block was removed
@@ -863,9 +1332,13 @@ mod test {
         );
 
         // Create an empty block payload store
+<<<<<<< HEAD
         let block_payload_store = Arc::new(Mutex::new(BlockPayloadStore::new(
             consensus_observer_config,
         )));
+=======
+        let mut block_payload_store = BlockPayloadStore::new(consensus_observer_config);
+>>>>>>> aptos-node-v1.36.8-hotfix
 
         // Remove the third block (which is not ready)
         let third_block = pending_blocks[2].clone();
@@ -873,7 +1346,11 @@ mod test {
         let ready_block = pending_block_store.lock().remove_ready_block(
             current_epoch,
             third_block_round,
+<<<<<<< HEAD
             block_payload_store.clone(),
+=======
+            &mut block_payload_store,
+>>>>>>> aptos-node-v1.36.8-hotfix
         );
         assert!(ready_block.is_none());
 
@@ -890,7 +1367,11 @@ mod test {
         let ready_block = pending_block_store.lock().remove_ready_block(
             current_epoch,
             last_block_round,
+<<<<<<< HEAD
             block_payload_store.clone(),
+=======
+            &mut block_payload_store,
+>>>>>>> aptos-node-v1.36.8-hotfix
         );
         assert!(ready_block.is_none());
 
@@ -912,11 +1393,23 @@ mod test {
             let ordered_block =
                 create_ordered_block(epoch, starting_round, max_pipelined_blocks, i);
 
+<<<<<<< HEAD
             // Create a pending block with metadata
             let pending_block_with_metadata = PendingBlockWithMetadata::new(
                 PeerNetworkId::random(),
                 Instant::now(),
                 ordered_block.clone(),
+=======
+            // Create an observed ordered block
+            let observed_ordered_block =
+                ObservedOrderedBlock::new_for_testing(ordered_block.clone());
+
+            // Create a pending block with metadata
+            let pending_block_with_metadata = PendingBlockWithMetadata::new_with_arc(
+                PeerNetworkId::random(),
+                Instant::now(),
+                observed_ordered_block,
+>>>>>>> aptos-node-v1.36.8-hotfix
             );
 
             // Insert the ordered block into the pending block store
@@ -965,7 +1458,15 @@ mod test {
                 BlockType::Genesis,
             );
             let block = Block::new_for_testing(block_info.id(), block_data, None);
+<<<<<<< HEAD
             let pipelined_block = Arc::new(PipelinedBlock::new_ordered(block));
+=======
+            let pipelined_block = Arc::new(PipelinedBlock::new_ordered(
+                block,
+                // TODO @bchocho @hariria revisit this, not sure how i would do this right now...
+                OrderedBlockWindow::empty(),
+            ));
+>>>>>>> aptos-node-v1.36.8-hotfix
 
             // Add the pipelined block to the list
             pipelined_blocks.push(pipelined_block);
@@ -984,15 +1485,23 @@ mod test {
 
     /// Inserts payloads into the payload store for the ordered block
     fn insert_payloads_for_ordered_block(
+<<<<<<< HEAD
         block_payload_store: Arc<Mutex<BlockPayloadStore>>,
+=======
+        block_payload_store: &mut BlockPayloadStore,
+>>>>>>> aptos-node-v1.36.8-hotfix
         ordered_block: &OrderedBlock,
     ) {
         for block in ordered_block.blocks() {
             let block_payload =
                 BlockPayload::new(block.block_info(), BlockTransactionPayload::empty());
+<<<<<<< HEAD
             block_payload_store
                 .lock()
                 .insert_block_payload(block_payload, true);
+=======
+            block_payload_store.insert_block_payload(block_payload, true);
+>>>>>>> aptos-node-v1.36.8-hotfix
         }
     }
 
@@ -1008,7 +1517,20 @@ mod test {
             num_expected_blocks
         );
 
+<<<<<<< HEAD
         // Check that all pending blocks are in the store
+=======
+        // Check the number of pending blocks by hash
+        assert_eq!(
+            pending_block_store
+                .lock()
+                .blocks_without_payloads_by_hash
+                .len(),
+            num_expected_blocks
+        );
+
+        // Check that all pending blocks are in the stores
+>>>>>>> aptos-node-v1.36.8-hotfix
         for pending_block in pending_blocks {
             // Lock the pending block store
             let pending_block_store = pending_block_store.lock();
@@ -1022,6 +1544,19 @@ mod test {
 
             // Verify that the pending block is in the store
             assert_eq!(block_in_store.ordered_block(), pending_block);
+<<<<<<< HEAD
+=======
+
+            // Get the pending block in the store by hash
+            let first_block_hash = first_block.id();
+            let block_in_store = pending_block_store
+                .blocks_without_payloads_by_hash
+                .get(&first_block_hash)
+                .unwrap();
+
+            // Verify the pending block is in the store by hash
+            assert_eq!(block_in_store.ordered_block(), pending_block);
+>>>>>>> aptos-node-v1.36.8-hotfix
         }
     }
 }

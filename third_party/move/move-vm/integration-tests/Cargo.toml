@@ -15,19 +15,20 @@ anyhow = { workspace = true }
 bytes = { workspace = true }
 claims = { workspace = true }
 codespan-reporting = { workspace = true }
+legacy-move-compiler = { workspace = true }
 memory-stats = { workspace = true }
 move-binary-format = { workspace = true, features = ["testing"] }
 move-bytecode-verifier = { workspace = true }
-move-compiler = { workspace = true }
 move-compiler-v2 = { workspace = true }
 move-core-types = { workspace = true }
 move-model = { workspace = true }
 move-stdlib = { path = "../../move-stdlib" }
-move-vm-runtime = { workspace = true, features = ["testing"] }
+move-vm-runtime = { workspace = true, features = ["disable_verifier_cache", "testing"] }
 move-vm-test-utils = { workspace = true }
 move-vm-types = { workspace = true, features = ["testing"] }
 smallvec = { workspace = true }
 tempfile = { workspace = true }
+test-case = { workspace = true }
 
 [features]
 default = []

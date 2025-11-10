@@ -1,4 +1,4 @@
-// -- Model dump before bytecode pipeline
+// -- Model dump before first bytecode pipeline
 module 0x8675309::M {
     struct R {
         dummy_field: bool,
@@ -28,7 +28,7 @@ module 0x8675309::M {
     }
 } // end 0x8675309::M
 
-// -- Sourcified model before bytecode pipeline
+// -- Sourcified model before first bytecode pipeline
 module 0x8675309::M {
     struct R has key {
     }
@@ -39,8 +39,8 @@ module 0x8675309::M {
         acquires X
         acquires R
     {
-        borrow_global_mut<R>(0x1);
-        borrow_global_mut<X>(0x1);
+        borrow_global_mut<R>(@0x1);
+        borrow_global_mut<X>(@0x1);
     }
     fun t1()
         acquires R
@@ -49,7 +49,7 @@ module 0x8675309::M {
         acquires R
         acquires R
     {
-        borrow_global_mut<R>(0x1);
-        borrow_global_mut<X>(0x1);
+        borrow_global_mut<R>(@0x1);
+        borrow_global_mut<X>(@0x1);
     }
 }

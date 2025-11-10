@@ -1,0 +1,14 @@
+processed 1 task
+<<<<<<<< HEAD:third_party/move/move-compiler-v2/transactional-tests/tests/control_flow/for_loop_non_terminating.optimize.exp
+
+task 0 'run'. lines 1-11:
+========
+task 0 lines 3-8:  run --gas-budget 700 --signers 0x1 [script {]
+>>>>>>>> aptos-node-v1.36.8-hotfix:third_party/move/move-compiler-v2/transactional-tests/tests/control_flow/round-trip/unused_signer_infinite_loop.decompiled.baseline.exp
+Error: Script execution failed with VMError: {
+    major_status: OUT_OF_GAS,
+    sub_status: None,
+    location: script,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 9)],
+}

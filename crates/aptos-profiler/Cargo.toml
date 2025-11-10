@@ -16,8 +16,5 @@ anyhow = { workspace = true }
 regex = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
+jemalloc-sys = { workspace = true }
 pprof = { workspace = true }
-backtrace = { workspace = true }
-# tikv-jemallocator = { workspace = true }
-# tikv-jemalloc-sys = { workspace = true }
-

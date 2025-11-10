@@ -19,6 +19,7 @@ aptos-gas-algebra = { workspace = true }
 aptos-gas-schedule = { workspace = true, features = ["testing"] }
 aptos-language-e2e-tests = { workspace = true }
 aptos-logger = { workspace = true }
+aptos-transaction-simulation = { workspace = true }
 aptos-types = { workspace = true }
 aptos-vm = { workspace = true, features = ['failpoints'] }
 aptos-vm-genesis = { workspace = true }
@@ -29,6 +30,7 @@ move-bytecode-verifier = { workspace = true }
 move-core-types = { workspace = true }
 move-ir-compiler = { workspace = true }
 proptest = { workspace = true }
+test-case = { workspace = true }
 
 [features]
 default = [

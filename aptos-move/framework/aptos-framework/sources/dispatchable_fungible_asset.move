@@ -84,7 +84,6 @@ module aptos_framework::dispatchable_fungible_asset {
                 features::dispatchable_fungible_asset_enabled(),
                 error::aborted(ENOT_ACTIVATED)
             );
-            let start_balance = fungible_asset::balance(store);
             let func = option::borrow(&func_opt);
             function_info::load_module_from_function(func);
             let fa = dispatchable_withdraw(
@@ -93,8 +92,6 @@ module aptos_framework::dispatchable_fungible_asset {
                 borrow_transfer_ref(store),
                 func,
             );
-            let end_balance = fungible_asset::balance(store);
-            assert!(amount <= start_balance - end_balance, error::aborted(EAMOUNT_MISMATCH));
             fa
         } else {
             fungible_asset::unchecked_withdraw(object::object_address(&store), amount)
@@ -211,7 +208,7 @@ module aptos_framework::dispatchable_fungible_asset {
         }
     }
 
-    inline fun borrow_transfer_ref<T: key>(metadata: Object<T>): &TransferRef acquires TransferRefStore {
+    inline fun borrow_transfer_ref<T: key>(metadata: Object<T>): &TransferRef {
         let metadata_addr = object::object_address(
             &fungible_asset::store_metadata(metadata)
         );

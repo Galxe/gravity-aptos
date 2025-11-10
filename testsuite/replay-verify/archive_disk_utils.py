@@ -17,6 +17,7 @@ from typing import Tuple, List, Optional, Any
 
 # Constants
 DISK_COPIES = 1
+STORAGE_CLASS = "pd-balanced-xfs-immediate"
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO)
@@ -32,6 +33,9 @@ REGION = "us-central1"
 CLUSTER_NAME = "devinfra-usce1-0"
 NAMESPACE = "replay-verify"
 ZONE = "us-central1-a"
+
+DEFAULT_PVC_ACCESS_MODE = "ReadWriteOnce"
+SNAPSHOT_DISK_SIZE = "12Ti"  # Default disk size for snapshots
 
 
 def get_region_from_zone(zone: str) -> str:
@@ -418,7 +422,7 @@ def create_persistent_volume(
                 read_only=read_only,
             ),
             persistent_volume_reclaim_policy="Delete",
-            storage_class_name="ssd-data-xfs",
+            storage_class_name=STORAGE_CLASS,
         ),
     )
 
@@ -433,7 +437,7 @@ def create_persistent_volume(
         spec=client.V1PersistentVolumeClaimSpec(
             access_modes=[access_mode],
             resources=client.V1ResourceRequirements(requests={"storage": storage_size}),
-            storage_class_name="ssd-data-xfs",
+            storage_class_name=STORAGE_CLASS,
             volume_name=pv_name,
             # Remove the selector since we're using volume_name for direct binding
         ),
@@ -502,12 +506,16 @@ def parse_args() -> argparse.Namespace:
     ),
 )
 def create_one_pvc_from_snapshot(
-    pvc_name: str, snapshot_name: str, namespace: str, label: str
+    pvc_name: str, snapshot_name: str, namespace: str, label: str, ttl_secs: int
 ) -> str:
     config.load_kube_config()
     api_instance = client.CoreV1Api()
     # testnet and mainnet disk size could be different
-    storage_size = "10Ti" if TESTNET_SNAPSHOT_NAME in snapshot_name else "10Ti"
+    storage_size = (
+        SNAPSHOT_DISK_SIZE
+        if TESTNET_SNAPSHOT_NAME in snapshot_name
+        else SNAPSHOT_DISK_SIZE
+    )
     # Define the PVC manifest
     pvc_manifest = {
         "apiVersion": "v1",
@@ -515,14 +523,15 @@ def create_one_pvc_from_snapshot(
         "metadata": {
             "name": f"{pvc_name}",
             "annotations": {
-                "volume.kubernetes.io/storage-provisioner": "pd.csi.storage.gke.io"
+                "volume.kubernetes.io/storage-provisioner": "pd.csi.storage.gke.io",
+                "k8s-ttl-controller.twin.sh/ttl": f"{ttl_secs}s",
             },
             "labels": {"run": f"{label}"},
         },
         "spec": {
-            "accessModes": ["ReadOnlyMany"],
+            "accessModes": [DEFAULT_PVC_ACCESS_MODE],
             "resources": {"requests": {"storage": storage_size}},
-            "storageClassName": "ssd-data-xfs",
+            "storageClassName": STORAGE_CLASS,
             "volumeMode": "Filesystem",
             "dataSource": {
                 "name": f"{snapshot_name}",
@@ -539,7 +548,12 @@ def create_one_pvc_from_snapshot(
 
 
 def create_replay_verify_pvcs_from_snapshot(
-    run_id: str, snapshot_name: str, namespace: str, pvc_num: int, label: str
+    run_id: str,
+    snapshot_name: str,
+    namespace: str,
+    pvc_num: int,
+    label: str,
+    ttl_secs: int,
 ) -> List[str]:
     config.load_kube_config()
     api_instance = client.CustomObjectsApi()
@@ -600,6 +614,7 @@ def create_replay_verify_pvcs_from_snapshot(
             snapshot_name,
             namespace,
             label,
+            ttl_secs,
         )
         for pvc_id in range(pvc_num)
     ]
@@ -607,6 +622,80 @@ def create_replay_verify_pvcs_from_snapshot(
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = [
             executor.submit(create_one_pvc_from_snapshot, *task) for task in tasks
+        ]
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                result = future.result()
+                logger.info(f"Task result: {result}")
+                res.append(result)
+            except Exception as e:
+                logger.error(f"Task generated an exception: {e}")
+    return res
+
+
+def create_one_pvc_from_existing(
+    pvc_name: str, existing_pvc_name: str, namespace: str, label: str, ttl_secs: int
+) -> str:
+    config.load_kube_config()
+    api_instance = client.CoreV1Api()
+    # testnet and mainnet disk size could be different
+    storage_size = "12Ti" if TESTNET_SNAPSHOT_NAME in existing_pvc_name else "12Ti"
+    # Define the PVC manifest
+    pvc_manifest = {
+        "apiVersion": "v1",
+        "kind": "PersistentVolumeClaim",
+        "metadata": {
+            "name": f"{pvc_name}",
+            "annotations": {
+                "volume.kubernetes.io/storage-provisioner": "pd.csi.storage.gke.io",
+                "k8s-ttl-controller.twin.sh/ttl": f"{ttl_secs}s",
+            },
+            "labels": {"run": f"{label}"},
+        },
+        "spec": {
+            "accessModes": ["ReadWriteOnce"],
+            "resources": {"requests": {"storage": storage_size}},
+            "storageClassName": STORAGE_CLASS,
+            "volumeMode": "Filesystem",
+            "dataSource": {
+                "name": f"{existing_pvc_name}",
+                "kind": "PersistentVolumeClaim",
+            },
+        },
+    }
+
+    api_instance.create_namespaced_persistent_volume_claim(
+        namespace=namespace, body=pvc_manifest
+    )
+    return pvc_name
+
+
+def create_replay_verify_pvcs_from_existing(
+    run_id: str,
+    original_snapshot_name: str,
+    existing_pvc: str,
+    pvc_num: int,
+    namespace: str,
+    label: str,
+    ttl_secs: int,
+) -> List[str]:
+    config.load_kube_config()
+    api_instance = client.CoreV1Api()
+
+    tasks = [
+        (
+            generate_disk_name(run_id, f"{original_snapshot_name}-clone", pvc_id),
+            existing_pvc,
+            namespace,
+            label,
+            ttl_secs,
+        )
+        for pvc_id in range(pvc_num)
+    ]
+    res = []
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [
+            executor.submit(create_one_pvc_from_existing, *task) for task in tasks
         ]
         for future in concurrent.futures.as_completed(futures):
             try:

@@ -748,7 +748,7 @@ impl BlockTransactionPayload {
         let inline_batches: Vec<&BatchInfo> = match self {
             BlockTransactionPayload::QuorumStoreInlineHybrid(_, inline_batches)
             | BlockTransactionPayload::QuorumStoreInlineHybridV2(_, inline_batches) => {
-                inline_batches.iter().map(|batch_info| batch_info).collect()
+                inline_batches.iter().collect()
             },
             _ => {
                 return Err(Error::InvalidMessageError(
@@ -1046,7 +1046,7 @@ mod test {
             BatchPointer, InlineBatch, OptBatches, OptQuorumStorePayload, PayloadExecutionLimit,
             ProofBatches,
         },
-        proof_of_store::BatchId,
+        pipelined_block::OrderedBlockWindow,
         quorum_cert::QuorumCert,
     };
     use aptos_crypto::{ed25519::Ed25519PrivateKey, HashValue, PrivateKey, SigningKey, Uniform};
@@ -1054,6 +1054,7 @@ mod test {
         aggregate_signature::AggregateSignature,
         chain_id::ChainId,
         ledger_info::LedgerInfo,
+        quorum_store::BatchId,
         transaction::{RawTransaction, Script, TransactionPayload},
         validator_signer::ValidatorSigner,
         validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
@@ -1947,7 +1948,10 @@ mod test {
             BlockType::Genesis,
         );
         let block = Block::new_for_testing(block_info.id(), block_data, None);
-        Arc::new(PipelinedBlock::new_ordered(block))
+        Arc::new(PipelinedBlock::new_ordered(
+            block,
+            OrderedBlockWindow::empty(),
+        ))
     }
 
     /// Creates and returns a new pipelined block with the given block info and parent ID
@@ -1977,7 +1981,10 @@ mod test {
 
         // Create the pipelined block
         let block = Block::new_for_testing(block_info.id(), block_data, None);
-        Arc::new(PipelinedBlock::new_ordered(block))
+        Arc::new(PipelinedBlock::new_ordered(
+            block,
+            OrderedBlockWindow::empty(),
+        ))
     }
 
     /// Creates a returns multiple signed transactions
@@ -1991,6 +1998,7 @@ mod test {
         let mut transactions = vec![];
         for i in 0..num_transactions {
             // Create the raw transaction
+            // TODO[Orderless]: Change this to transaction payload v2 format
             let transaction_payload =
                 TransactionPayload::Script(Script::new(vec![], vec![], vec![]));
             let raw_transaction = RawTransaction::new(

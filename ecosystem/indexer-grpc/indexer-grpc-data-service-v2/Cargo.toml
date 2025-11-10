@@ -38,4 +38,4 @@ uuid = { workspace = true }
 warp = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-tikv-jemallocator = { workspace = true }
+jemallocator = { workspace = true }

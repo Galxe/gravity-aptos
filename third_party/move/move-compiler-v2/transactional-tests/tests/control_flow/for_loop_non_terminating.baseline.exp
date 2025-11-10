@@ -1,10 +1,13 @@
 processed 1 task
-
-task 0 'run'. lines 1-11:
+task 0 lines 1-11:  run --gas-budget 700 [script {]
 Error: Script execution failed with VMError: {
     major_status: OUT_OF_GAS,
     sub_status: None,
     location: script,
     indices: [],
+<<<<<<<< HEAD:third_party/move/move-compiler-v2/transactional-tests/tests/control_flow/for_loop_nested_break.baseline.exp
+    offsets: [(FunctionDefinitionIndex(0), 25)],
+========
     offsets: [(FunctionDefinitionIndex(0), 9)],
+>>>>>>>> aptos-node-v1.36.8-hotfix:third_party/move/move-compiler-v2/transactional-tests/tests/control_flow/for_loop_non_terminating.baseline.exp
 }

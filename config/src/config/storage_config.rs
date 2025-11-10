@@ -34,6 +34,7 @@ pub struct DbPathConfig {
     pub ledger_db_path: Option<PathBuf>,
     pub state_kv_db_path: Option<ShardedDbPathConfig>,
     pub state_merkle_db_path: Option<ShardedDbPathConfig>,
+    pub hot_state_kv_db_path: Option<ShardedDbPathConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -102,6 +103,15 @@ impl ShardedDbPathConfig {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RocksDBStatsLevel {
+    ExceptHistogramOrTimers,
+    ExceptTimers,
+    ExceptDetailedTimers,
+    ExceptTimeForMutex,
+    All,
+}
+
 /// Port selected RocksDB options for tuning underlying rocksdb instance of AptosDB.
 /// see <https://github.com/facebook/rocksdb/blob/master/include/rocksdb/options.h>
 /// for detailed explanations.
@@ -112,14 +122,33 @@ pub struct RocksdbConfig {
     pub max_open_files: i32,
     /// Maximum size of the RocksDB write ahead log (WAL)
     pub max_total_wal_size: u64,
-    /// Maximum number of background threads for Rocks DB
+    /// Maximum number of background jobs for Rocks DB
     pub max_background_jobs: i32,
     /// Block cache size for Rocks DB
     pub block_cache_size: u64,
     /// Block size for Rocks DB
     pub block_size: u64,
-    /// Whether cache index and filter blocks into block cache.
+    /// Whether to cache index and filter blocks into block cache.
     pub cache_index_and_filter_blocks: bool,
+    /// Whether to pin L0 filters and indexes in memory. Only makes sense if
+    /// `cache_index_and_filter_blocks` is `true`.
+    pub pin_l0_filter_and_index_blocks_in_cache: bool,
+    /// The level of details for statistics. Higher level might cause more overhead. `None` means
+    /// disabling everything.
+    pub stats_level: Option<RocksDBStatsLevel>,
+    /// If not zero, dump stats to LOG every this many seconds. `None` means using RocksDB's
+    /// default.
+    pub stats_dump_period_sec: Option<u32>,
+}
+
+impl RocksdbConfig {
+    /// Default block cache size is 1GB,
+    const DEFAULT_BLOCK_CACHE_SIZE: u64 = 1 << 30;
+    /// Default block size is 4KB,
+    const DEFAULT_BLOCK_SIZE: u64 = 4 * (1 << 10);
+    /// Default block cache size for state kv db is 16GB, because the number of different keys
+    /// being read is usually large.
+    const DEFAULT_STATE_KV_BLOCK_CACHE_SIZE: u64 = 16 * (1 << 30);
 }
 
 impl Default for RocksdbConfig {
@@ -130,15 +159,18 @@ impl Default for RocksdbConfig {
             // For now we set the max total WAL size to be 1G. This config can be useful when column
             // families are updated at non-uniform frequencies.
             max_total_wal_size: 1u64 << 30,
-            // This includes threads for flashing and compaction. Rocksdb will decide the # of
-            // threads to use internally.
-            max_background_jobs: 16,
-            // Default block cache size is 8MB,
-            block_cache_size: 8 * (1u64 << 20),
-            // Default block cache size is 4KB,
-            block_size: 4 * (1u64 << 10),
-            // Whether cache index and filter blocks into block cache.
-            cache_index_and_filter_blocks: false,
+            // This includes jobs for flush and compaction.
+            max_background_jobs: 4,
+            block_cache_size: Self::DEFAULT_BLOCK_CACHE_SIZE,
+            block_size: Self::DEFAULT_BLOCK_SIZE,
+            // Count index/filter blocks in block cache usage by default.
+            cache_index_and_filter_blocks: true,
+            // L0 index/filter blocks are usually small and used frequently.
+            pin_l0_filter_and_index_blocks_in_cache: true,
+            // Enable but use a less detailed option by default since there might be some overhead.
+            stats_level: Some(RocksDBStatsLevel::ExceptHistogramOrTimers),
+            // Use RocksDB's default if not specified.
+            stats_dump_period_sec: None,
         }
     }
 }
@@ -151,8 +183,14 @@ pub struct RocksdbConfigs {
     pub state_merkle_db_config: RocksdbConfig,
     pub state_kv_db_config: RocksdbConfig,
     pub index_db_config: RocksdbConfig,
-    // Note: Not ready for production use yet.
+    #[serde(default = "default_to_true")]
     pub enable_storage_sharding: bool,
+    pub high_priority_background_threads: i32,
+    pub low_priority_background_threads: i32,
+}
+
+fn default_to_true() -> bool {
+    true
 }
 
 impl Default for RocksdbConfigs {
@@ -160,12 +198,17 @@ impl Default for RocksdbConfigs {
         Self {
             ledger_db_config: RocksdbConfig::default(),
             state_merkle_db_config: RocksdbConfig::default(),
-            state_kv_db_config: RocksdbConfig::default(),
+            state_kv_db_config: RocksdbConfig {
+                block_cache_size: RocksdbConfig::DEFAULT_STATE_KV_BLOCK_CACHE_SIZE,
+                ..Default::default()
+            },
             index_db_config: RocksdbConfig {
                 max_open_files: 1000,
                 ..Default::default()
             },
-            enable_storage_sharding: false,
+            enable_storage_sharding: true,
+            high_priority_background_threads: 4,
+            low_priority_background_threads: 2,
         }
     }
 }
@@ -292,7 +335,7 @@ impl Default for LedgerPrunerConfig {
     fn default() -> Self {
         LedgerPrunerConfig {
             enable: true,
-            prune_window: 100_000_000,
+            prune_window: 90_000_000,
             batch_size: 5_000,
             user_pruning_window_offset: 200_000,
         }
@@ -372,6 +415,7 @@ impl StorageConfig {
         let mut ledger_db_path = None;
         let mut state_kv_db_paths = ShardedDbPaths::default();
         let mut state_merkle_db_paths = ShardedDbPaths::default();
+        let mut hot_state_kv_db_paths = ShardedDbPaths::default();
 
         if let Some(db_path_overrides) = self.db_path_overrides.as_ref() {
             db_path_overrides
@@ -385,6 +429,10 @@ impl StorageConfig {
             if let Some(state_merkle_db_path) = db_path_overrides.state_merkle_db_path.as_ref() {
                 state_merkle_db_paths = ShardedDbPaths::new(state_merkle_db_path);
             }
+
+            if let Some(hot_state_kv_db_path) = db_path_overrides.hot_state_kv_db_path.as_ref() {
+                hot_state_kv_db_paths = ShardedDbPaths::new(hot_state_kv_db_path);
+            }
         }
 
         StorageDirPaths::new(
@@ -392,6 +440,7 @@ impl StorageConfig {
             ledger_db_path,
             state_kv_db_paths,
             state_merkle_db_paths,
+            hot_state_kv_db_paths,
         )
     }
 
@@ -405,11 +454,13 @@ impl StorageConfig {
     }
 }
 
+#[derive(Debug)]
 pub struct StorageDirPaths {
     default_path: PathBuf,
     ledger_db_path: Option<PathBuf>,
     state_kv_db_paths: ShardedDbPaths,
     state_merkle_db_paths: ShardedDbPaths,
+    hot_state_kv_db_paths: ShardedDbPaths,
 }
 
 impl StorageDirPaths {
@@ -431,7 +482,7 @@ impl StorageDirPaths {
             .unwrap_or(&self.default_path)
     }
 
-    pub fn state_kv_db_shard_root_path(&self, shard_id: u8) -> &PathBuf {
+    pub fn state_kv_db_shard_root_path(&self, shard_id: usize) -> &PathBuf {
         self.state_kv_db_paths
             .shard_path(shard_id)
             .unwrap_or(&self.default_path)
@@ -443,8 +494,14 @@ impl StorageDirPaths {
             .unwrap_or(&self.default_path)
     }
 
-    pub fn state_merkle_db_shard_root_path(&self, shard_id: u8) -> &PathBuf {
+    pub fn state_merkle_db_shard_root_path(&self, shard_id: usize) -> &PathBuf {
         self.state_merkle_db_paths
+            .shard_path(shard_id)
+            .unwrap_or(&self.default_path)
+    }
+
+    pub fn hot_state_kv_db_shard_root_path(&self, shard_id: usize) -> &PathBuf {
+        self.hot_state_kv_db_paths
             .shard_path(shard_id)
             .unwrap_or(&self.default_path)
     }
@@ -455,6 +512,7 @@ impl StorageDirPaths {
             ledger_db_path: None,
             state_kv_db_paths: Default::default(),
             state_merkle_db_paths: Default::default(),
+            hot_state_kv_db_paths: Default::default(),
         }
     }
 
@@ -463,17 +521,19 @@ impl StorageDirPaths {
         ledger_db_path: Option<PathBuf>,
         state_kv_db_paths: ShardedDbPaths,
         state_merkle_db_paths: ShardedDbPaths,
+        hot_state_kv_db_paths: ShardedDbPaths,
     ) -> Self {
         Self {
             default_path,
             ledger_db_path,
             state_kv_db_paths,
             state_merkle_db_paths,
+            hot_state_kv_db_paths,
         }
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct ShardedDbPaths {
     metadata_path: Option<PathBuf>,
     shard_paths: [Option<PathBuf>; 16],
@@ -496,8 +556,41 @@ impl ShardedDbPaths {
         self.metadata_path.as_ref()
     }
 
-    fn shard_path(&self, shard_id: u8) -> Option<&PathBuf> {
-        self.shard_paths[shard_id as usize].as_ref()
+    fn shard_path(&self, shard_id: usize) -> Option<&PathBuf> {
+        self.shard_paths[shard_id].as_ref()
+    }
+}
+
+impl ConfigOptimizer for StorageConfig {
+    fn optimize(
+        node_config: &mut NodeConfig,
+        local_config_yaml: &Value,
+        _node_type: NodeType,
+        chain_id: Option<ChainId>,
+    ) -> Result<bool, Error> {
+        let config = &mut node_config.storage;
+        let config_yaml = &local_config_yaml["storage"];
+
+        let mut modified_config = false;
+        if let Some(chain_id) = chain_id {
+            if (chain_id.is_testnet() || chain_id.is_mainnet())
+                && config_yaml["ensure_rlimit_nofile"].is_null()
+            {
+                config.ensure_rlimit_nofile = 999_999;
+                modified_config = true;
+            }
+            if chain_id.is_testnet() && config_yaml["assert_rlimit_nofile"].is_null() {
+                config.assert_rlimit_nofile = true;
+                modified_config = true;
+            }
+            if (chain_id.is_testnet() || chain_id.is_mainnet())
+                && config_yaml["rocksdb_configs"]["enable_storage_sharding"].as_bool() != Some(true)
+            {
+                panic!("Storage sharding (AIP-97) is not enabled in node config. Please follow the guide to migration your node, and set storage.rocksdb_configs.enable_storage_sharding to true explicitly in your node config. https://aptoslabs.notion.site/DB-Sharding-Migration-Public-Full-Nodes-1978b846eb7280b29f17ceee7d480730");
+            }
+        }
+
+        Ok(modified_config)
     }
 }
 
@@ -635,8 +728,8 @@ impl ConfigSanitizer for StorageConfig {
 #[cfg(test)]
 mod test {
     use crate::config::{
-        config_optimizer::ConfigOptimizer, NodeConfig, NodeType, PrunerConfig, ShardPathConfig,
-        ShardedDbPathConfig, StorageConfig,
+        config_optimizer::ConfigOptimizer, NodeConfig, NodeType, PersistableConfig, PrunerConfig,
+        RocksdbConfig, ShardPathConfig, ShardedDbPathConfig, StorageConfig,
     };
     use aptos_types::chain_id::ChainId;
 
@@ -721,9 +814,17 @@ mod test {
         assert_eq!(node_config.storage.ensure_rlimit_nofile, 0);
         assert!(!node_config.storage.assert_rlimit_nofile);
 
+        let yaml = serde_yaml::from_str(
+            r#"
+            storage:
+              rocksdb_configs:
+                enable_storage_sharding: true
+            "#,
+        )
+        .unwrap();
         let modified_config = StorageConfig::optimize(
             &mut node_config,
-            &serde_yaml::from_str("{}").unwrap(), // An empty local config,
+            &yaml,
             NodeType::Validator,
             Some(ChainId::mainnet()),
         )
@@ -735,7 +836,7 @@ mod test {
 
         let modified_config = StorageConfig::optimize(
             &mut node_config,
-            &serde_yaml::from_str("{}").unwrap(), // An empty local config,
+            &yaml,
             NodeType::Validator,
             Some(ChainId::testnet()),
         )
@@ -744,5 +845,60 @@ mod test {
 
         assert_eq!(node_config.storage.ensure_rlimit_nofile, 999_999);
         assert!(node_config.storage.assert_rlimit_nofile);
+    }
+
+    fn verify_parsing_block_cache_size(
+        yaml: &str,
+        expected_ledger_block_cache_size: u64,
+        expected_state_kv_block_cache_size: u64,
+    ) {
+        let node_config = NodeConfig::parse_serialized_config(yaml).unwrap();
+        let config = &node_config.storage;
+        assert_eq!(
+            config.rocksdb_configs.ledger_db_config.block_cache_size,
+            expected_ledger_block_cache_size
+        );
+        assert_eq!(
+            config.rocksdb_configs.state_kv_db_config.block_cache_size,
+            expected_state_kv_block_cache_size,
+        );
+    }
+
+    #[test]
+    fn test_rocksdb_config_override() {
+        verify_parsing_block_cache_size(
+            r#"
+            storage:
+              rocksdb_configs:
+                ledger_db_config:
+                  block_cache_size: 123
+            "#,
+            123,
+            RocksdbConfig::DEFAULT_STATE_KV_BLOCK_CACHE_SIZE,
+        );
+
+        verify_parsing_block_cache_size(
+            r#"
+            storage:
+              rocksdb_configs:
+                state_kv_db_config:
+                  block_cache_size: 123
+            "#,
+            RocksdbConfig::DEFAULT_BLOCK_CACHE_SIZE,
+            123,
+        );
+
+        verify_parsing_block_cache_size(
+            r#"
+            storage:
+              rocksdb_configs:
+                ledger_db_config:
+                  block_cache_size: 123
+                state_kv_db_config:
+                  block_cache_size: 456
+            "#,
+            123,
+            456,
+        );
     }
 }

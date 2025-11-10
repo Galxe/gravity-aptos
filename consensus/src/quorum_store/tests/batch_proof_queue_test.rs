@@ -6,11 +6,14 @@ use crate::quorum_store::{
 };
 use aptos_consensus_types::{
     common::TxnSummaryWithExpiration,
-    proof_of_store::{BatchId, BatchInfo, ProofOfStore},
+    proof_of_store::{BatchInfo, ProofOfStore},
     utils::PayloadTxnsSize,
 };
 use aptos_crypto::HashValue;
-use aptos_types::{aggregate_signature::AggregateSignature, PeerId};
+use aptos_types::{
+    aggregate_signature::AggregateSignature, quorum_store::BatchId, transaction::ReplayProtector,
+    PeerId,
+};
 use maplit::hashset;
 use std::{collections::HashSet, time::Duration};
 
@@ -157,10 +160,30 @@ async fn test_proof_calculate_remaining_txns_and_proofs() {
     let author_0 = PeerId::random();
     let author_1 = PeerId::random();
     let txns = vec![
-        TxnSummaryWithExpiration::new(PeerId::ONE, 0, now_in_secs + 1, HashValue::zero()),
-        TxnSummaryWithExpiration::new(PeerId::ONE, 1, now_in_secs + 1, HashValue::zero()),
-        TxnSummaryWithExpiration::new(PeerId::ONE, 2, now_in_secs + 1, HashValue::zero()),
-        TxnSummaryWithExpiration::new(PeerId::ONE, 3, now_in_secs + 1, HashValue::zero()),
+        TxnSummaryWithExpiration::new(
+            PeerId::ONE,
+            ReplayProtector::SequenceNumber(0),
+            now_in_secs + 1,
+            HashValue::zero(),
+        ),
+        TxnSummaryWithExpiration::new(
+            PeerId::ONE,
+            ReplayProtector::SequenceNumber(1),
+            now_in_secs + 1,
+            HashValue::zero(),
+        ),
+        TxnSummaryWithExpiration::new(
+            PeerId::ONE,
+            ReplayProtector::SequenceNumber(2),
+            now_in_secs + 1,
+            HashValue::zero(),
+        ),
+        TxnSummaryWithExpiration::new(
+            PeerId::ONE,
+            ReplayProtector::SequenceNumber(3),
+            now_in_secs + 1,
+            HashValue::zero(),
+        ),
     ];
 
     let author_0_batches = vec![
@@ -415,10 +438,30 @@ async fn test_proof_pull_proofs_with_duplicates() {
     let now_in_secs = aptos_infallible::duration_since_epoch().as_secs() as u64;
     let now_in_usecs = now_in_secs * 1_000_000;
     let txns = vec![
-        TxnSummaryWithExpiration::new(PeerId::ONE, 0, now_in_secs + 2, HashValue::zero()),
-        TxnSummaryWithExpiration::new(PeerId::ONE, 1, now_in_secs + 1, HashValue::zero()),
-        TxnSummaryWithExpiration::new(PeerId::ONE, 2, now_in_secs + 3, HashValue::zero()),
-        TxnSummaryWithExpiration::new(PeerId::ONE, 3, now_in_secs + 4, HashValue::zero()),
+        TxnSummaryWithExpiration::new(
+            PeerId::ONE,
+            ReplayProtector::SequenceNumber(0),
+            now_in_secs + 2,
+            HashValue::zero(),
+        ),
+        TxnSummaryWithExpiration::new(
+            PeerId::ONE,
+            ReplayProtector::SequenceNumber(1),
+            now_in_secs + 1,
+            HashValue::zero(),
+        ),
+        TxnSummaryWithExpiration::new(
+            PeerId::ONE,
+            ReplayProtector::SequenceNumber(2),
+            now_in_secs + 3,
+            HashValue::zero(),
+        ),
+        TxnSummaryWithExpiration::new(
+            PeerId::ONE,
+            ReplayProtector::SequenceNumber(3),
+            now_in_secs + 4,
+            HashValue::zero(),
+        ),
     ];
 
     let author_0 = PeerId::random();
@@ -655,6 +698,137 @@ async fn test_proof_pull_proofs_with_duplicates() {
     assert_eq!(result.2, 0);
 
     proof_queue.handle_updated_block_timestamp(now_in_usecs + 5_000_000);
+    assert!(proof_queue.is_empty());
+}
+
+#[tokio::test]
+async fn test_proof_queue_soft_limit() {
+    let my_peer_id = PeerId::random();
+    let batch_store = batch_store_for_test(5 * 1024 * 1024);
+    let mut proof_queue = BatchProofQueue::new(my_peer_id, batch_store, 1);
+
+    let author = PeerId::random();
+
+    let author_batches = vec![
+        proof_of_store_with_size(author, BatchId::new_for_test(0), 100, 1, 10),
+        proof_of_store_with_size(author, BatchId::new_for_test(1), 200, 1, 10),
+        proof_of_store_with_size(author, BatchId::new_for_test(2), 200, 1, 10),
+    ];
+    for batch in author_batches {
+        proof_queue.insert_proof(batch);
+    }
+
+    let (pulled, _, num_unique_txns, _) = proof_queue.pull_proofs(
+        &hashset![],
+        PayloadTxnsSize::new(100, 100),
+        12,
+        12,
+        true,
+        aptos_infallible::duration_since_epoch(),
+    );
+
+    assert_eq!(pulled.len(), 1);
+    assert_eq!(num_unique_txns, 10);
+
+    let (pulled, _, num_unique_txns, _) = proof_queue.pull_proofs(
+        &hashset![],
+        PayloadTxnsSize::new(100, 100),
+        30,
+        12,
+        true,
+        aptos_infallible::duration_since_epoch(),
+    );
+
+    assert_eq!(pulled.len(), 2);
+    assert_eq!(num_unique_txns, 20);
+}
+
+#[tokio::test]
+async fn test_proof_queue_insert_after_commit() {
+    let my_peer_id = PeerId::random();
+    let batch_store = batch_store_for_test(5 * 1024);
+    let mut proof_queue = BatchProofQueue::new(my_peer_id, batch_store, 1);
+
+    let author = PeerId::random();
+    let author_batches = vec![
+        proof_of_store_with_size(author, BatchId::new_for_test(0), 100, 1, 10),
+        proof_of_store_with_size(author, BatchId::new_for_test(1), 200, 1, 10),
+        proof_of_store_with_size(author, BatchId::new_for_test(2), 200, 1, 10),
+    ];
+    let batch_infos = author_batches
+        .iter()
+        .map(|proof| proof.info().clone())
+        .collect();
+
+    proof_queue.mark_committed(batch_infos);
+
+    for proof in author_batches {
+        proof_queue.insert_proof(proof);
+    }
+
+    let (remaining_txns, remaining_proofs) = proof_queue.remaining_txns_and_proofs();
+    assert_eq!(remaining_txns, 0);
+    assert_eq!(remaining_proofs, 0);
+
+    proof_queue.handle_updated_block_timestamp(10);
+
+    assert!(proof_queue.is_empty());
+}
+
+#[tokio::test]
+async fn test_proof_queue_pull_full_utilization() {
+    let my_peer_id = PeerId::random();
+    let batch_store = batch_store_for_test(5 * 1024);
+    let mut proof_queue = BatchProofQueue::new(my_peer_id, batch_store, 1);
+
+    let author = PeerId::random();
+    let author_batches = vec![
+        proof_of_store_with_size(author, BatchId::new_for_test(0), 100, 1, 10),
+        proof_of_store_with_size(author, BatchId::new_for_test(1), 200, 1, 10),
+        proof_of_store_with_size(author, BatchId::new_for_test(2), 200, 1, 10),
+    ];
+
+    for proof in author_batches {
+        proof_queue.insert_proof(proof);
+    }
+
+    let (remaining_txns, remaining_proofs) = proof_queue.remaining_txns_and_proofs();
+    assert_eq!(remaining_txns, 30);
+    assert_eq!(remaining_proofs, 3);
+
+    let now_in_secs = aptos_infallible::duration_since_epoch();
+    let (proof_block, txns_with_proof_size, cur_unique_txns, proof_queue_fully_utilized) =
+        proof_queue.pull_proofs(
+            &HashSet::new(),
+            PayloadTxnsSize::new(10, 10),
+            10,
+            10,
+            true,
+            now_in_secs,
+        );
+
+    assert_eq!(proof_block.len(), 1);
+    assert_eq!(txns_with_proof_size.count(), 10);
+    assert_eq!(cur_unique_txns, 10);
+    assert!(!proof_queue_fully_utilized);
+
+    let now_in_secs = aptos_infallible::duration_since_epoch();
+    let (proof_block, txns_with_proof_size, cur_unique_txns, proof_queue_fully_utilized) =
+        proof_queue.pull_proofs(
+            &HashSet::new(),
+            PayloadTxnsSize::new(50, 50),
+            50,
+            50,
+            true,
+            now_in_secs,
+        );
+
+    assert_eq!(proof_block.len(), 3);
+    assert_eq!(txns_with_proof_size.count(), 30);
+    assert_eq!(cur_unique_txns, 30);
+    assert!(proof_queue_fully_utilized);
+
+    proof_queue.handle_updated_block_timestamp(10);
     assert!(proof_queue.is_empty());
 }
 

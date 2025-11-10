@@ -1,0 +1,13 @@
+[package]
+<<<<<<<< HEAD:aptos-move/e2e-move-tests/src/tests/large_package_publishing.data/large_pack_upgrade_incompat/Move.toml
+name = "LargePackageExample"
+========
+name = "generic_cmp"
+>>>>>>>> aptos-node-v1.36.8-hotfix:aptos-move/e2e-move-tests/src/tests/cmp_generic.data/pack/Move.toml
+version = "0.0.0"
+upgrade_policy = "compatible"
+[dependencies]
+AptosFramework = { local = "../../../../../framework/aptos-framework" }
+
+[addresses]
+large_package_example = "_"

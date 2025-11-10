@@ -5,7 +5,11 @@ use crate::{
     metrics,
     metrics::{EXECUTOR_ERRORS, OTHER_TIMERS},
 };
+<<<<<<< HEAD
 use anyhow::{anyhow, Result};
+=======
+use anyhow::{anyhow, ensure, Result};
+>>>>>>> aptos-node-v1.36.8-hotfix
 use aptos_block_executor::txn_provider::default::DefaultTxnProvider;
 #[cfg(feature = "consensus-only-perf-test")]
 use aptos_block_executor::txn_provider::TxnProvider;
@@ -42,10 +46,18 @@ use aptos_types::{
         TStateView,
     },
     transaction::{
+<<<<<<< HEAD
         signature_verified_transaction::SignatureVerifiedTransaction, BlockEndInfo, BlockOutput,
         Transaction, TransactionOutput, TransactionStatus, Version,
     },
     write_set::{TransactionWrite, WriteSet},
+=======
+        signature_verified_transaction::SignatureVerifiedTransaction, AuxiliaryInfo,
+        AuxiliaryInfoTrait, BlockOutput, PersistedAuxiliaryInfo, Transaction, TransactionOutput,
+        TransactionStatus, Version,
+    },
+    write_set::{HotStateOp, TransactionWrite, WriteSet},
+>>>>>>> aptos-node-v1.36.8-hotfix
 };
 use aptos_vm::VMBlockExecutor;
 use itertools::Itertools;
@@ -57,6 +69,10 @@ impl DoGetExecutionOutput {
     pub fn by_transaction_execution<V: VMBlockExecutor>(
         executor: &V,
         transactions: ExecutableTransactions,
+<<<<<<< HEAD
+=======
+        auxiliary_infos: Vec<AuxiliaryInfo>,
+>>>>>>> aptos-node-v1.36.8-hotfix
         parent_state: &LedgerState,
         state_view: CachedStateView,
         onchain_config: BlockExecutorConfigFromOnchain,
@@ -67,14 +83,25 @@ impl DoGetExecutionOutput {
                 Self::by_transaction_execution_unsharded::<V>(
                     executor,
                     txns,
+<<<<<<< HEAD
+=======
+                    auxiliary_infos,
+>>>>>>> aptos-node-v1.36.8-hotfix
                     parent_state,
                     state_view,
                     onchain_config,
                     transaction_slice_metadata,
                 )?
             },
+<<<<<<< HEAD
             ExecutableTransactions::Sharded(txns) => Self::by_transaction_execution_sharded::<V>(
                 txns,
+=======
+            // TODO: Execution with auxiliary info is yet to be supported properly here for sharded transactions
+            ExecutableTransactions::Sharded(txns) => Self::by_transaction_execution_sharded::<V>(
+                txns,
+                auxiliary_infos,
+>>>>>>> aptos-node-v1.36.8-hotfix
                 parent_state,
                 state_view,
                 onchain_config,
@@ -100,14 +127,22 @@ impl DoGetExecutionOutput {
     fn by_transaction_execution_unsharded<V: VMBlockExecutor>(
         executor: &V,
         transactions: Vec<SignatureVerifiedTransaction>,
+<<<<<<< HEAD
+=======
+        auxiliary_infos: Vec<AuxiliaryInfo>,
+>>>>>>> aptos-node-v1.36.8-hotfix
         parent_state: &LedgerState,
         state_view: CachedStateView,
         onchain_config: BlockExecutorConfigFromOnchain,
         transaction_slice_metadata: TransactionSliceMetadata,
     ) -> Result<ExecutionOutput> {
+<<<<<<< HEAD
         let append_state_checkpoint_to_block =
             transaction_slice_metadata.append_state_checkpoint_to_block();
         let txn_provider = DefaultTxnProvider::new(transactions);
+=======
+        let txn_provider = DefaultTxnProvider::new(transactions, auxiliary_infos.clone());
+>>>>>>> aptos-node-v1.36.8-hotfix
         let block_output = Self::execute_block::<V>(
             executor,
             &txn_provider,
@@ -115,6 +150,7 @@ impl DoGetExecutionOutput {
             onchain_config,
             transaction_slice_metadata,
         )?;
+<<<<<<< HEAD
         let (transaction_outputs, block_end_info) = block_output.into_inner();
 
         Parser::parse(
@@ -130,11 +166,79 @@ impl DoGetExecutionOutput {
             block_end_info,
             append_state_checkpoint_to_block,
             false, // prime_state_cache
+=======
+        let (mut transaction_outputs, block_epilogue_txn) = block_output.into_inner();
+        let (transactions, mut auxiliary_infos) = txn_provider.into_inner();
+        let mut transactions = transactions
+            .into_iter()
+            .map(|t| t.into_inner())
+            .collect_vec();
+        if let Some(block_epilogue_txn) = block_epilogue_txn {
+            transactions.push(block_epilogue_txn.into_inner());
+
+            // Check if all existing auxiliary infos are None to maintain consistency
+            let all_auxiliary_infos_are_none = auxiliary_infos
+                .iter()
+                .all(|info| matches!(info.persisted_info(), PersistedAuxiliaryInfo::None));
+
+            let block_epilogue_aux_info = if all_auxiliary_infos_are_none {
+                // If all other auxiliary infos are None, use None for consistency (version 0 behavior)
+                AuxiliaryInfo::new(PersistedAuxiliaryInfo::None, None)
+            } else {
+                // Otherwise, use the standard function (version 1 behavior)
+                AuxiliaryInfo::auxiliary_info_at_txn_index(transactions.len() as u32 - 1)
+            };
+
+            auxiliary_infos.push(block_epilogue_aux_info);
+        }
+
+        // Manually create hotness write sets for block epilogue transaction(s), based on the block
+        // end info saved. Note that even if we are re-executing transactions during a state sync,
+        // the block end info is not re-computed and has to come from the previous execution.
+        //
+        // If the input transactions are from a normal block, the last one should be the epilogue.
+        // If they are from a chunk (i.e. we are re-executing transactions during state sync), then
+        // there could be zero or more block epilogue transactions, and we need to handle all of
+        // them.
+        //
+        // TODO(HotState): it might be better to do this in AptosVM::execute_single_transaction,
+        // but we need to figure out how to properly construct `VMOutput` from block end info.
+        for (transaction, output) in transactions.iter().zip_eq(transaction_outputs.iter_mut()) {
+            if let Transaction::BlockEpilogue(payload) = transaction {
+                assert!(output.status().is_kept(), "Block epilogue must be kept");
+                output.add_hotness(
+                    payload
+                        .try_get_slots_to_make_hot()
+                        .cloned()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|(key, slot)| (key, HotStateOp::make_hot(slot)))
+                        .collect(),
+                );
+            }
+        }
+
+        Parser::parse(
+            state_view.next_version(),
+            transactions,
+            transaction_outputs,
+            auxiliary_infos,
+            parent_state,
+            state_view,
+            false, // prime_state_cache
+            transaction_slice_metadata
+                .append_state_checkpoint_to_block()
+                .is_some(),
+>>>>>>> aptos-node-v1.36.8-hotfix
         )
     }
 
     pub fn by_transaction_execution_sharded<V: VMBlockExecutor>(
         transactions: PartitionedTransactions,
+<<<<<<< HEAD
+=======
+        auxiliary_infos: Vec<AuxiliaryInfo>,
+>>>>>>> aptos-node-v1.36.8-hotfix
         parent_state: &LedgerState,
         state_view: CachedStateView,
         onchain_config: BlockExecutorConfigFromOnchain,
@@ -147,6 +251,11 @@ impl DoGetExecutionOutput {
             onchain_config,
         )?;
 
+<<<<<<< HEAD
+=======
+        // TODO(Manu): Handle state checkpoint here.
+
+>>>>>>> aptos-node-v1.36.8-hotfix
         // TODO(skedia) add logic to emit counters per shard instead of doing it globally.
 
         // Unwrapping here is safe because the execution has finished and it is guaranteed that
@@ -159,17 +268,29 @@ impl DoGetExecutionOutput {
                 .map(|t| t.into_txn().into_inner())
                 .collect(),
             transaction_outputs,
+<<<<<<< HEAD
             parent_state,
             state_view,
             None, // block end info
             append_state_checkpoint_to_block,
             false, // prime_state_cache
+=======
+            auxiliary_infos,
+            parent_state,
+            state_view,
+            false, // prime_state_cache
+            append_state_checkpoint_to_block.is_some(),
+>>>>>>> aptos-node-v1.36.8-hotfix
         )
     }
 
     pub fn by_transaction_output(
         transactions: Vec<Transaction>,
         transaction_outputs: Vec<TransactionOutput>,
+<<<<<<< HEAD
+=======
+        auxiliary_infos: Vec<AuxiliaryInfo>,
+>>>>>>> aptos-node-v1.36.8-hotfix
         parent_state: &LedgerState,
         state_view: CachedStateView,
     ) -> Result<ExecutionOutput> {
@@ -177,11 +298,19 @@ impl DoGetExecutionOutput {
             state_view.next_version(),
             transactions,
             transaction_outputs,
+<<<<<<< HEAD
             parent_state,
             state_view,
             None, // block end info
             None, // append state checkpoint to block
             true, // prime state cache
+=======
+            auxiliary_infos,
+            parent_state,
+            state_view,
+            true,  // prime state cache
+            false, // is_block
+>>>>>>> aptos-node-v1.36.8-hotfix
         )?;
 
         let ret = out.clone();
@@ -224,11 +353,19 @@ impl DoGetExecutionOutput {
     #[cfg(not(feature = "consensus-only-perf-test"))]
     fn execute_block<V: VMBlockExecutor>(
         executor: &V,
+<<<<<<< HEAD
         txn_provider: &DefaultTxnProvider<SignatureVerifiedTransaction>,
         state_view: &CachedStateView,
         onchain_config: BlockExecutorConfigFromOnchain,
         transaction_slice_metadata: TransactionSliceMetadata,
     ) -> Result<BlockOutput<TransactionOutput>> {
+=======
+        txn_provider: &DefaultTxnProvider<SignatureVerifiedTransaction, AuxiliaryInfo>,
+        state_view: &CachedStateView,
+        onchain_config: BlockExecutorConfigFromOnchain,
+        transaction_slice_metadata: TransactionSliceMetadata,
+    ) -> Result<BlockOutput<SignatureVerifiedTransaction, TransactionOutput>> {
+>>>>>>> aptos-node-v1.36.8-hotfix
         let _timer = OTHER_TIMERS.timer_with(&["vm_execute_block"]);
         Ok(executor.execute_block(
             txn_provider,
@@ -290,6 +427,7 @@ impl Parser {
         first_version: Version,
         mut transactions: Vec<Transaction>,
         mut transaction_outputs: Vec<TransactionOutput>,
+<<<<<<< HEAD
         parent_state: &LedgerState,
         base_state_view: CachedStateView,
         block_end_info: Option<BlockEndInfo>,
@@ -302,6 +440,18 @@ impl Parser {
 
         // Collect all statuses.
         let statuses_for_input_txns = {
+=======
+        auxiliary_infos: Vec<AuxiliaryInfo>,
+        parent_state: &LedgerState,
+        base_state_view: CachedStateView,
+        prime_state_cache: bool,
+        is_block: bool,
+    ) -> Result<ExecutionOutput> {
+        let _timer = OTHER_TIMERS.timer_with(&["parse_raw_output"]);
+
+        // Collect all statuses.
+        let mut statuses_for_input_txns = {
+>>>>>>> aptos-node-v1.36.8-hotfix
             let _timer = OTHER_TIMERS.timer_with(&["parse_raw_output__all_statuses"]);
             transaction_outputs
                 .iter()
@@ -310,16 +460,39 @@ impl Parser {
                 .collect_vec()
         };
 
+<<<<<<< HEAD
         // Isolate retries.
         let (to_retry, has_reconfig) =
             Self::extract_retries(&mut transactions, &mut transaction_outputs);
 
         // Isolate discards.
         let to_discard = Self::extract_discards(&mut transactions, &mut transaction_outputs);
+=======
+        let mut persisted_auxiliary_infos = auxiliary_infos
+            .into_iter()
+            .map(|info| info.into_persisted_info())
+            .collect();
+
+        // Isolate retries and discards.
+        let (to_retry, to_discard, has_reconfig) = Self::extract_retries_and_discards(
+            &mut transactions,
+            &mut transaction_outputs,
+            &mut persisted_auxiliary_infos,
+        );
+
+        let mut block_end_info = None;
+        if is_block && !has_reconfig {
+            if let Some(Transaction::BlockEpilogue(payload)) = transactions.last() {
+                block_end_info = payload.try_as_block_end_info().cloned();
+                ensure!(statuses_for_input_txns.pop().is_some());
+            }
+        }
+>>>>>>> aptos-node-v1.36.8-hotfix
 
         // The rest is to be committed, attach block epilogue as needed and optionally get next EpochState.
         let to_commit = {
             let _timer = OTHER_TIMERS.timer_with(&["parse_raw_output__to_commit"]);
+<<<<<<< HEAD
             let to_commit = TransactionsWithOutput::new(transactions, transaction_outputs);
             TransactionsToKeep::index(
                 first_version,
@@ -331,6 +504,14 @@ impl Parser {
                 ),
                 has_reconfig,
             )
+=======
+            let to_commit = TransactionsWithOutput::new(
+                transactions,
+                transaction_outputs,
+                persisted_auxiliary_infos,
+            );
+            TransactionsToKeep::index(first_version, to_commit, has_reconfig)
+>>>>>>> aptos-node-v1.36.8-hotfix
         };
         let next_epoch_state = {
             let _timer = OTHER_TIMERS.timer_with(&["parse_raw_output__next_epoch_state"]);
@@ -381,11 +562,20 @@ impl Parser {
             .collect_vec()
     }
 
+<<<<<<< HEAD
     fn extract_retries(
         transactions: &mut Vec<Transaction>,
         transaction_outputs: &mut Vec<TransactionOutput>,
     ) -> (TransactionsWithOutput, bool) {
         let _timer = OTHER_TIMERS.timer_with(&["parse_raw_output__retries"]);
+=======
+    fn extract_retries_and_discards(
+        transactions: &mut Vec<Transaction>,
+        transaction_outputs: &mut Vec<TransactionOutput>,
+        persisted_auxiliary_infos: &mut Vec<PersistedAuxiliaryInfo>,
+    ) -> (TransactionsWithOutput, TransactionsWithOutput, bool) {
+        let _timer = OTHER_TIMERS.timer_with(&["parse_raw_output__retries_and_discards"]);
+>>>>>>> aptos-node-v1.36.8-hotfix
 
         let last_non_retry = transaction_outputs
             .iter()
@@ -396,6 +586,7 @@ impl Parser {
             false
         };
 
+<<<<<<< HEAD
         let first_retry = last_non_retry.map_or(0, |pos| pos + 1);
         let to_retry = TransactionsWithOutput::new(
             transactions.drain(first_retry..).collect(),
@@ -431,6 +622,42 @@ impl Parser {
 
         // Sanity check transactions with the Discard status:
         to_discard.iter().for_each(|(t, o)| {
+=======
+        let mut to_discard = TransactionsWithOutput::new_empty();
+        let mut to_retry = TransactionsWithOutput::new_empty();
+
+        let mut num_keep_txns = 0;
+
+        for idx in 0..transactions.len() {
+            match transaction_outputs[idx].status() {
+                TransactionStatus::Keep(_) => {
+                    if num_keep_txns != idx {
+                        transactions[num_keep_txns] = transactions[idx].clone();
+                        transaction_outputs[num_keep_txns] = transaction_outputs[idx].clone();
+                        persisted_auxiliary_infos[num_keep_txns] = persisted_auxiliary_infos[idx];
+                    }
+                    num_keep_txns += 1;
+                },
+                TransactionStatus::Retry => to_retry.push(
+                    transactions[idx].clone(),
+                    transaction_outputs[idx].clone(),
+                    persisted_auxiliary_infos[idx],
+                ),
+                TransactionStatus::Discard(_) => to_discard.push(
+                    transactions[idx].clone(),
+                    transaction_outputs[idx].clone(),
+                    persisted_auxiliary_infos[idx],
+                ),
+            }
+        }
+
+        transactions.truncate(num_keep_txns);
+        transaction_outputs.truncate(num_keep_txns);
+        persisted_auxiliary_infos.truncate(num_keep_txns);
+
+        // Sanity check transactions with the Discard status:
+        to_discard.iter().for_each(|(t, o, _)| {
+>>>>>>> aptos-node-v1.36.8-hotfix
             // In case a new status other than Retry, Keep and Discard is added:
             if !matches!(o.status(), TransactionStatus::Discard(_)) {
                 error!("Status other than Retry, Keep or Discard; Transaction discarded.");
@@ -447,6 +674,7 @@ impl Parser {
             }
         });
 
+<<<<<<< HEAD
         to_discard
     }
 
@@ -471,6 +699,9 @@ impl Parser {
         }; // else: not adding block epilogue at epoch ending.
 
         to_commit
+=======
+        (to_retry, to_discard, is_reconfig)
+>>>>>>> aptos-node-v1.36.8-hotfix
     }
 
     fn ensure_next_epoch_state(to_commit: &TransactionsWithOutput) -> Result<EpochState> {
@@ -500,7 +731,11 @@ struct WriteSetStateView<'a> {
     write_set: &'a WriteSet,
 }
 
+<<<<<<< HEAD
 impl<'a> TStateView for WriteSetStateView<'a> {
+=======
+impl TStateView for WriteSetStateView<'_> {
+>>>>>>> aptos-node-v1.36.8-hotfix
     type Key = StateKey;
 
     fn get_state_value(
@@ -509,7 +744,11 @@ impl<'a> TStateView for WriteSetStateView<'a> {
     ) -> aptos_types::state_store::StateViewResult<Option<StateValue>> {
         Ok(self
             .write_set
+<<<<<<< HEAD
             .get(state_key)
+=======
+            .get_write_op(state_key)
+>>>>>>> aptos-node-v1.36.8-hotfix
             .and_then(|write_op| write_op.as_state_value()))
     }
 
@@ -517,6 +756,10 @@ impl<'a> TStateView for WriteSetStateView<'a> {
         unreachable!("Not supposed to be called on WriteSetStateView.")
     }
 }
+<<<<<<< HEAD
+=======
+
+>>>>>>> aptos-node-v1.36.8-hotfix
 #[cfg(test)]
 mod tests {
     use super::Parser;
@@ -526,9 +769,16 @@ mod tests {
     use aptos_types::{
         contract_event::ContractEvent,
         transaction::{
+<<<<<<< HEAD
             ExecutionStatus, Transaction, TransactionAuxiliaryData, TransactionOutput,
             TransactionStatus,
         },
+=======
+            AuxiliaryInfo, ExecutionStatus, PersistedAuxiliaryInfo, Transaction,
+            TransactionAuxiliaryData, TransactionOutput, TransactionStatus,
+        },
+        vm_status::StatusCode,
+>>>>>>> aptos-node-v1.36.8-hotfix
         write_set::WriteSet,
     };
 
@@ -560,15 +810,39 @@ mod tests {
                 TransactionAuxiliaryData::default(),
             ),
         ];
+<<<<<<< HEAD
+=======
+        let auxiliary_infos = vec![
+            AuxiliaryInfo::new(
+                PersistedAuxiliaryInfo::V1 {
+                    transaction_index: 0,
+                },
+                None,
+            ),
+            AuxiliaryInfo::new(
+                PersistedAuxiliaryInfo::V1 {
+                    transaction_index: 1,
+                },
+                None,
+            ),
+        ];
+>>>>>>> aptos-node-v1.36.8-hotfix
         let state = LedgerState::new_empty();
         let execution_output = Parser::parse(
             0,
             txns,
             txn_outs,
+<<<<<<< HEAD
             &state,
             CachedStateView::new_dummy(&state),
             None,
             None,
+=======
+            auxiliary_infos,
+            &state,
+            CachedStateView::new_dummy(&state),
+            false,
+>>>>>>> aptos-node-v1.36.8-hotfix
             false,
         )
         .unwrap();
@@ -577,4 +851,136 @@ mod tests {
             *execution_output.subscribable_events
         );
     }
+<<<<<<< HEAD
+=======
+
+    #[test]
+    fn test_extract_retry_and_discard_no_reconfig() {
+        let mut txns = vec![
+            Transaction::dummy(),
+            Transaction::dummy(),
+            Transaction::dummy(),
+            Transaction::dummy(),
+        ];
+        let mut txn_outs = vec![
+            TransactionOutput::new(
+                WriteSet::default(),
+                vec![],
+                0,
+                TransactionStatus::Keep(ExecutionStatus::Success),
+                TransactionAuxiliaryData::default(),
+            ),
+            TransactionOutput::new(
+                WriteSet::default(),
+                vec![],
+                0,
+                TransactionStatus::Discard(StatusCode::SEQUENCE_NUMBER_TOO_OLD),
+                TransactionAuxiliaryData::default(),
+            ),
+            TransactionOutput::new(
+                WriteSet::default(),
+                vec![],
+                0,
+                TransactionStatus::Retry,
+                TransactionAuxiliaryData::default(),
+            ),
+            TransactionOutput::new(
+                WriteSet::default(),
+                vec![],
+                0,
+                TransactionStatus::Keep(ExecutionStatus::Success),
+                TransactionAuxiliaryData::default(),
+            ),
+        ];
+        let mut auxiliary_infos = vec![
+            PersistedAuxiliaryInfo::V1 {
+                transaction_index: 0,
+            },
+            PersistedAuxiliaryInfo::V1 {
+                transaction_index: 1,
+            },
+            PersistedAuxiliaryInfo::V1 {
+                transaction_index: 2,
+            },
+            PersistedAuxiliaryInfo::V1 {
+                transaction_index: 3,
+            },
+        ];
+        let (to_retry, to_discard, is_reconfig) =
+            Parser::extract_retries_and_discards(&mut txns, &mut txn_outs, &mut auxiliary_infos);
+        assert!(!is_reconfig);
+        assert_eq!(to_retry.len(), 1);
+        assert_eq!(to_discard.len(), 1);
+        assert_eq!(txns.len(), 2);
+        assert_eq!(txn_outs.len(), 2);
+        assert_eq!(auxiliary_infos.len(), 2);
+        assert_eq!(
+            PersistedAuxiliaryInfo::V1 {
+                transaction_index: 0
+            },
+            auxiliary_infos[0]
+        );
+        assert_eq!(
+            PersistedAuxiliaryInfo::V1 {
+                transaction_index: 3
+            },
+            auxiliary_infos[1]
+        );
+    }
+
+    #[test]
+    fn test_extract_retry_and_discard_reconfig() {
+        let reconfig_event = ContractEvent::new_v2_with_type_tag_str(
+            "0x1::reconfiguration::NewEpochEvent",
+            b"".to_vec(),
+        );
+        let mut txns = vec![
+            Transaction::dummy(),
+            Transaction::dummy(),
+            Transaction::dummy(),
+        ];
+        let mut txn_outs = vec![
+            TransactionOutput::new(
+                WriteSet::default(),
+                vec![reconfig_event],
+                0,
+                TransactionStatus::Keep(ExecutionStatus::Success),
+                TransactionAuxiliaryData::default(),
+            ),
+            TransactionOutput::new(
+                WriteSet::default(),
+                vec![],
+                0,
+                TransactionStatus::Retry,
+                TransactionAuxiliaryData::default(),
+            ),
+            TransactionOutput::new(
+                WriteSet::default(),
+                vec![],
+                0,
+                TransactionStatus::Retry,
+                TransactionAuxiliaryData::default(),
+            ),
+        ];
+        let mut auxiliary_infos = vec![
+            PersistedAuxiliaryInfo::V1 {
+                transaction_index: 0,
+            },
+            PersistedAuxiliaryInfo::V1 {
+                transaction_index: 1,
+            },
+            PersistedAuxiliaryInfo::V1 {
+                transaction_index: 2,
+            },
+        ];
+        let (to_retry, to_discard, is_reconfig) =
+            Parser::extract_retries_and_discards(&mut txns, &mut txn_outs, &mut auxiliary_infos);
+        assert!(is_reconfig);
+        assert_eq!(to_retry.len(), 2);
+        assert_eq!(to_discard.len(), 0);
+        assert_eq!(txns.len(), 1);
+        assert_eq!(txn_outs.len(), 1);
+        assert_eq!(auxiliary_infos.len(), 1);
+    }
+>>>>>>> aptos-node-v1.36.8-hotfix
 }

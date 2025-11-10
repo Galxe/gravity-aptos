@@ -1,0 +1,11 @@
+[package]
+<<<<<<<< HEAD:aptos-move/e2e-move-tests/src/tests/code_publishing.data/pack_init_module_code_publish/Move.toml
+name = "test_package"
+========
+name = "function_values"
+>>>>>>>> aptos-node-v1.36.8-hotfix:aptos-move/e2e-move-tests/src/tests/aggregator_v2.data/function_values/Move.toml
+version = "0.0.0"
+upgrade_policy = "immutable"
+
+[dependencies]
+AptosFramework = { local = "../../../../../framework/aptos-framework" }
