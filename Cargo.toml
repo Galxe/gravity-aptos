@@ -90,6 +90,7 @@ randomness_disabled = ["aptos-types/randomness_disabled"]
 resolver = "2"
 
 members = [
+    ".",
     "api",
     "api/openapi-spec-generator",
     "api/test-context",
