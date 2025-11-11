@@ -1,9 +1,9 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-mod agg_trx_producer;
+pub mod agg_trx_producer;
 mod counters;
-mod dkg_manager;
+pub mod dkg_manager;
 pub mod epoch_manager;
 pub mod network;
 pub mod network_interface;
