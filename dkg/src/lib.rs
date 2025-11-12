@@ -1,9 +1,9 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-mod agg_trx_producer;
+pub mod agg_trx_producer;
 mod counters;
-mod dkg_manager;
+pub mod dkg_manager;
 pub mod epoch_manager;
 pub mod network;
 pub mod network_interface;
@@ -22,6 +22,7 @@ use aptos_validator_transaction_pool::VTxnPoolState;
 use move_core_types::account_address::AccountAddress;
 use tokio::runtime::Runtime;
 pub use types::DKGMessage;
+pub use transcript_aggregation::TranscriptAggregationState;
 
 pub fn start_dkg_runtime(
     my_addr: AccountAddress,

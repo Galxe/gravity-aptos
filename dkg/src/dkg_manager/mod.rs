@@ -29,7 +29,7 @@ use rand::{prelude::StdRng, thread_rng, SeedableRng};
 use std::{sync::Arc, time::Duration};
 
 #[derive(Clone, Debug)]
-enum InnerState {
+pub enum InnerState {
     NotStarted,
     InProgress {
         start_time: Duration,
@@ -66,7 +66,7 @@ pub struct DKGManager<DKG: DKGTrait> {
 
     // Control states.
     stopped: bool,
-    state: InnerState,
+    pub state: InnerState,
 }
 
 impl InnerState {
