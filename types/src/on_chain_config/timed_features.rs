@@ -11,13 +11,29 @@ use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
 #[derive(Debug, EnumCountMacro, EnumIter, Clone, Copy, Eq, PartialEq)]
 pub enum TimedFeatureFlag {
     DisableInvariantViolationCheckInSwapLoc,
+<<<<<<< HEAD
     LimitTypeTagSize,
     ModuleComplexityCheck,
+=======
+    // Was always enabled.
+    _LimitTypeTagSize,
+    // Enabled on mainnet, cannot be disabled.
+    _ModuleComplexityCheck,
+>>>>>>> aptos-node-v1.37.4
     EntryCompatibility,
     ChargeBytesForPrints,
 
     // Fixes the bug of table natives not tracking the memory usage of the global values they create.
     FixMemoryUsageTracking,
+<<<<<<< HEAD
+=======
+    // Disable checking for captured option types.
+    // Only when this feature is turned on, feature flag ENABLE_CAPTURE_OPTION can control whether the option type can be captured.
+    DisabledCaptureOption,
+
+    /// Fixes the bug that table natives double count the memory usage of the global values.
+    FixTableNativesMemoryDoubleCounting,
+>>>>>>> aptos-node-v1.37.4
 }
 
 /// Representation of features that are gated by the block timestamps.
@@ -45,8 +61,8 @@ impl TimedFeatureOverride {
 
         Some(match self {
             Replay => match flag {
-                LimitTypeTagSize => true,
-                ModuleComplexityCheck => true,
+                _LimitTypeTagSize => true,
+                _ModuleComplexityCheck => true,
                 // Add overrides for replay here.
                 _ => return None,
             },
@@ -72,6 +88,7 @@ impl TimedFeatureFlag {
             (DisableInvariantViolationCheckInSwapLoc, MAINNET) => BEGINNING_OF_TIME,
 
             // Note: These have been enabled since the start due to a bug.
+<<<<<<< HEAD
             (LimitTypeTagSize, TESTNET) => BEGINNING_OF_TIME,
             (LimitTypeTagSize, MAINNET) => BEGINNING_OF_TIME,
 
@@ -80,6 +97,16 @@ impl TimedFeatureFlag {
                 .unwrap()
                 .with_timezone(&Utc),
             (ModuleComplexityCheck, MAINNET) => Los_Angeles
+=======
+            (_LimitTypeTagSize, TESTNET) => BEGINNING_OF_TIME,
+            (_LimitTypeTagSize, MAINNET) => BEGINNING_OF_TIME,
+
+            (_ModuleComplexityCheck, TESTNET) => Los_Angeles
+                .with_ymd_and_hms(2024, 6, 25, 16, 0, 0)
+                .unwrap()
+                .with_timezone(&Utc),
+            (_ModuleComplexityCheck, MAINNET) => Los_Angeles
+>>>>>>> aptos-node-v1.37.4
                 .with_ymd_and_hms(2024, 7, 3, 12, 0, 0)
                 .unwrap()
                 .with_timezone(&Utc),
@@ -113,6 +140,26 @@ impl TimedFeatureFlag {
                 .with_ymd_and_hms(2025, 3, 11, 17, 0, 0)
                 .unwrap()
                 .with_timezone(&Utc),
+<<<<<<< HEAD
+=======
+            (DisabledCaptureOption, TESTNET) => Los_Angeles
+                .with_ymd_and_hms(2025, 9, 15, 12, 0, 0)
+                .unwrap()
+                .with_timezone(&Utc),
+            // For testing, time set to 1 hour after the beginning of time to test the old and new behaviors in tests.
+            (DisabledCaptureOption, TESTING) => Utc.with_ymd_and_hms(1970, 1, 1, 1, 0, 0).unwrap(),
+            // For mainnet, always enable this feature.
+            (DisabledCaptureOption, MAINNET) => BEGINNING_OF_TIME,
+
+            (FixTableNativesMemoryDoubleCounting, TESTNET) => Los_Angeles
+                .with_ymd_and_hms(2025, 10, 16, 17, 0, 0)
+                .unwrap()
+                .with_timezone(&Utc),
+            (FixTableNativesMemoryDoubleCounting, MAINNET) => Los_Angeles
+                .with_ymd_and_hms(2025, 10, 21, 10, 0, 0)
+                .unwrap()
+                .with_timezone(&Utc),
+>>>>>>> aptos-node-v1.37.4
 
             // For chains other than testnet and mainnet, a timed feature is considered enabled from
             // the very beginning, if left unspecified.
@@ -228,13 +275,21 @@ mod test {
         );
 
         assert_eq!(
+<<<<<<< HEAD
             TimedFeatureFlag::ModuleComplexityCheck
+=======
+            TimedFeatureFlag::_ModuleComplexityCheck
+>>>>>>> aptos-node-v1.37.4
                 .activation_time_on(&TESTNET)
                 .timestamp_micros(),
             1_719_356_400_000_000
         );
         assert_eq!(
+<<<<<<< HEAD
             TimedFeatureFlag::ModuleComplexityCheck
+=======
+            TimedFeatureFlag::_ModuleComplexityCheck
+>>>>>>> aptos-node-v1.37.4
                 .activation_time_on(&MAINNET)
                 .timestamp_micros(),
             1_720_033_200_000_000
@@ -273,11 +328,19 @@ mod test {
             "DisableInvariantViolationCheckInSwapLoc should always be enabled"
         );
         assert!(
+<<<<<<< HEAD
             testnet_jan_1_2024.is_enabled(LimitTypeTagSize),
             "LimitTypeTagSize should always be enabled"
         );
         assert!(
             !testnet_jan_1_2024.is_enabled(ModuleComplexityCheck),
+=======
+            testnet_jan_1_2024.is_enabled(_LimitTypeTagSize),
+            "LimitTypeTagSize should always be enabled"
+        );
+        assert!(
+            !testnet_jan_1_2024.is_enabled(_ModuleComplexityCheck),
+>>>>>>> aptos-node-v1.37.4
             "ModuleComplexityCheck should be disabled on Jan 1, 2024 on testnet"
         );
         assert!(
@@ -291,11 +354,19 @@ mod test {
             "DisableInvariantViolationCheckInSwapLoc should always be enabled"
         );
         assert!(
+<<<<<<< HEAD
             testnet_nov_15_2024.is_enabled(LimitTypeTagSize),
             "LimitTypeTagSize should always be enabled"
         );
         assert!(
             testnet_nov_15_2024.is_enabled(ModuleComplexityCheck),
+=======
+            testnet_nov_15_2024.is_enabled(_LimitTypeTagSize),
+            "LimitTypeTagSize should always be enabled"
+        );
+        assert!(
+            testnet_nov_15_2024.is_enabled(_ModuleComplexityCheck),
+>>>>>>> aptos-node-v1.37.4
             "ModuleComplexityCheck should be enabled on Nov 15, 2024 on testnet"
         );
         assert!(
@@ -309,11 +380,19 @@ mod test {
             "DisableInvariantViolationCheckInSwapLoc should always be enabled"
         );
         assert!(
+<<<<<<< HEAD
             mainnet_jan_1_2024.is_enabled(LimitTypeTagSize),
             "LimitTypeTagSize should always be enabled"
         );
         assert!(
             !mainnet_jan_1_2024.is_enabled(ModuleComplexityCheck),
+=======
+            mainnet_jan_1_2024.is_enabled(_LimitTypeTagSize),
+            "LimitTypeTagSize should always be enabled"
+        );
+        assert!(
+            !mainnet_jan_1_2024.is_enabled(_ModuleComplexityCheck),
+>>>>>>> aptos-node-v1.37.4
             "ModuleComplexityCheck should be disabled on Jan 1, 2024 on mainnet"
         );
         assert!(
@@ -327,11 +406,19 @@ mod test {
             "DisableInvariantViolationCheckInSwapLoc should always be enabled"
         );
         assert!(
+<<<<<<< HEAD
             mainnet_nov_15_2024.is_enabled(LimitTypeTagSize),
             "LimitTypeTagSize should always be enabled"
         );
         assert!(
             mainnet_nov_15_2024.is_enabled(ModuleComplexityCheck),
+=======
+            mainnet_nov_15_2024.is_enabled(_LimitTypeTagSize),
+            "LimitTypeTagSize should always be enabled"
+        );
+        assert!(
+            mainnet_nov_15_2024.is_enabled(_ModuleComplexityCheck),
+>>>>>>> aptos-node-v1.37.4
             "ModuleComplexityCheck should be enabled on Nov 15, 2024 on mainnet"
         );
         assert!(

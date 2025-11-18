@@ -209,7 +209,7 @@ impl MemoryListener {
         match Pin::new(&mut self.incoming).poll_next(context) {
             Poll::Ready(Some(socket)) => Poll::Ready(Ok(socket)),
             Poll::Ready(None) => {
-                let err = Error::new(ErrorKind::Other, "MemoryListener unknown error");
+                let err = Error::other("MemoryListener unknown error");
                 Poll::Ready(Err(err))
             },
             Poll::Pending => Poll::Pending,
@@ -225,7 +225,7 @@ pub struct Incoming<'a> {
     inner: &'a mut MemoryListener,
 }
 
-impl<'a> Stream for Incoming<'a> {
+impl Stream for Incoming<'_> {
     type Item = Result<MemorySocket>;
 
     fn poll_next(mut self: Pin<&mut Self>, context: &mut Context) -> Poll<Option<Self::Item>> {

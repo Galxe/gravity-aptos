@@ -17,7 +17,8 @@ use std::collections::HashMap;
 
 /// Default Window Size for Execution Pool.
 /// This describes the number of blocks in the Execution Pool Window
-// pub const DEFAULT_WINDOW_SIZE: Option<u64> = None;
+pub const DEFAULT_WINDOW_SIZE: Option<u64> = None;
+pub const DEFAULT_ENABLED_WINDOW_SIZE: Option<u64> = Some(1);
 
 // #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 // pub enum ConsensusAlgorithmConfig {
@@ -41,6 +42,22 @@ use std::collections::HashMap;
 //             order_vote_enabled: true,
 //         }
 //     }
+
+    // pub fn default_with_quorum_store_disabled() -> Self {
+    //     Self::JolteonV2 {
+    //         main: ConsensusConfigV1::default(),
+    //         quorum_store_enabled: false,
+    //         order_vote_enabled: true,
+    //     }
+    // }
+
+    // pub fn default_if_missing() -> Self {
+    //     Self::JolteonV2 {
+    //         main: ConsensusConfigV1::default(),
+    //         quorum_store_enabled: true,
+    //         order_vote_enabled: false,
+    //     }
+    // }
 
 //     pub fn default_with_quorum_store_disabled() -> Self {
 //         Self::JolteonV2 {
@@ -214,15 +231,34 @@ pub enum OnChainConsensusConfig {
         // Execution pool block window
         window_size: Option<u64>,
     },
+<<<<<<< HEAD
+=======
+    V5 {
+        alg: ConsensusAlgorithmConfig,
+        vtxn: ValidatorTxnConfig,
+        // Execution pool block window
+        window_size: Option<u64>,
+        // Whether to check if we can skip generating randomness for blocks
+        rand_check_enabled: bool,
+    },
+>>>>>>> aptos-node-v1.37.4
 }
 
 /// The public interface that exposes all values with safe fallback.
 impl OnChainConsensusConfig {
     pub fn default_for_genesis() -> Self {
+<<<<<<< HEAD
         OnChainConsensusConfig::V4 {
             alg: ConsensusAlgorithmConfig::default_for_genesis(),
             vtxn: ValidatorTxnConfig::default_for_genesis(),
             window_size: DEFAULT_WINDOW_SIZE,
+=======
+        OnChainConsensusConfig::V5 {
+            alg: ConsensusAlgorithmConfig::default_for_genesis(),
+            vtxn: ValidatorTxnConfig::default_for_genesis(),
+            window_size: DEFAULT_WINDOW_SIZE,
+            rand_check_enabled: true,
+>>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -232,9 +268,15 @@ impl OnChainConsensusConfig {
             OnChainConsensusConfig::V1(config) | OnChainConsensusConfig::V2(config) => {
                 config.exclude_round
             },
+<<<<<<< HEAD
             OnChainConsensusConfig::V3 { alg, .. } | OnChainConsensusConfig::V4 { alg, .. } => {
                 alg.leader_reputation_exclude_round()
             },
+=======
+            OnChainConsensusConfig::V3 { alg, .. }
+            | OnChainConsensusConfig::V4 { alg, .. }
+            | OnChainConsensusConfig::V5 { alg, .. } => alg.leader_reputation_exclude_round(),
+>>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -250,9 +292,15 @@ impl OnChainConsensusConfig {
             OnChainConsensusConfig::V1(config) | OnChainConsensusConfig::V2(config) => {
                 config.max_failed_authors_to_store
             },
+<<<<<<< HEAD
             OnChainConsensusConfig::V3 { alg, .. } | OnChainConsensusConfig::V4 { alg, .. } => {
                 alg.max_failed_authors_to_store()
             },
+=======
+            OnChainConsensusConfig::V3 { alg, .. }
+            | OnChainConsensusConfig::V4 { alg, .. }
+            | OnChainConsensusConfig::V5 { alg, .. } => alg.max_failed_authors_to_store(),
+>>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -262,9 +310,15 @@ impl OnChainConsensusConfig {
             OnChainConsensusConfig::V1(config) | OnChainConsensusConfig::V2(config) => {
                 &config.proposer_election_type
             },
+<<<<<<< HEAD
             OnChainConsensusConfig::V3 { alg, .. } | OnChainConsensusConfig::V4 { alg, .. } => {
                 alg.proposer_election_type()
             },
+=======
+            OnChainConsensusConfig::V3 { alg, .. }
+            | OnChainConsensusConfig::V4 { alg, .. }
+            | OnChainConsensusConfig::V5 { alg, .. } => alg.proposer_election_type(),
+>>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -272,9 +326,15 @@ impl OnChainConsensusConfig {
         match &self {
             OnChainConsensusConfig::V1(_config) => false,
             OnChainConsensusConfig::V2(_) => true,
+<<<<<<< HEAD
             OnChainConsensusConfig::V3 { alg, .. } | OnChainConsensusConfig::V4 { alg, .. } => {
                 alg.quorum_store_enabled()
             },
+=======
+            OnChainConsensusConfig::V3 { alg, .. }
+            | OnChainConsensusConfig::V4 { alg, .. }
+            | OnChainConsensusConfig::V5 { alg, .. } => alg.quorum_store_enabled(),
+>>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -282,9 +342,15 @@ impl OnChainConsensusConfig {
         match &self {
             OnChainConsensusConfig::V1(_config) => false,
             OnChainConsensusConfig::V2(_) => false,
+<<<<<<< HEAD
             OnChainConsensusConfig::V3 { alg, .. } | OnChainConsensusConfig::V4 { alg, .. } => {
                 alg.order_vote_enabled()
             },
+=======
+            OnChainConsensusConfig::V3 { alg, .. }
+            | OnChainConsensusConfig::V4 { alg, .. }
+            | OnChainConsensusConfig::V5 { alg, .. } => alg.order_vote_enabled(),
+>>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -292,9 +358,15 @@ impl OnChainConsensusConfig {
         match self {
             OnChainConsensusConfig::V1(_) => false,
             OnChainConsensusConfig::V2(_) => false,
+<<<<<<< HEAD
             OnChainConsensusConfig::V3 { alg, .. } | OnChainConsensusConfig::V4 { alg, .. } => {
                 alg.is_dag_enabled()
             },
+=======
+            OnChainConsensusConfig::V3 { alg, .. }
+            | OnChainConsensusConfig::V4 { alg, .. }
+            | OnChainConsensusConfig::V5 { alg, .. } => alg.is_dag_enabled(),
+>>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -303,10 +375,16 @@ impl OnChainConsensusConfig {
             OnChainConsensusConfig::V1(_) | OnChainConsensusConfig::V2(_) => {
                 unreachable!("not a dag config")
             },
+<<<<<<< HEAD
             OnChainConsensusConfig::V3 { alg, .. } | OnChainConsensusConfig::V4 { alg, .. } => {
                 unreachable!("not a dag config")
                 // alg.unwrap_dag_config_v1()
             },
+=======
+            OnChainConsensusConfig::V3 { alg, .. }
+            | OnChainConsensusConfig::V4 { alg, .. }
+            | OnChainConsensusConfig::V5 { alg, .. } => alg.unwrap_dag_config_v1(),
+>>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -315,9 +393,15 @@ impl OnChainConsensusConfig {
             OnChainConsensusConfig::V1(_) | OnChainConsensusConfig::V2(_) => {
                 ValidatorTxnConfig::default_disabled()
             },
+<<<<<<< HEAD
             OnChainConsensusConfig::V3 { vtxn, .. } | OnChainConsensusConfig::V4 { vtxn, .. } => {
                 vtxn.clone()
             },
+=======
+            OnChainConsensusConfig::V3 { vtxn, .. }
+            | OnChainConsensusConfig::V4 { vtxn, .. }
+            | OnChainConsensusConfig::V5 { vtxn, .. } => vtxn.clone(),
+>>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -330,7 +414,13 @@ impl OnChainConsensusConfig {
             OnChainConsensusConfig::V1(_) | OnChainConsensusConfig::V2(_) => {
                 // vtxn not supported. No-op.
             },
+<<<<<<< HEAD
             OnChainConsensusConfig::V3 { vtxn, .. } | OnChainConsensusConfig::V4 { vtxn, .. } => {
+=======
+            OnChainConsensusConfig::V3 { vtxn, .. }
+            | OnChainConsensusConfig::V4 { vtxn, .. }
+            | OnChainConsensusConfig::V5 { vtxn, .. } => {
+>>>>>>> aptos-node-v1.37.4
                 *vtxn = ValidatorTxnConfig::V0;
             },
         }
@@ -338,7 +428,11 @@ impl OnChainConsensusConfig {
 
     pub fn enable_validator_txns(&mut self) {
         let new_self = match std::mem::take(self) {
+<<<<<<< HEAD
             OnChainConsensusConfig::V1(config) => OnChainConsensusConfig::V4 {
+=======
+            OnChainConsensusConfig::V1(config) => OnChainConsensusConfig::V5 {
+>>>>>>> aptos-node-v1.37.4
                 alg: ConsensusAlgorithmConfig::JolteonV2 {
                     main: config,
                     quorum_store_enabled: false,
@@ -346,8 +440,14 @@ impl OnChainConsensusConfig {
                 },
                 vtxn: ValidatorTxnConfig::default_enabled(),
                 window_size: DEFAULT_WINDOW_SIZE,
+<<<<<<< HEAD
             },
             OnChainConsensusConfig::V2(config) => OnChainConsensusConfig::V4 {
+=======
+                rand_check_enabled: true,
+            },
+            OnChainConsensusConfig::V2(config) => OnChainConsensusConfig::V5 {
+>>>>>>> aptos-node-v1.37.4
                 alg: ConsensusAlgorithmConfig::JolteonV2 {
                     main: config,
                     quorum_store_enabled: true,
@@ -355,14 +455,26 @@ impl OnChainConsensusConfig {
                 },
                 vtxn: ValidatorTxnConfig::default_enabled(),
                 window_size: DEFAULT_WINDOW_SIZE,
+<<<<<<< HEAD
+=======
+                rand_check_enabled: true,
+>>>>>>> aptos-node-v1.37.4
             },
             OnChainConsensusConfig::V3 {
                 vtxn: ValidatorTxnConfig::V0,
                 alg,
+<<<<<<< HEAD
             } => OnChainConsensusConfig::V4 {
                 alg,
                 vtxn: ValidatorTxnConfig::default_enabled(),
                 window_size: DEFAULT_WINDOW_SIZE,
+=======
+            } => OnChainConsensusConfig::V5 {
+                alg,
+                vtxn: ValidatorTxnConfig::default_enabled(),
+                window_size: DEFAULT_WINDOW_SIZE,
+                rand_check_enabled: true,
+>>>>>>> aptos-node-v1.37.4
             },
             OnChainConsensusConfig::V4 {
                 alg,
@@ -372,6 +484,20 @@ impl OnChainConsensusConfig {
                 alg,
                 vtxn: ValidatorTxnConfig::default_enabled(),
                 window_size,
+<<<<<<< HEAD
+=======
+            },
+            OnChainConsensusConfig::V5 {
+                alg,
+                vtxn: ValidatorTxnConfig::V0,
+                window_size,
+                rand_check_enabled: rand_check,
+            } => OnChainConsensusConfig::V5 {
+                alg,
+                vtxn: ValidatorTxnConfig::default_enabled(),
+                window_size,
+                rand_check_enabled: rand_check,
+>>>>>>> aptos-node-v1.37.4
             },
             item @ OnChainConsensusConfig::V3 {
                 vtxn: ValidatorTxnConfig::V1 { .. },
@@ -381,6 +507,13 @@ impl OnChainConsensusConfig {
                 vtxn: ValidatorTxnConfig::V1 { .. },
                 ..
             } => item,
+<<<<<<< HEAD
+=======
+            item @ OnChainConsensusConfig::V5 {
+                vtxn: ValidatorTxnConfig::V1 { .. },
+                ..
+            } => item,
+>>>>>>> aptos-node-v1.37.4
         };
         *self = new_self;
     }
@@ -390,7 +523,38 @@ impl OnChainConsensusConfig {
             OnChainConsensusConfig::V1(_)
             | OnChainConsensusConfig::V2(_)
             | OnChainConsensusConfig::V3 { .. } => None,
+<<<<<<< HEAD
             OnChainConsensusConfig::V4 { window_size, .. } => *window_size,
+=======
+            OnChainConsensusConfig::V4 { window_size, .. }
+            | OnChainConsensusConfig::V5 { window_size, .. } => *window_size,
+        }
+    }
+
+    pub fn rand_check_enabled(&self) -> bool {
+        match self {
+            OnChainConsensusConfig::V1(_)
+            | OnChainConsensusConfig::V2(_)
+            | OnChainConsensusConfig::V3 { .. }
+            | OnChainConsensusConfig::V4 { .. } => false,
+            OnChainConsensusConfig::V5 {
+                rand_check_enabled: rand_check,
+                ..
+            } => *rand_check,
+        }
+    }
+
+    pub fn disable_rand_check(&mut self) {
+        match self {
+            OnChainConsensusConfig::V5 {
+                rand_check_enabled, ..
+            } => {
+                *rand_check_enabled = false;
+            },
+            _ => {
+                // rand_check not supported. No-op.
+            },
+>>>>>>> aptos-node-v1.37.4
         }
     }
 }

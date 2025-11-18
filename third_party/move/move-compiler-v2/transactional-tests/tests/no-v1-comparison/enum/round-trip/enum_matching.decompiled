@@ -1,0 +1,242 @@
+//**** Cross-compiled for `move` syntax from `tests/no-v1-comparison/enum/enum_matching.move`
+
+//# publish
+module 0x42::m {
+    struct Box has drop {
+        x: u64,
+    }
+    enum CommonFields {
+        Foo {
+            x: u64,
+            y: u64,
+        }
+        Bar {
+            z: u64,
+            x: u64,
+        }
+    }
+    enum Inner has drop {
+        Inner1 {
+            x: u64,
+        }
+        Inner2 {
+            x: u64,
+            y: u64,
+        }
+    }
+    enum Option<T0> has drop {
+        None,
+        Some {
+            value: T0,
+        }
+    }
+    enum Outer has drop {
+        None,
+        One {
+            i: Inner,
+        }
+        Two {
+            i: Inner,
+            b: Box,
+        }
+    }
+    public fun inner_value(p0: Inner): u64 {
+        let _v0;
+        let _v1 = &p0;
+        if (_v1 is Inner1) {
+            let Inner::Inner1{x: _v2} = p0;
+            _v0 = _v2
+        } else if (_v1 is Inner2) {
+            let Inner::Inner2{x: _v3, y: _v4} = p0;
+            _v0 = _v3 + _v4
+        } else abort 14566554180833181697;
+        _v0
+    }
+    public fun is_inner1(p0: &Inner): bool {
+        let _v0;
+        if (p0 is Inner1) _v0 = true else _v0 = false;
+        _v0
+    }
+    public fun is_some<T0>(p0: &Option<T0>): bool {
+        let _v0;
+        if (p0 is None) _v0 = false else if (p0 is Some) _v0 = true else abort 14566554180833181697;
+        _v0
+    }
+    public fun is_some_dropped<T0: drop>(p0: Option<T0>): bool {
+        let _v0;
+        if (&p0 is None) {
+            let Option::None<T0>{} = p0;
+            _v0 = false
+        } else _v0 = true;
+        _v0
+    }
+    public fun is_some_specialized(p0: &Option<Option<u64>>): bool {
+        let _v0;
+        if (p0 is None) _v0 = false else if ((p0 is Some) && (&p0.value is None)) _v0 = false else if ((p0 is Some) && (&p0.value is Some)) _v0 = true else abort 14566554180833181697;
+        _v0
+    }
+    public fun outer_value(p0: Outer): u64 {
+        let _v0;
+        let _v1 = &p0;
+        if (_v1 is None) {
+            let Outer::None{} = p0;
+            _v0 = 0
+        } else if (_v1 is One) {
+            let Outer::One{i: _v2} = p0;
+            _v0 = inner_value(_v2)
+        } else if (_v1 is Two) {
+            let Outer::Two{i: _v3, b: _v4} = p0;
+            let _v5 = _v4;
+            let _v6 = inner_value(_v3);
+            let _v7 = *&(&_v5).x;
+            _v0 = _v6 + _v7
+        } else abort 14566554180833181697;
+        _v0
+    }
+    public fun outer_value_nested(p0: Outer): u64 {
+        let _v0;
+        let _v1 = &p0;
+        if (_v1 is None) {
+            let Outer::None{} = p0;
+            _v0 = 0
+        } else if ((_v1 is One) && (&_v1.i is Inner1)) {
+            let Outer::One{i: _v2} = p0;
+            let Inner::Inner1{x: _v3} = _v2;
+            _v0 = _v3
+        } else if (_v1 is One) {
+            let Outer::One{i: _v4} = p0;
+            _v0 = inner_value(_v4)
+        } else if (_v1 is Two) {
+            let Outer::Two{i: _v5, b: _v6} = p0;
+            let _v7 = _v6;
+            let _v8 = inner_value(_v5);
+            let _v9 = *&(&_v7).x;
+            _v0 = _v8 + _v9
+        } else abort 14566554180833181697;
+        _v0
+    }
+    public fun outer_value_with_cond(p0: Outer): u64 {
+        let _v0;
+        let _v1 = &p0;
+        if (_v1 is None) {
+            let Outer::None{} = p0;
+            _v0 = 0
+        } else if ((_v1 is One) && is_inner1(&_v1.i)) {
+            let Outer::One{i: _v2} = p0;
+            _v0 = inner_value(_v2) % 2
+        } else if (_v1 is One) {
+            let Outer::One{i: _v3} = p0;
+            _v0 = inner_value(_v3)
+        } else if (_v1 is Two) {
+            let Outer::Two{i: _v4, b: _v5} = p0;
+            let _v6 = _v5;
+            let _v7 = inner_value(_v4);
+            let _v8 = *&(&_v6).x;
+            _v0 = _v7 + _v8
+        } else abort 14566554180833181697;
+        _v0
+    }
+    public fun outer_value_with_cond_ref(p0: &Outer): bool {
+        let _v0;
+        if (p0 is None) _v0 = false else if ((p0 is One) && is_inner1(&p0.i)) _v0 = true else if (p0 is One) _v0 = is_inner1(&p0.i) else if (p0 is Two) _v0 = is_inner1(&p0.i) else abort 14566554180833181697;
+        _v0
+    }
+    fun select_common_fields(p0: CommonFields): u64 {
+        let _v0;
+        let _v1;
+        let _v2 = &p0;
+        if (_v2 is Bar) _v0 = &_v2.x else _v0 = &_v2.x;
+        let _v3 = *_v0;
+        let _v4 = &p0;
+        if (_v4 is Foo) {
+            let CommonFields::Foo{x: _v5, y: _v6} = p0;
+            _v1 = _v6
+        } else if (_v4 is Bar) {
+            let CommonFields::Bar{z: _v7, x: _v8} = p0;
+            _v1 = _v7
+        } else abort 14566554180833181697;
+        _v3 + _v1
+    }
+    fun t1_inner_value(): u64 {
+        inner_value(Inner::Inner2{x: 2, y: 5})
+    }
+    fun t1_is_inner1(): bool {
+        let _v0 = Inner::Inner1{x: 2};
+        is_inner1(&_v0)
+    }
+    fun t1_is_some(): bool {
+        let _v0 = Option::None<u64>{};
+        is_some<u64>(&_v0)
+    }
+    fun t1_is_some_specialized(): bool {
+        let _v0 = Option::Some<Option<u64>>{value: Option::None<u64>{}};
+        is_some_specialized(&_v0)
+    }
+    fun t1_outer_value(): u64 {
+        outer_value(Outer::None{})
+    }
+    fun t1_outer_value_nested(): u64 {
+        outer_value_nested(Outer::One{i: Inner::Inner1{x: 27}})
+    }
+    fun t1_outer_value_with_cond(): u64 {
+        outer_value_with_cond(Outer::One{i: Inner::Inner1{x: 43}})
+    }
+    fun t1_outer_value_with_cond_ref(): bool {
+        let _v0 = Outer::One{i: Inner::Inner1{x: 43}};
+        outer_value_with_cond_ref(&_v0)
+    }
+    fun t2_is_inner1(): bool {
+        let _v0 = Inner::Inner2{x: 2, y: 3};
+        is_inner1(&_v0)
+    }
+    fun t2_is_some(): bool {
+        let _v0 = Option::Some<u64>{value: 3};
+        is_some<u64>(&_v0)
+    }
+    fun t2_is_some_specialized(): bool {
+        let _v0 = Option::Some<Option<u64>>{value: Option::Some<u64>{value: 1}};
+        is_some_specialized(&_v0)
+    }
+    fun t2_outer_value(): u64 {
+        outer_value(Outer::One{i: Inner::Inner2{x: 1, y: 2}})
+    }
+    fun t2_outer_value_nested(): u64 {
+        let _v0 = Inner::Inner1{x: 5};
+        let _v1 = Box{x: 7};
+        outer_value_nested(Outer::Two{i: _v0, b: _v1})
+    }
+    fun t3_outer_value(): u64 {
+        let _v0 = Inner::Inner1{x: 1};
+        let _v1 = Box{x: 7};
+        outer_value(Outer::Two{i: _v0, b: _v1})
+    }
+}
+
+
+//# run 0x42::m::t1_is_inner1
+
+//# run 0x42::m::t2_is_inner1
+
+//# run 0x42::m::t1_inner_value
+
+//# run 0x42::m::t1_outer_value
+
+//# run 0x42::m::t2_outer_value
+
+//# run 0x42::m::t3_outer_value
+
+//# run 0x42::m::t1_outer_value_nested
+
+//# run 0x42::m::t2_outer_value_nested
+
+//# run 0x42::m::t1_outer_value_with_cond
+
+//# run 0x42::m::t1_outer_value_with_cond_ref
+
+//# run 0x42::m::t1_is_some
+
+//# run 0x42::m::t2_is_some
+
+//# run 0x42::m::t1_is_some_specialized
+
+//# run 0x42::m::t2_is_some_specialized

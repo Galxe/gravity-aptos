@@ -6,11 +6,19 @@ use crate::{
     state_store::state_key::StateKey, transaction::Version,
 };
 use aptos_crypto::{hash::SPARSE_MERKLE_PLACEHOLDER_HASH, HashValue};
+<<<<<<< HEAD
 use aptos_crypto_derive::{BCSCryptoHash, CryptoHasher, Deref};
 use bytes::Bytes;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest::{arbitrary::Arbitrary, collection::vec, prelude::*};
 use ref_cast::RefCast;
+=======
+use aptos_crypto_derive::{BCSCryptoHash, CryptoHasher};
+use bytes::Bytes;
+#[cfg(any(test, feature = "fuzzing"))]
+use proptest::{arbitrary::Arbitrary, collection::vec, prelude::*};
+use rapidhash::rapidhash;
+>>>>>>> aptos-node-v1.37.4
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::ops::Deref;
 
@@ -180,6 +188,7 @@ impl PersistedStateValue {
     }
 }
 
+<<<<<<< HEAD
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExistingStateValue {
     data: Bytes,
@@ -249,10 +258,30 @@ impl StateValue {
         match metadata {
             None => PersistedStateValue::V0(data),
             Some(metadata) => PersistedStateValue::WithMetadata { data, metadata },
+=======
+#[derive(Clone, Debug, BCSCryptoHash, CryptoHasher)]
+pub struct StateValue {
+    data: Bytes,
+    metadata: StateValueMetadata,
+    maybe_rapid_hash: Option<(u64, usize)>,
+}
+
+impl PartialEq for StateValue {
+    fn eq(&self, other: &Self) -> bool {
+        // Fast path: if both have rapid hashes and they differ, values can't be equal
+        if let (Some(hash1), Some(hash2)) = (&self.maybe_rapid_hash, &other.maybe_rapid_hash) {
+            if hash1 != hash2 {
+                return false;
+            }
+>>>>>>> aptos-node-v1.37.4
         }
+
+        // Full comparison: data and metadata
+        self.data == other.data && self.metadata == other.metadata
     }
 }
 
+<<<<<<< HEAD
 impl Deref for StateValue {
     type Target = ExistingStateValue;
 
@@ -269,10 +298,18 @@ impl PartialEq for StateValue {
     }
 }
 
+=======
+>>>>>>> aptos-node-v1.37.4
 impl Eq for StateValue {}
 
 pub const ARB_STATE_VALUE_MAX_SIZE: usize = 100;
 
+<<<<<<< HEAD
+=======
+/// Threshold for computing rapid hash on StateValue data to optimize equality checks
+pub const RAPID_HASH_THRESHOLD: usize = 32;
+
+>>>>>>> aptos-node-v1.37.4
 #[cfg(any(test, feature = "fuzzing"))]
 impl Arbitrary for StateValue {
     type Parameters = ();
@@ -304,11 +341,30 @@ impl Serialize for StateValue {
 }
 
 impl StateValue {
+    /// Computes rapid hash if data is large enough, otherwise returns None
+    fn compute_rapid_hash(data: &Bytes) -> Option<(u64, usize)> {
+        (data.len() >= RAPID_HASH_THRESHOLD).then(|| (rapidhash(data), data.len()))
+    }
+
+    fn to_persistable_form(&self) -> PersistedStateValue {
+        let Self {
+            data,
+            metadata,
+            maybe_rapid_hash: _,
+        } = self.clone();
+        let metadata = metadata.into_persistable();
+        match metadata {
+            None => PersistedStateValue::V0(data),
+            Some(metadata) => PersistedStateValue::WithMetadata { data, metadata },
+        }
+    }
+
     pub fn new_legacy(bytes: Bytes) -> Self {
         Self::new_with_metadata(bytes, StateValueMetadata::none())
     }
 
     pub fn new_with_metadata(data: Bytes, metadata: StateValueMetadata) -> Self {
+<<<<<<< HEAD
         Self(Store::new_existing_without_access_ts(data, metadata))
     }
 
@@ -342,6 +398,13 @@ impl StateValue {
             Store::HotNonExistent { .. } => {
                 unreachable!("Guaranteed to be the Existing flavor.")
             },
+=======
+        let maybe_rapid_hash = Self::compute_rapid_hash(&data);
+        Self {
+            data,
+            metadata,
+            maybe_rapid_hash,
+>>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -356,9 +419,10 @@ impl StateValue {
     /// Applies a bytes-to-bytes transformation on the state value contents,
     /// leaving the state value metadata untouched.
     pub fn map_bytes<F: FnOnce(Bytes) -> anyhow::Result<Bytes>>(
-        self,
+        mut self,
         f: F,
     ) -> anyhow::Result<StateValue> {
+<<<<<<< HEAD
         let inner = self.into_inner();
         Ok(Self::new_with_metadata(f(inner.data)?, inner.metadata))
     }
@@ -389,6 +453,41 @@ impl StateValue {
             metadata,
             access_time_secs: _,
         } = self.into_inner();
+=======
+        self.data = f(self.data)?;
+        self.maybe_rapid_hash = Self::compute_rapid_hash(&self.data);
+        Ok(self)
+    }
+
+    pub fn into_bytes(self) -> Bytes {
+        self.data
+    }
+
+    pub fn set_bytes(&mut self, data: Bytes) {
+        self.data = data;
+        self.maybe_rapid_hash = Self::compute_rapid_hash(&self.data);
+    }
+
+    pub fn metadata(&self) -> &StateValueMetadata {
+        &self.metadata
+    }
+
+    pub fn metadata_mut(&mut self) -> &mut StateValueMetadata {
+        &mut self.metadata
+    }
+
+    pub fn into_metadata(self) -> StateValueMetadata {
+        self.metadata
+    }
+
+    pub fn unpack(self) -> (StateValueMetadata, Bytes) {
+        let Self {
+            data,
+            metadata,
+            maybe_rapid_hash: _,
+        } = self;
+
+>>>>>>> aptos-node-v1.37.4
         (metadata, data)
     }
 }
@@ -407,6 +506,7 @@ impl From<Bytes> for StateValue {
     }
 }
 
+<<<<<<< HEAD
 /// StateValue for usage by the DB and execution pipeline
 ///
 /// 1. `HotNonExistent` flavor is possible
@@ -465,6 +565,8 @@ impl DbStateValue {
     }
 }
 
+=======
+>>>>>>> aptos-node-v1.37.4
 /// TODO(joshlind): add a proof implementation (e.g., verify()) and unit tests
 /// for these once we start supporting them.
 ///

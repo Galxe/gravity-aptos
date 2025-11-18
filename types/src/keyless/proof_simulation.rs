@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::keyless::{Bn254, G1Bytes, G2Bytes, Groth16Proof};
+<<<<<<< HEAD
 use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup, Group};
+=======
+use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup, PrimeGroup};
+>>>>>>> aptos-node-v1.37.4
 use ark_ff::{Field, PrimeField};
 use ark_groth16::{
     data_structures::{Proof, VerifyingKey},
