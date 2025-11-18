@@ -110,10 +110,10 @@ impl TracingWriter {
 
 impl Writer for TracingWriter {
     /// Write to file
-    fn write(&self, log: String) {
+    fn write(&self, mut log: String) {
+        log.push('\n');
         let (writer_mutex, _guard) = &*self.writer_guard;
         if let Ok(mut writer) = writer_mutex.lock() {
-            let log_with_newline = format!("{}\n", log);
             if let Err(err) = writer.write_all(log_with_newline.as_bytes()) {
                 eprintln!("Unable to write to log file: {}", err);
             }
