@@ -16,7 +16,7 @@ use move_vm_types::code::{ModuleCache, ModuleCode, SyncModuleCache, SyncScriptCa
 use serde::Serialize;
 use std::{fmt::Debug, hash::Hash, sync::Arc};
 
-pub mod registered_dependencies;
+mod registered_dependencies;
 pub mod types;
 pub mod unsync_map;
 pub mod versioned_data;
@@ -33,8 +33,12 @@ mod unit_tests;
 /// given key, it holds exclusive access and doesn't need to explicitly synchronize
 /// with other reader/writers.
 ///
-/// TODO: separate V into different generic types for data and code modules with specialized
-/// traits (currently both WriteOp for executor).
+/// TODO(BlockSTMv2): consider handling the baseline retrieval inside MVHashMap, by
+/// providing a lambda during construction. This would simplify the caller logic and
+/// allow unifying initialization logic e.g. for resource groups that span two
+/// different multi-version data-structures (MVData and MVGroupData). It would also
+/// allow performing a check on the path once during initialization (to determine
+/// if the path is for a resource or a group), and then checking invariants.
 pub struct MVHashMap<K, T, V: TransactionWrite, I: Clone> {
     data: VersionedData<K, V>,
     group_data: VersionedGroupData<K, T, V>,
@@ -49,7 +53,7 @@ impl<K, T, V, I> MVHashMap<K, T, V, I>
 where
     K: ModulePath + Hash + Clone + Eq + Debug,
     T: Hash + Clone + Eq + Debug + Serialize,
-    V: TransactionWrite,
+    V: TransactionWrite + PartialEq,
     I: Copy + Clone + Eq + Hash + Debug,
 {
     #[allow(clippy::new_without_default)]
@@ -70,7 +74,7 @@ where
             num_resources: self.data.num_keys(),
             num_resource_groups: self.group_data.num_keys(),
             num_delayed_fields: self.delayed_fields.num_keys(),
-            num_modules,
+            num_modules: self.module_cache.num_modules(),
             base_resources_size: self.data.total_base_value_size(),
             base_delayed_fields_size: self.delayed_fields.total_base_value_size(),
         }
@@ -109,7 +113,7 @@ where
             ModuleId,
             Arc<ModuleCode<CompiledModule, Module, AptosModuleExtension>>,
         ),
-    > {
+    > + use<K, T, V, I> {
         self.module_cache.take_modules_iter()
     }
 

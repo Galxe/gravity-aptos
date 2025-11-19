@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    types::{GroupReadResult, TxnIndex, UnsyncGroupError, ValueWithLayout},
+    types::{TxnIndex, UnsyncGroupError, ValueWithLayout},
     BlockStateStats,
 };
 use anyhow::anyhow;
 use aptos_aggregator::types::DelayedFieldValue;
-use aptos_crypto::hash::HashValue;
 use aptos_types::{
     error::{code_invariant_error, PanicError},
     executable::ModulePath,
@@ -30,6 +29,7 @@ use std::{
         Arc,
     },
 };
+use triomphe::Arc as TriompheArc;
 
 /// UnsyncMap is designed to mimic the functionality of MVHashMap for sequential execution.
 /// In this case only the latest recorded version is relevant, simplifying the implementation.
@@ -44,12 +44,7 @@ pub struct UnsyncMap<
     group_cache: RefCell<HashMap<K, RefCell<(HashMap<T, ValueWithLayout<V>>, ResourceGroupSize)>>>,
     delayed_field_map: RefCell<HashMap<I, DelayedFieldValue>>,
 
-    // Optional hash can store the hash of the module to avoid re-computations. This map is used by
-    // V1 loader and will be removed in the future.
-    #[deprecated]
-    deprecated_module_map: RefCell<HashMap<K, (Arc<V>, Option<HashValue>)>>,
-
-    // Code caches for loader V2 implementation: contains modules and scripts.
+    // Code caches for modules and scripts.
     module_cache:
         UnsyncModuleCache<ModuleId, CompiledModule, Module, AptosModuleExtension, Option<TxnIndex>>,
     script_cache: UnsyncScriptCache<[u8; 32], CompiledScript, Script>,
@@ -66,10 +61,8 @@ impl<
     > Default for UnsyncMap<K, T, V, I>
 {
     fn default() -> Self {
-        #[allow(deprecated)]
         Self {
             resource_map: RefCell::new(HashMap::new()),
-            deprecated_module_map: RefCell::new(HashMap::new()),
             module_cache: UnsyncModuleCache::empty(),
             script_cache: UnsyncScriptCache::empty(),
             group_cache: RefCell::new(HashMap::new()),
@@ -117,14 +110,11 @@ impl<
     }
 
     pub fn stats(&self) -> BlockStateStats {
-        #[allow(deprecated)]
-        let num_modules =
-            self.deprecated_module_map.borrow().len() + self.module_cache.num_modules();
         BlockStateStats {
             num_resources: self.resource_map.borrow().len(),
             num_resource_groups: self.group_cache.borrow().len(),
             num_delayed_fields: self.delayed_field_map.borrow().len(),
-            num_modules,
+            num_modules: self.module_cache.num_modules(),
             base_resources_size: self.total_base_resource_size.load(Ordering::Relaxed),
             base_delayed_fields_size: self.total_base_delayed_field_size.load(Ordering::Relaxed),
         }
@@ -137,7 +127,7 @@ impl<
     ) -> anyhow::Result<()> {
         let base_map: HashMap<T, ValueWithLayout<V>> = base_values
             .into_iter()
-            .map(|(t, v)| (t, ValueWithLayout::RawFromStorage(Arc::new(v))))
+            .map(|(t, v)| (t, ValueWithLayout::RawFromStorage(TriompheArc::new(v))))
             .collect();
         let base_size = group_size_as_sum(
             base_map
@@ -166,7 +156,7 @@ impl<
         group_key: K,
         tag: T,
         value: V,
-        layout: Option<Arc<MoveTypeLayout>>,
+        layout: Option<TriompheArc<MoveTypeLayout>>,
     ) {
         self.group_cache
             .borrow_mut()
@@ -174,14 +164,17 @@ impl<
             .expect("Unable to fetch the entry for the group key in group_cache")
             .borrow_mut()
             .0
-            .insert(tag, ValueWithLayout::Exchanged(Arc::new(value), layout));
+            .insert(
+                tag,
+                ValueWithLayout::Exchanged(TriompheArc::new(value), layout),
+            );
     }
 
-    pub fn get_group_size(&self, group_key: &K) -> GroupReadResult {
-        match self.group_cache.borrow().get(group_key) {
-            Some(entry) => GroupReadResult::Size(entry.borrow().1),
-            None => GroupReadResult::Uninitialized,
-        }
+    pub fn get_group_size(&self, group_key: &K) -> Option<ResourceGroupSize> {
+        self.group_cache
+            .borrow()
+            .get(group_key)
+            .map(|entry| entry.borrow().1)
     }
 
     pub fn fetch_group_tagged_data(
@@ -207,7 +200,7 @@ impl<
         &self,
         group_key: &K,
     ) -> (
-        impl Iterator<Item = (T, ValueWithLayout<V>)>,
+        impl Iterator<Item = (T, ValueWithLayout<V>)> + use<K, T, V, I>,
         ResourceGroupSize,
     ) {
         let binding = self.group_cache.borrow();
@@ -222,7 +215,7 @@ impl<
     pub fn insert_group_ops(
         &self,
         group_key: &K,
-        group_ops: impl IntoIterator<Item = (T, (V, Option<Arc<MoveTypeLayout>>))>,
+        group_ops: impl IntoIterator<Item = (T, (V, Option<TriompheArc<MoveTypeLayout>>))>,
         group_size: ResourceGroupSize,
     ) -> Result<(), PanicError> {
         for (value_tag, (group_op, maybe_layout)) in group_ops.into_iter() {
@@ -242,7 +235,7 @@ impl<
         group_key: &K,
         value_tag: T,
         v: V,
-        maybe_layout: Option<Arc<MoveTypeLayout>>,
+        maybe_layout: Option<TriompheArc<MoveTypeLayout>>,
     ) -> Result<(), PanicError> {
         use aptos_types::write_set::WriteOpKind::*;
         use std::collections::hash_map::Entry::*;
@@ -260,10 +253,16 @@ impl<
                 entry.remove();
             },
             (Occupied(mut entry), Modification) => {
-                entry.insert(ValueWithLayout::Exchanged(Arc::new(v), maybe_layout));
+                entry.insert(ValueWithLayout::Exchanged(
+                    TriompheArc::new(v),
+                    maybe_layout,
+                ));
             },
             (Vacant(entry), Creation) => {
-                entry.insert(ValueWithLayout::Exchanged(Arc::new(v), maybe_layout));
+                entry.insert(ValueWithLayout::Exchanged(
+                    TriompheArc::new(v),
+                    maybe_layout,
+                ));
             },
             (l, r) => {
                 return Err(code_invariant_error(format!(
@@ -283,50 +282,45 @@ impl<
         self.resource_map.borrow().get(key).cloned()
     }
 
-    pub fn fetch_exchanged_data(&self, key: &K) -> Option<(Arc<V>, Arc<MoveTypeLayout>)> {
-        if let Some(ValueWithLayout::Exchanged(value, Some(layout))) = self.fetch_data(key) {
-            Some((value, layout))
+    pub fn fetch_exchanged_data(
+        &self,
+        key: &K,
+    ) -> Result<(TriompheArc<V>, TriompheArc<MoveTypeLayout>), PanicError> {
+        let data = self.fetch_data(key);
+        if let Some(ValueWithLayout::Exchanged(value, Some(layout))) = data {
+            Ok((value, layout))
         } else {
-            None
+            Err(code_invariant_error(format!(
+                "Read value needing exchange {:?} does not exist or not in Exchanged format",
+                data
+            )))
         }
     }
 
-    pub fn fetch_group_data(&self, key: &K) -> Option<Vec<(Arc<T>, ValueWithLayout<V>)>> {
+    pub fn fetch_group_data(&self, key: &K) -> Option<Vec<(TriompheArc<T>, ValueWithLayout<V>)>> {
         self.group_cache.borrow().get(key).map(|group_map| {
             group_map
                 .borrow()
                 .0
                 .iter()
-                .map(|(tag, value)| (Arc::new(tag.clone()), value.clone()))
+                .map(|(tag, value)| (TriompheArc::new(tag.clone()), value.clone()))
                 .collect()
         })
-    }
-
-    #[deprecated]
-    pub fn fetch_module_for_loader_v1(&self, key: &K) -> Option<Arc<V>> {
-        #[allow(deprecated)]
-        self.deprecated_module_map
-            .borrow()
-            .get(key)
-            .map(|entry| entry.0.clone())
     }
 
     pub fn fetch_delayed_field(&self, id: &I) -> Option<DelayedFieldValue> {
         self.delayed_field_map.borrow().get(id).cloned()
     }
 
-    pub fn write(&self, key: K, value: Arc<V>, layout: Option<Arc<MoveTypeLayout>>) {
+    pub fn write(
+        &self,
+        key: K,
+        value: TriompheArc<V>,
+        layout: Option<TriompheArc<MoveTypeLayout>>,
+    ) {
         self.resource_map
             .borrow_mut()
             .insert(key, ValueWithLayout::Exchanged(value, layout));
-    }
-
-    #[deprecated]
-    pub fn write_module(&self, key: K, value: V) {
-        #[allow(deprecated)]
-        self.deprecated_module_map
-            .borrow_mut()
-            .insert(key, (Arc::new(value), None));
     }
 
     pub fn set_base_value(&self, key: K, value: ValueWithLayout<V>) {
@@ -386,15 +380,15 @@ mod test {
         assert_eq!(committed.len(), 3);
         assert_some_eq!(
             committed.get(&1),
-            &ValueWithLayout::RawFromStorage(Arc::new(TestValue::with_kind(1, true)))
+            &ValueWithLayout::RawFromStorage(TriompheArc::new(TestValue::with_kind(1, true)))
         );
         assert_some_eq!(
             committed.get(&2),
-            &ValueWithLayout::Exchanged(Arc::new(TestValue::with_kind(202, false)), None)
+            &ValueWithLayout::Exchanged(TriompheArc::new(TestValue::with_kind(202, false)), None)
         );
         assert_some_eq!(
             committed.get(&3),
-            &ValueWithLayout::Exchanged(Arc::new(TestValue::with_kind(203, false)), None)
+            &ValueWithLayout::Exchanged(TriompheArc::new(TestValue::with_kind(203, false)), None)
         );
 
         assert_ok!(map.insert_group_op(&ap, 3, TestValue::with_kind(303, false), None));
@@ -403,19 +397,19 @@ mod test {
         assert_eq!(committed.len(), 4);
         assert_some_eq!(
             committed.get(&1),
-            &ValueWithLayout::RawFromStorage(Arc::new(TestValue::with_kind(1, true)))
+            &ValueWithLayout::RawFromStorage(TriompheArc::new(TestValue::with_kind(1, true)))
         );
         assert_some_eq!(
             committed.get(&2),
-            &ValueWithLayout::Exchanged(Arc::new(TestValue::with_kind(202, false)), None)
+            &ValueWithLayout::Exchanged(TriompheArc::new(TestValue::with_kind(202, false)), None)
         );
         assert_some_eq!(
             committed.get(&3),
-            &ValueWithLayout::Exchanged(Arc::new(TestValue::with_kind(303, false)), None)
+            &ValueWithLayout::Exchanged(TriompheArc::new(TestValue::with_kind(303, false)), None)
         );
         assert_some_eq!(
             committed.get(&4),
-            &ValueWithLayout::Exchanged(Arc::new(TestValue::with_kind(304, true)), None)
+            &ValueWithLayout::Exchanged(TriompheArc::new(TestValue::with_kind(304, true)), None)
         );
 
         assert_ok!(map.insert_group_op(&ap, 0, TestValue::with_kind(100, true), None));
@@ -425,20 +419,20 @@ mod test {
         assert_eq!(committed.len(), 4);
         assert_some_eq!(
             committed.get(&0),
-            &ValueWithLayout::Exchanged(Arc::new(TestValue::with_kind(100, true)), None)
+            &ValueWithLayout::Exchanged(TriompheArc::new(TestValue::with_kind(100, true)), None)
         );
         assert_none!(committed.get(&1));
         assert_some_eq!(
             committed.get(&2),
-            &ValueWithLayout::Exchanged(Arc::new(TestValue::with_kind(202, false)), None)
+            &ValueWithLayout::Exchanged(TriompheArc::new(TestValue::with_kind(202, false)), None)
         );
         assert_some_eq!(
             committed.get(&3),
-            &ValueWithLayout::Exchanged(Arc::new(TestValue::with_kind(303, false)), None)
+            &ValueWithLayout::Exchanged(TriompheArc::new(TestValue::with_kind(303, false)), None)
         );
         assert_some_eq!(
             committed.get(&4),
-            &ValueWithLayout::Exchanged(Arc::new(TestValue::with_kind(304, true)), None)
+            &ValueWithLayout::Exchanged(TriompheArc::new(TestValue::with_kind(304, true)), None)
         );
 
         assert_ok!(map.insert_group_op(&ap, 0, TestValue::deletion(), None));
@@ -450,7 +444,7 @@ mod test {
         assert_eq!(committed.len(), 1);
         assert_some_eq!(
             committed.get(&1),
-            &ValueWithLayout::Exchanged(Arc::new(TestValue::with_kind(400, true)), None)
+            &ValueWithLayout::Exchanged(TriompheArc::new(TestValue::with_kind(400, true)), None)
         );
     }
 
@@ -493,7 +487,7 @@ mod test {
         let ap = KeyType(b"/foo/f".to_vec());
         let map = UnsyncMap::<KeyType<Vec<u8>>, usize, TestValue, ()>::new();
 
-        assert_eq!(map.get_group_size(&ap), GroupReadResult::Uninitialized);
+        assert_none!(map.get_group_size(&ap));
 
         map.set_group_base_values(
             ap.clone(),
@@ -509,7 +503,7 @@ mod test {
         let four_entry_len = TestValue::creation_with_len(4).bytes().unwrap().len();
 
         let base_size = group_size_as_sum(vec![(&tag, one_entry_len); 4].into_iter()).unwrap();
-        assert_eq!(map.get_group_size(&ap), GroupReadResult::Size(base_size));
+        assert_some_eq!(map.get_group_size(&ap), base_size);
 
         let exp_size = group_size_as_sum(vec![(&tag, two_entry_len); 2].into_iter().chain(vec![
             (
@@ -537,7 +531,7 @@ mod test {
             ],
             exp_size
         ));
-        assert_eq!(map.get_group_size(&ap), GroupReadResult::Size(exp_size));
+        assert_some_eq!(map.get_group_size(&ap), exp_size);
 
         let exp_size = group_size_as_sum(
             vec![(&tag, one_entry_len); 2]
@@ -554,7 +548,7 @@ mod test {
             ],
             exp_size
         ));
-        assert_eq!(map.get_group_size(&ap), GroupReadResult::Size(exp_size));
+        assert_some_eq!(map.get_group_size(&ap), exp_size);
 
         let exp_size = group_size_as_sum(
             vec![(&tag, one_entry_len); 2]
@@ -571,7 +565,7 @@ mod test {
             ],
             exp_size
         ));
-        assert_eq!(map.get_group_size(&ap), GroupReadResult::Size(exp_size));
+        assert_some_eq!(map.get_group_size(&ap), exp_size);
     }
 
     #[test]
@@ -595,7 +589,7 @@ mod test {
         for i in 1..5 {
             assert_ok_eq!(
                 map.fetch_group_tagged_data(&ap, &i),
-                ValueWithLayout::RawFromStorage(Arc::new(TestValue::creation_with_len(i)),)
+                ValueWithLayout::RawFromStorage(TriompheArc::new(TestValue::creation_with_len(i)),)
             );
         }
         assert_err_eq!(
@@ -617,11 +611,11 @@ mod test {
         );
         assert_ok_eq!(
             map.fetch_group_tagged_data(&ap, &3),
-            ValueWithLayout::Exchanged(Arc::new(TestValue::modification_with_len(8)), None,)
+            ValueWithLayout::Exchanged(TriompheArc::new(TestValue::modification_with_len(8)), None,)
         );
         assert_ok_eq!(
             map.fetch_group_tagged_data(&ap, &6),
-            ValueWithLayout::Exchanged(Arc::new(TestValue::creation_with_len(9)), None,)
+            ValueWithLayout::Exchanged(TriompheArc::new(TestValue::creation_with_len(9)), None,)
         );
 
         // others unaffected.
@@ -631,11 +625,11 @@ mod test {
         );
         assert_ok_eq!(
             map.fetch_group_tagged_data(&ap, &2),
-            ValueWithLayout::RawFromStorage(Arc::new(TestValue::creation_with_len(2)),)
+            ValueWithLayout::RawFromStorage(TriompheArc::new(TestValue::creation_with_len(2)),)
         );
         assert_ok_eq!(
             map.fetch_group_tagged_data(&ap, &4),
-            ValueWithLayout::RawFromStorage(Arc::new(TestValue::creation_with_len(4)),)
+            ValueWithLayout::RawFromStorage(TriompheArc::new(TestValue::creation_with_len(4)),)
         );
     }
 }

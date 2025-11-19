@@ -24,12 +24,6 @@ pub struct StorageVersion;
 // TODO: Find better representations for this, a similar one for TxnIndex.
 pub type Version = Result<(TxnIndex, Incarnation), StorageVersion>;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum Flag {
-    Done = 0,
-    Estimate = 1,
-}
-
 #[derive(Debug, PartialEq, Eq)]
 pub enum MVGroupError {
     /// The base group contents are not initialized.
@@ -53,48 +47,6 @@ pub enum MVDataError {
     DeltaApplicationFailure,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum MVModulesError {
-    /// No prior entry is found.
-    NotFound,
-    /// A dependency on other transaction has been found during the read.
-    Dependency(TxnIndex),
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum GroupReadResult {
-    Value(Option<Bytes>, Option<Arc<MoveTypeLayout>>),
-    Size(ResourceGroupSize),
-    Uninitialized,
-}
-
-impl GroupReadResult {
-    pub fn into_value(self) -> (Option<Bytes>, Option<Arc<MoveTypeLayout>>) {
-        match self {
-            GroupReadResult::Value(maybe_bytes, maybe_layout) => (maybe_bytes, maybe_layout),
-            GroupReadResult::Size(size) => {
-                unreachable!("Expected group value, found size {:?}", size)
-            },
-            GroupReadResult::Uninitialized => {
-                unreachable!("Expected group value, found uninitialized")
-            },
-        }
-    }
-
-    pub fn into_size(self) -> ResourceGroupSize {
-        match self {
-            GroupReadResult::Size(size) => size,
-            GroupReadResult::Value(maybe_bytes, maybe_layout) => unreachable!(
-                "Expected size, found value bytes = {:?}, layout = {:?}",
-                maybe_bytes, maybe_layout
-            ),
-            GroupReadResult::Uninitialized => {
-                unreachable!("Expected group size, found uninitialized")
-            },
-        }
-    }
-}
-
 /// Returned as Ok(..) when read successfully from the multi-version data-structure.
 #[derive(Debug, PartialEq, Eq)]
 pub enum MVDataOutput<V> {
@@ -105,19 +57,6 @@ pub enum MVDataOutput<V> {
     /// Information from the last versioned-write. Note that the version is returned
     /// and not the data to avoid copying big values around.
     Versioned(Version, ValueWithLayout<V>),
-}
-
-/// Returned as Ok(..) when read successfully from the multi-version data-structure.
-#[derive(Debug, PartialEq, Eq)]
-pub enum MVModulesOutput<M, X> {
-    /// Arc to the executable corresponding to the latest module, and a descriptor
-    /// with either the module hash or indicator that the module is from storage.
-    Executable((Arc<X>, ExecutableDescriptor)),
-    /// Arc to the latest module, together with its (cryptographic) hash. Note that
-    /// this can't be a storage-level module, as it's from multi-versioned modules map.
-    /// The Option can be None if HashValue can't be computed, currently may happen
-    /// if the latest entry corresponded to the module deletion.
-    Module((Arc<M>, HashValue)),
 }
 
 // TODO[agg_v2](cleanup): once VersionedAggregators is separated from the MVHashMap,
@@ -221,6 +160,7 @@ impl<V: TransactionWrite> ValueWithLayout<V> {
     }
 
     pub fn bytes_len(&self) -> Option<usize> {
+        fail_point!("value_with_layout_bytes_len", |_| { Some(10) });
         match self {
             ValueWithLayout::RawFromStorage(value) | ValueWithLayout::Exchanged(value, _) => {
                 value.bytes().map(|b| b.len())
@@ -240,6 +180,7 @@ impl<V: TransactionWrite> ValueWithLayout<V> {
 #[derive(Clone, Debug)]
 pub enum UnknownOrLayout<'a> {
     Unknown,
+    // TODO: Make this Arc<MoveTypeLayout> to avoid deep cloning.
     Known(Option<&'a MoveTypeLayout>),
 }
 
@@ -255,7 +196,7 @@ pub(crate) mod test {
     use bytes::Bytes;
     use claims::{assert_err, assert_ok_eq};
     use move_core_types::{account_address::AccountAddress, identifier::IdentStr};
-    use std::{fmt::Debug, hash::Hash, sync::Arc};
+    use std::{fmt::Debug, hash::Hash};
 
     #[derive(Clone, Eq, Hash, PartialEq, Debug)]
     pub(crate) struct KeyType<K: Hash + Clone + Debug + Eq>(

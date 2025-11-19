@@ -15,6 +15,7 @@ rust-version = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 aptos-aggregator = { workspace = true }
+aptos-crypto = { workspace = true }
 aptos-infallible = { workspace = true }
 aptos-types = { workspace = true }
 aptos-vm-types = { workspace = true }
@@ -23,6 +24,7 @@ claims = { workspace = true }
 crossbeam = { workspace = true }
 dashmap = { workspace = true }
 equivalent = "1.0"
+fail = { workspace = true }
 move-binary-format = { workspace = true }
 move-core-types = { workspace = true }
 move-vm-runtime = { workspace = true }
