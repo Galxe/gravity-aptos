@@ -62,6 +62,9 @@ pub trait ValidCryptoMaterial:
     // The for<'a> exactly matches the assumption "deserializable from any lifetime".
     for<'a> TryFrom<&'a [u8], Error=CryptoMaterialError> + Serialize + DeserializeOwned
 {
+    /// Prefix for AIP-80 e.g. ed25519-priv
+    const AIP_80_PREFIX: &'static str;
+
     /// Convert the valid crypto material to bytes.
     fn to_bytes(&self) -> Vec<u8>;
 }

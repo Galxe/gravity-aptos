@@ -181,12 +181,6 @@ impl KnownAttribute {
 
 const METADATA_CACHE_SIZE: usize = 1024;
 
-thread_local! {
-    static V1_METADATA_CACHE: RefCell<LruCache<Vec<u8>, Option<Arc<RuntimeModuleMetadataV1>>>> = RefCell::new(LruCache::new(METADATA_CACHE_SIZE));
-
-    static V0_METADATA_CACHE: RefCell<LruCache<Vec<u8>, Option<Arc<RuntimeModuleMetadataV1>>>> = RefCell::new(LruCache::new(METADATA_CACHE_SIZE));
-}
-
 /// Extract metadata from the VM, upgrading V0 to V1 representation as needed
 pub fn get_metadata(md: &[Metadata]) -> Option<Arc<RuntimeModuleMetadataV1>> {
     if let Some(data) = md.iter().find(|md| md.key == APTOS_METADATA_KEY_V1) {

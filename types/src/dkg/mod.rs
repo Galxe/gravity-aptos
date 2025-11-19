@@ -9,7 +9,7 @@ use crate::{
         ValidatorConsensusInfo, ValidatorConsensusInfoMoveStruct, ValidatorVerifier,
     },
 };
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, format_err};
 use aptos_crypto::Uniform;
 use aptos_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use move_core_types::{

@@ -9,7 +9,7 @@ use self::{
 use crate::move_any;
 use crate::{
     aggregate_signature::AggregateSignature, jwks::unsupported::UnsupportedJWK,
-    move_utils::as_move_value::AsMoveValue, on_chain_config::OnChainConfig,
+    move_utils::as_move_value::AsMoveValue, on_chain_config::OnChainConfig, idl::jwk_converter::construct_observed_jwks,
 };
 use anyhow::{bail, ensure, Context};
 use aptos_crypto_derive::{BCSCryptoHash, CryptoHasher};
