@@ -13,8 +13,10 @@ use aptos_aggregator::delta_change_set::DeltaOp;
 use aptos_infallible::Mutex;
 use aptos_types::{
     error::{code_invariant_error, PanicError},
+    state_store::state_value::StateValue,
     write_set::TransactionWrite,
 };
+use bytes::Bytes;
 use claims::{assert_ok, assert_some};
 use crossbeam::utils::CachePadded;
 use dashmap::DashMap;
@@ -566,7 +568,11 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
         match data_output {
             Versioned(_, ValueWithLayout::Exchanged(value, Some(layout))) => {
                 // value and layout are TriompheArc, convert to std::sync::Arc
-                Ok((StdArc::from((*value).clone()), StdArc::from((*layout).clone())))
+                // Use bytes() to get the underlying data and create new Arc
+                let v_bytes = value.bytes().cloned().unwrap_or_else(Bytes::new);
+                let new_value = StdArc::new(TransactionWrite::from_state_value(Some(StateValue::new(v_bytes))));
+                let new_layout = StdArc::new((*layout).clone());
+                Ok((new_value, new_layout))
             },
             _ => Err(code_invariant_error(format!(
                 "Read value needing exchange {:?} does not exist or not in Exchanged format",
