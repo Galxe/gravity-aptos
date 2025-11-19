@@ -297,4 +297,9 @@ module aptos_std::bcs_stream {
             option::none()
         }
     }
+
+    /// Checks if there are remaining bytes in the stream.
+    public fun has_remaining(stream: &mut BCSStream): bool {
+        stream.cur < vector::length(&stream.data)
+    }
 }
