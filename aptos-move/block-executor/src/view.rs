@@ -5,11 +5,12 @@
 use crate::types::InputOutputKey;
 use crate::{
     captured_reads::{
-        CapturedReads, DataRead, DelayedFieldRead, DelayedFieldReadKind, GroupRead, ReadKind,
-        UnsyncReadSet,
+        CacheRead, CapturedReads, DataRead, DelayedFieldRead, DelayedFieldReadKind, GroupRead,
+        ReadKind, UnsyncReadSet,
     },
+    code_cache::ModuleCodeBuilder,
     code_cache_global::GlobalModuleCache,
-    counters,
+    counters::{self, GLOBAL_MODULE_CACHE_MISS_SECONDS},
     scheduler::{DependencyResult, DependencyStatus, Scheduler, TWaitForDependency},
     value_exchange::TemporaryValueToIdentifierMapping,
 };
@@ -23,9 +24,8 @@ use aptos_aggregator::{
 use aptos_logger::error;
 use aptos_mvhashmap::{
     types::{
-        GroupReadResult, MVDataError, MVDataOutput, MVDelayedFieldsError, MVGroupError,
-        MVModulesError, MVModulesOutput, StorageVersion, TxnIndex, UnknownOrLayout,
-        UnsyncGroupError, ValueWithLayout,
+        Incarnation, MVDataError, MVDataOutput, MVDelayedFieldsError, MVGroupError, StorageVersion,
+        TxnIndex, UnknownOrLayout, UnsyncGroupError, ValueWithLayout,
     },
     unsync_map::UnsyncMap,
     versioned_delayed_fields::TVersionedDelayedFieldView,
@@ -33,7 +33,7 @@ use aptos_mvhashmap::{
 };
 use aptos_types::{
     error::{code_invariant_error, expect_ok, PanicError, PanicOr},
-    executable::{ExecutableTestType, ModulePath},
+    executable::ModulePath,
     state_store::{
         errors::StateViewError,
         state_storage_usage::StateStorageUsage,
@@ -65,18 +65,19 @@ use std::{
     cell::RefCell,
     collections::{BTreeMap, HashMap, HashSet},
     fmt::Debug,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicU32, Ordering},
 };
+use triomphe::Arc as TriompheArc;
 
-/// A struct which describes the result of the read from the proxy. The client
-/// can interpret these types to further resolve the reads.
+/// [ReadResult] wraps the result of MVHashMap's data map, while [GroupReadResult]
+/// is for the groups' MVHashMap. The client can interpret these types to
+/// further resolve the reads. TODO: Needs re-organization and clean-up.
+
 #[derive(Debug)]
 pub(crate) enum ReadResult {
-    Value(Option<StateValue>, Option<Arc<MoveTypeLayout>>),
+    Value(Option<StateValue>, Option<TriompheArc<MoveTypeLayout>>),
     Metadata(Option<StateValueMetadata>),
+    ResourceSize(Option<u64>),
     Exists(bool),
     Uninitialized,
     // Must halt the execution of the calling transaction. This might be because
@@ -86,44 +87,104 @@ pub(crate) enum ReadResult {
     HaltSpeculativeExecution(String),
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum GroupReadResult {
+    Value(Option<Bytes>, Option<TriompheArc<MoveTypeLayout>>),
+    ResourceSize(Option<u64>),
+    Exists(bool),
+    Uninitialized,
+}
+
 impl ReadResult {
-    fn from_data_read<V: TransactionWrite>(data: DataRead<V>) -> Self {
+    pub(crate) fn from_value<T: Transaction>(
+        value: ValueWithLayout<T::Value>,
+        kind: &ReadKind,
+    ) -> Result<Self, PanicError> {
+        // We set an arbitrary version, as in the end ReadResult does not require version
+        // so it can be anything. Re-uses the implementation pattern from capture_read
+        // and capture_group_read in the captured_reads.rs file.
+        match DataRead::from_value_with_layout(Err(StorageVersion), value).convert_to(kind) {
+            Some(data_read) => Ok(Self::from_data_read(data_read)),
+            None => Err(code_invariant_error(format!(
+                "Could not convert value to kind {:?} ReadResult",
+                kind
+            ))),
+        }
+    }
+
+    // Should not be passed a MetadataAndResourceSize variant.
+    pub(crate) fn from_data_read<V: TransactionWrite>(data: DataRead<V>) -> Self {
         match data {
             DataRead::Versioned(_, v, layout) => ReadResult::Value(v.as_state_value(), layout),
             DataRead::Resolved(v) => {
                 // TODO[agg_v1](cleanup): Move AggV1 to Delayed fields, and then handle the layout if needed
                 ReadResult::Value(Some(StateValue::new_legacy(serialize(&v).into())), None)
             },
+            DataRead::MetadataAndResourceSize(_, _) => {
+                // Should be a Metadata or ResourceSize variant, not both.
+                unreachable!("Target read result for MetadataAndResourceSize is ambiguous");
+            },
             DataRead::Metadata(maybe_metadata) => ReadResult::Metadata(maybe_metadata),
+            DataRead::ResourceSize(maybe_size) => ReadResult::ResourceSize(maybe_size),
             DataRead::Exists(exists) => ReadResult::Exists(exists),
         }
     }
 
-    fn from_value_with_layout<V: TransactionWrite>(
-        value: ValueWithLayout<V>,
-        kind: ReadKind,
-    ) -> Option<Self> {
-        match (value, kind) {
-            (ValueWithLayout::Exchanged(v, layout), ReadKind::Value) => {
-                Some(ReadResult::Value(v.as_state_value(), layout))
-            },
-            (ValueWithLayout::RawFromStorage(_), ReadKind::Value) => None,
-            (ValueWithLayout::Exchanged(v, _), ReadKind::Metadata)
-            | (ValueWithLayout::RawFromStorage(v), ReadKind::Metadata) => {
-                Some(ReadResult::Metadata(v.as_state_value_metadata()))
-            },
-            (ValueWithLayout::Exchanged(v, _), ReadKind::Exists)
-            | (ValueWithLayout::RawFromStorage(v), ReadKind::Exists) => {
-                Some(ReadResult::Exists(!v.is_deletion()))
-            },
-        }
-    }
-
-    pub fn into_value(self) -> Option<StateValue> {
+    fn expect_value(self) -> Option<StateValue> {
         if let ReadResult::Value(v, _layout) = self {
             v
         } else {
             unreachable!("Read result must be Value kind")
+        }
+    }
+}
+
+impl GroupReadResult {
+    pub(crate) fn from_value<T: Transaction>(
+        value: ValueWithLayout<T::Value>,
+        kind: &ReadKind,
+    ) -> Result<Self, PanicError> {
+        // We set an arbitrary version, as below (from_data_read) internally ignores it.
+        match DataRead::from_value_with_layout(Err(StorageVersion), value).convert_to(kind) {
+            Some(data_read) => Ok(Self::from_data_read(data_read)),
+            None => Err(code_invariant_error(format!(
+                "Could not convert value to kind {:?} ReadResult",
+                kind
+            ))),
+        }
+    }
+
+    pub(crate) fn from_data_read<V: TransactionWrite>(data: DataRead<V>) -> Self {
+        match data {
+            DataRead::Versioned(_, v, layout) => {
+                GroupReadResult::Value(v.extract_raw_bytes(), layout)
+            },
+            DataRead::Resolved(_) => {
+                // Resolved is only available in data MVHashMap for legacy AggregatorV1.
+                unreachable!("Resolved is not a possible group read result");
+            },
+            DataRead::MetadataAndResourceSize(_, _) | DataRead::Metadata(_) => {
+                // Metadata for the group does not go through the group MVHashMap and is handled
+                // separately in view.rs (it's stored in the data MVHashMap).
+                unreachable!("Metadata may not be queried for resource group members");
+            },
+            DataRead::ResourceSize(maybe_size) => GroupReadResult::ResourceSize(maybe_size),
+            DataRead::Exists(exists) => GroupReadResult::Exists(exists),
+        }
+    }
+
+    fn expect_value(self) -> Option<Bytes> {
+        match self {
+            GroupReadResult::Value(maybe_bytes, _) => maybe_bytes,
+            GroupReadResult::Uninitialized => {
+                unreachable!("Expected group value, found uninitialized")
+            },
+            GroupReadResult::ResourceSize(_) => {
+                unreachable!("Expected group value, found resource size")
+            },
+            GroupReadResult::Exists(_) => {
+                unreachable!("Expected group value, found exists")
+            },
         }
     }
 }
@@ -1590,38 +1651,55 @@ impl<'a, T: Transaction, S: TStateView<Key = T::Key>> TModuleView for LatestView
             state_key,
         );
 
+        // Convert state_key to ModuleId for cache lookups
+        let module_id = match state_key.inner() {
+            StateKeyInner::AccessPath(access_path) => {
+                access_path.try_get_module_id().expect("state_key must be a module path")
+            },
+            _ => unreachable!("state_key must be a module path"),
+        };
+
         match &self.latest_view {
             ViewState::Sync(state) => {
-                use MVModulesError::*;
-                use MVModulesOutput::*;
-
-                #[allow(deprecated)]
-                match state.fetch_module(state_key, self.txn_idx) {
-                    Ok(Executable(_)) => unreachable!("Versioned executable not implemented"),
-                    Ok(Module((v, _))) => Ok(v.as_state_value()),
-                    Err(Dependency(_)) => {
-                        // Return anything (e.g. module does not exist) to avoid waiting,
-                        // because parallel execution will fall back to sequential anyway.
-                        Ok(None)
-                    },
-                    Err(NotFound) => self.get_raw_base_value(state_key),
+                // Check the transaction-level cache with already read modules first.
+                if let CacheRead::Hit(read) = state.captured_reads.borrow().get_module_read(&module_id) {
+                    return Ok(read.map(|(v, _)| v.extension().as_state_value()));
                 }
+
+                // Otherwise, it is a miss. Check global cache.
+                if let Some(module) = self.global_module_cache.get(&module_id) {
+                    state
+                        .captured_reads
+                        .borrow_mut()
+                        .capture_global_cache_read(module_id.clone(), module.clone());
+                    return Ok(Some(module.extension().as_state_value()));
+                }
+
+                // If not global cache, check per-block cache.
+                let _timer = GLOBAL_MODULE_CACHE_MISS_SECONDS.start_timer();
+                let read = state
+                    .versioned_map
+                    .module_cache()
+                    .get_module_or_build_with(&module_id, self)?;
+                state
+                    .captured_reads
+                    .borrow_mut()
+                    .capture_per_block_cache_read(module_id.clone(), read.clone());
+                Ok(read.map(|(v, _)| v.extension().as_state_value()))
             },
             ViewState::Unsync(state) => {
-                #[allow(deprecated)]
-                state
-                    .read_set
-                    .borrow_mut()
-                    .deprecated_module_reads
-                    .insert(state_key.clone());
-                #[allow(deprecated)]
-                state
+                if let Some(module) = self.global_module_cache.get(&module_id) {
+                    state.read_set.borrow_mut().capture_module_read(module_id.clone());
+                    return Ok(Some(module.extension().as_state_value()));
+                }
+
+                let _timer = GLOBAL_MODULE_CACHE_MISS_SECONDS.start_timer();
+                let read = state
                     .unsync_map
-                    .fetch_module_for_loader_v1(state_key)
-                    .map_or_else(
-                        || self.get_raw_base_value(state_key),
-                        |v| Ok(v.as_state_value()),
-                    )
+                    .module_cache()
+                    .get_module_or_build_with(&module_id, self)?;
+                state.read_set.borrow_mut().capture_module_read(module_id.clone());
+                Ok(read.map(|(v, _)| v.extension().as_state_value()))
             },
         }
     }
