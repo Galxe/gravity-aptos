@@ -404,25 +404,23 @@ impl VMChangeSet {
         additional_aggregator_v1_write_set: BTreeMap<StateKey, WriteOp>,
         additional_aggregator_v1_delta_set: BTreeMap<StateKey, DeltaOp>,
     ) -> PartialVMResult<()> {
-        use WriteOp::*;
-
         // First, squash deltas.
         for (state_key, additional_delta_op) in additional_aggregator_v1_delta_set {
             if let Some(write_op) = aggregator_v1_write_set.get_mut(&state_key) {
                 // In this case, delta follows a write op.
-                match write_op {
-                    Creation(v) | Modification(v) => {
+                match write_op.bytes() {
+                    Some(bytes) => {
                         // Apply delta on top of creation or modification.
                         // TODO[agg_v1](cleanup): This will not be needed anymore once aggregator
                         // change sets carry non-serialized information.
-                        let base: u128 = bcs::from_bytes(v.bytes())
+                        let base: u128 = bcs::from_bytes(bytes)
                             .expect("Deserializing into an aggregator value always succeeds");
                         let value = additional_delta_op
                             .apply_to(base)
                             .map_err(PartialVMError::from)?;
-                        v.set_bytes(serialize(&value).into())
+                        write_op.set_bytes(serialize(&value).into())
                     },
-                    Deletion(..) => {
+                    None => {
                         // This case (applying a delta to deleted item) should
                         // never happen. Let's still return an error instead of
                         // panicking.
