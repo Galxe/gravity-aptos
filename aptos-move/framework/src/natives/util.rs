@@ -46,7 +46,7 @@ fn native_from_bytes(
     let max_value_nest_depth = context.max_value_nest_depth();
     let val = match ValueSerDeContext::new(max_value_nest_depth)
         .with_legacy_signer()
-        .with_func_args_deserialization(&function_value_extension)
+        .with_func_args_deserialization(&*function_value_extension)
         .deserialize(&bytes, &layout)
     {
         Some(val) => val,
