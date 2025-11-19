@@ -439,6 +439,7 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
         // Use dashmap's get method which accepts a reference when Borrow is implemented
         // The equivalent crate automatically implements the right traits.
         let v = self.values.get(key).expect("Path must exist");
+        let v = v.value();
         v.versioned_map
             .get(&ShiftedTxnIndex::new(txn_idx))
             .expect("Entry by the txn must exist to mark estimate")
@@ -453,6 +454,7 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
     {
         // TODO: investigate logical deletion.
         let mut v = self.values.get_mut(key).expect("Path must exist");
+        let v = v.value_mut();
         assert_some!(
             v.versioned_map.remove(&ShiftedTxnIndex::new(txn_idx)),
             "Entry for key / idx must exist to be deleted"
@@ -473,6 +475,7 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
         let mut v = self.values.get_mut(key).ok_or_else(|| {
             code_invariant_error(format!("Path must exist for remove_v2: {:?}", key))
         })?;
+        let v = v.value_mut();
 
         // Get the entry to be removed
         let removed_entry = v
@@ -543,7 +546,7 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
     {
         self.values
             .get(key)
-            .map(|v| v.read(txn_idx, Some(incarnation)))
+            .map(|v| v.value().read(txn_idx, Some(incarnation)))
             .unwrap_or(Err(MVDataError::Uninitialized))
     }
 
@@ -665,8 +668,8 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
         Self::write_impl(
             &mut v,
             txn_idx,
-            incarnation,
-            ValueWithLayout::Exchanged(data, maybe_layout),
+                incarnation,
+                ValueWithLayout::Exchanged(data, maybe_layout),
             BTreeMap::new(),
         );
     }
@@ -697,7 +700,7 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
         // (invalidated read dependencies) to the caller.
         let (deps_to_retain, deps_to_return) = if validation_passed {
             (affected_dependencies, BTreeMap::new())
-        } else {
+            } else {
             (BTreeMap::new(), affected_dependencies)
         };
 
