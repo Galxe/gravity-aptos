@@ -6,7 +6,7 @@ use move_binary_format::{
     access::ScriptAccess,
     binary_views::BinaryIndexedView,
     errors::{PartialVMError, PartialVMResult},
-    file_format::{Bytecode, CompiledScript, FunctionDefinitionIndex, Signature, SignatureIndex},
+    file_format::{Bytecode, CompiledScript, FunctionDefinitionIndex, Signature, SignatureIndex, Visibility},
 };
 use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_status::StatusCode};
 use move_vm_types::loaded_data::{
@@ -117,7 +117,7 @@ impl Script {
             ty_param_abilities,
             native,
             is_native: def_is_native,
-            is_friend_or_private: false,
+            visibility: Visibility::Public,
             is_entry: false,
             name,
             // Script must not return values.
