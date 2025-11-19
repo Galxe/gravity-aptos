@@ -533,4 +533,11 @@ impl<'a> FunctionValueExtension for Resolver<'a> {
         };
         function_value_extension.get_serialization_data(fun)
     }
+
+    fn max_value_nest_depth(&self) -> Option<u64> {
+        let function_value_extension = FunctionValueExtensionAdapter {
+            module_storage: self.module_storage,
+        };
+        function_value_extension.max_value_nest_depth()
+    }
 }

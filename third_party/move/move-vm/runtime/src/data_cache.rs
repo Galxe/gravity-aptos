@@ -19,7 +19,7 @@ use move_core_types::{
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     resolver::ResourceResolver,
-    value_serde::ValueSerDeContext,
+    value_serde::{FunctionValueExtension, ValueSerDeContext},
     values::{GlobalValue, Value},
 };
 use std::collections::btree_map::BTreeMap;
@@ -70,14 +70,12 @@ impl<'r> TransactionDataCache<'r> {
     /// published modules.
     ///
     /// Gives all proper guarantees on lifetime of global data as well.
-    pub(crate) fn into_effects(
-        self,
-        module_storage: &dyn ModuleStorage,
-    ) -> PartialVMResult<ChangeSet> {
+    pub fn into_effects(self, module_storage: &dyn ModuleStorage) -> PartialVMResult<ChangeSet> {
         let resource_converter =
             |value: Value, layout: MoveTypeLayout, _: bool| -> PartialVMResult<Bytes> {
                 let function_value_extension = FunctionValueExtensionAdapter { module_storage };
-                ValueSerDeContext::new()
+                let max_value_nest_depth = function_value_extension.max_value_nest_depth();
+                ValueSerDeContext::new(max_value_nest_depth)
                     .with_func_args_deserialization(&function_value_extension)
                     .serialize(&value, &layout)?
                     .map(Into::into)
@@ -199,9 +197,10 @@ impl<'r> TransactionDataCache<'r> {
             load_res = Some(NumBytes::new(bytes_loaded as u64));
 
             let function_value_extension = FunctionValueExtensionAdapter { module_storage };
+            let max_value_nest_depth = function_value_extension.max_value_nest_depth();
             let gv = match data {
                 Some(blob) => {
-                    let val = match ValueSerDeContext::new()
+                    let val = match ValueSerDeContext::new(max_value_nest_depth)
                         .with_func_args_deserialization(&function_value_extension)
                         .with_delayed_fields_serde()
                         .deserialize(&blob, &ty_layout)

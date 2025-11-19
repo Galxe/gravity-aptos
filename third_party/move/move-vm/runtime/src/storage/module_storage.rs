@@ -543,4 +543,8 @@ impl<'a> FunctionValueExtension for FunctionValueExtensionAdapter<'a> {
             },
         }
     }
+
+    fn max_value_nest_depth(&self) -> Option<u64> {
+        self.module_storage.runtime_environment().vm_config().max_value_nest_depth
+    }
 }

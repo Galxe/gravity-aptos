@@ -21,7 +21,7 @@ use move_vm_metrics::{Timer, VM_TIMER};
 use move_vm_types::{
     gas::GasMeter,
     loaded_data::runtime_types::Type,
-    value_serde::ValueSerDeContext,
+    value_serde::{FunctionValueExtension, ValueSerDeContext},
     values::{Locals, Reference, VMValueCast, Value},
 };
 use std::borrow::Borrow;
@@ -67,7 +67,8 @@ impl VMRuntime {
         }
 
         let function_value_extension = module_storage.as_function_value_extension();
-        match ValueSerDeContext::new()
+        let max_value_nest_depth = function_value_extension.max_value_nest_depth();
+        match ValueSerDeContext::new(max_value_nest_depth)
             .with_func_args_deserialization(&function_value_extension)
             .deserialize(arg.borrow(), &layout)
         {
@@ -154,7 +155,8 @@ impl VMRuntime {
         }
 
         let function_value_extension = module_storage.as_function_value_extension();
-        let bytes = ValueSerDeContext::new()
+        let max_value_nest_depth = function_value_extension.max_value_nest_depth();
+        let bytes = ValueSerDeContext::new(max_value_nest_depth)
             .with_func_args_deserialization(&function_value_extension)
             .serialize(&value, &layout)?
             .ok_or_else(serialization_error)?;

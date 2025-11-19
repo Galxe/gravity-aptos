@@ -43,6 +43,9 @@ pub trait FunctionValueExtension {
         &self,
         fun: &dyn AbstractFunction,
     ) -> PartialVMResult<SerializedFunctionData>;
+
+    /// Returns the maximum allowed nesting depth of a VM value.
+    fn max_value_nest_depth(&self) -> Option<u64>;
 }
 
 /// An extension to (de)serializer to lookup information about delayed fields.
