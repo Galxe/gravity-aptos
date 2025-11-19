@@ -18,6 +18,7 @@ use fail::fail_point;
 use move_core_types::value::MoveTypeLayout;
 use rand::{thread_rng, Rng};
 use std::{collections::BTreeMap, sync::Arc};
+use triomphe::Arc as TriompheArc;
 
 // TODO(clean-up): refactor & replace these macros with functions for code clarity. Currently
 // not possible due to type & API mismatch.
@@ -49,25 +50,17 @@ macro_rules! resource_writes_to_materialize {
 	$outputs
             .reads_needing_delayed_field_exchange($($txn_idx),*)
             .into_iter()
-	    .map(|(key, metadata, layout)| {
-		match $data_source.fetch_exchanged_data(&key, $($txn_idx),*) {
-		    Some((value, existing_layout)) => {
-			randomly_check_layout_matches(
-			    Some(&existing_layout),
-			    Some(layout.as_ref()),
-			)?;
-			let new_value = Arc::new(TransactionWrite::from_state_value(Some(
-			    StateValue::new_with_metadata(
-				value.bytes().cloned().unwrap_or_else(Bytes::new), metadata)
-			    )));
-			Ok((key, new_value, layout))
-		    },
-		    None => {
-			Err(code_invariant_error(
-			    "Read value needing exchange not in Exchanged format".to_string()
-			))
-		    }
-		}}).chain(
+	    .map(|(key, metadata, layout)| -> Result<_, PanicError> {
+	        let (value, existing_layout) = $data_source.fetch_exchanged_data(&key, $($txn_idx),*)?;
+            randomly_check_layout_matches(Some(&existing_layout), Some(layout.as_ref()))?;
+            let new_value = TriompheArc::new(TransactionWrite::from_state_value(Some(
+                StateValue::new_with_metadata(
+                    value.bytes().cloned().unwrap_or_else(Bytes::new),
+                    metadata,
+                ))
+            ));
+            Ok((key, new_value, layout))
+        }).chain(
 		$writes.into_iter().filter_map(|(key, value, maybe_layout)| {
 		    // layout is Some(_) if it contains a delayed field
 		    if let Some(layout) = maybe_layout {

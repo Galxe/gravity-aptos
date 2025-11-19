@@ -547,6 +547,27 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
             .unwrap_or(Err(MVDataError::Uninitialized))
     }
 
+    // Fetches data in Exchanged format for delayed field exchange.
+    pub fn fetch_exchanged_data<Q>(
+        &self,
+        key: &Q,
+        txn_idx: TxnIndex,
+    ) -> Result<(Arc<V>, Arc<MoveTypeLayout>), PanicError>
+    where
+        Q: Equivalent<K> + Hash,
+    {
+        use MVDataOutput::*;
+        match self.fetch_data_no_record(key, txn_idx)? {
+            Versioned(_, ValueWithLayout::Exchanged(value, Some(layout))) => {
+                Ok((value, layout))
+            },
+            _ => Err(code_invariant_error(format!(
+                "Read value needing exchange {:?} does not exist or not in Exchanged format",
+                key
+            ))),
+        }
+    }
+
     // The caller needs to repeat the read after set_base_value (concurrent caller might have
     // exchanged and stored a different delayed field ID).
     pub fn set_base_value(&self, key: K, base_value_with_layout: ValueWithLayout<V>) {

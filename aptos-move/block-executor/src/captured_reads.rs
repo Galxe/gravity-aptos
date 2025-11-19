@@ -496,7 +496,8 @@ where
                 }
 
                 if let DataRead::Versioned(_version, value, Some(layout)) = data_read {
-                    view.filter_value_for_exchange(value, layout, delayed_write_set_ids, key)
+                    let std_layout = Arc::from(layout.as_ref().clone());
+                    view.filter_value_for_exchange(value, &std_layout, delayed_write_set_ids, key)
                 } else {
                     None
                 }

@@ -28,6 +28,7 @@ use aptos_aggregator::{
 };
 use aptos_drop_helper::DEFAULT_DROPPER;
 use aptos_logger::{error, info};
+use anyhow;
 use aptos_mvhashmap::{
     types::{Incarnation, MVDelayedFieldsError, TxnIndex, ValueWithLayout},
     unsync_map::UnsyncMap,
@@ -204,7 +205,7 @@ where
                     group_key,
                     idx_to_execute,
                     incarnation,
-                    group_ops.into_iter(),
+                    group_ops.into_iter().map(|(tag, (value, layout))| (tag, (value, layout.map(|l| TriompheArc::from(l.as_ref().clone()))))),
                     group_size,
                     prev_tags,
                 )? {
@@ -215,7 +216,7 @@ where
             let resource_write_set = output.resource_write_set();
 
             // Then, process resource & aggregator_v1 writes.
-            for (k, v, maybe_layout) in resource_write_set.clone().into_iter().chain(
+            for (k, v, maybe_layout) in resource_write_set.clone().into_iter().map(|(k, v, layout)| (k, TriompheArc::from(v.as_ref().clone()), layout.map(|l| TriompheArc::from(l.as_ref().clone())))).chain(
                 output
                     .aggregator_v1_write_set()
                     .into_iter()
@@ -817,7 +818,7 @@ where
 
                 map_finalized_group::<T>(
                     group_key,
-                    finalize_group,
+                    finalize_group.map_err(|e: PanicError| anyhow::anyhow!("{}", e)),
                     metadata_op,
                     is_read_needing_exchange,
                 )
@@ -1219,13 +1220,14 @@ where
         resource_write_set: Vec<(T::Key, Arc<T::Value>, Option<Arc<MoveTypeLayout>>)>,
     ) -> Result<(), SequentialBlockExecutionError<E::Error>> {
         for (key, write_op, layout) in resource_write_set.into_iter() {
-            unsync_map.write(key, write_op, layout);
+            unsync_map.write(key, TriompheArc::from(write_op.as_ref().clone()), layout.map(|l| TriompheArc::from(l.as_ref().clone())));
         }
 
         for (group_key, metadata_op, group_size, group_ops) in
             output.resource_group_write_set().into_iter()
         {
-            unsync_map.insert_group_ops(&group_key, group_ops, group_size)?;
+            let converted_group_ops = group_ops.into_iter().map(|(tag, (value, layout))| (tag, (TriompheArc::from(value.as_ref().clone()), layout.map(|l| TriompheArc::from(l.as_ref().clone())))));
+            unsync_map.insert_group_ops(&group_key, converted_group_ops, group_size)?;
             unsync_map.write(group_key, TriompheArc::new(metadata_op), None);
         }
 
