@@ -750,6 +750,7 @@ dependencies = [
  "rayon",
  "scopeguard",
  "test-case",
+ "triomphe",
 ]
 
 [[package]]

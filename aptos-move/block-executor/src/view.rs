@@ -8,7 +8,6 @@ use crate::{
         CacheRead, CapturedReads, DataRead, DelayedFieldRead, DelayedFieldReadKind, GroupRead,
         ReadKind, UnsyncReadSet,
     },
-    code_cache::ModuleCodeBuilder,
     code_cache_global::GlobalModuleCache,
     counters::{self, GLOBAL_MODULE_CACHE_MISS_SECONDS},
     scheduler::{DependencyResult, DependencyStatus, Scheduler, TWaitForDependency},
@@ -66,7 +65,7 @@ use std::{
     cell::RefCell,
     collections::{BTreeMap, HashMap, HashSet},
     fmt::Debug,
-    sync::atomic::{AtomicU32, Ordering},
+    sync::{atomic::{AtomicU32, Ordering}, Arc},
 };
 use triomphe::Arc as TriompheArc;
 
@@ -628,8 +627,8 @@ impl<'a, T: Transaction> ResourceState<T> for ParallelState<'a, T> {
                                     self.versioned_map.data().set_base_value(
                                         key.clone(),
                                         ValueWithLayout::Exchanged(
-                                            Arc::new(patched_value),
-                                            layout.cloned().map(Arc::new),
+                                            TriompheArc::new(patched_value),
+                                            layout.cloned().map(TriompheArc::new),
                                         ),
                                     );
                                     // Refetch in case a concurrent change went through.
@@ -794,7 +793,7 @@ impl<'a, T: Transaction> ResourceGroupState<T> for ParallelState<'a, T> {
                                     group_key.clone(),
                                     resource_tag.clone(),
                                     patched_value,
-                                    maybe_layout.cloned().map(Arc::new),
+                                    maybe_layout.cloned().map(TriompheArc::new),
                                 );
                             // Re-fetch in case a concurrent change went through.
                             continue;
@@ -989,7 +988,7 @@ impl<'a, T: Transaction> ResourceGroupState<T> for SequentialState<'a, T> {
                 // If we have a known layout, upgrade RawFromStorage value to Exchanged.
                 if let ValueWithLayout::RawFromStorage(v) = value {
                     let patched_value = patch_base_value(v.as_ref(), maybe_layout)?;
-                    let maybe_layout = maybe_layout.cloned().map(Arc::new);
+                    let maybe_layout = maybe_layout.cloned().map(TriompheArc::new);
                     self.unsync_map.update_tagged_base_value_with_layout(
                         group_key.clone(),
                         resource_tag.clone(),
@@ -998,7 +997,7 @@ impl<'a, T: Transaction> ResourceGroupState<T> for SequentialState<'a, T> {
                     );
 
                     // Sequential execution doesn't need to worry about concurrent change going through.
-                    value = ValueWithLayout::Exchanged(Arc::new(patched_value), maybe_layout);
+                    value = ValueWithLayout::Exchanged(TriompheArc::new(patched_value), maybe_layout);
                 }
 
                 if let ValueWithLayout::Exchanged(v, l) = value {
@@ -1448,7 +1447,7 @@ impl<'a, T: Transaction, S: TStateView<Key = T::Key>> LatestView<'a, T, S> {
                 TransactionWrite::from_state_value(self.get_raw_base_value(state_key)?);
             state.set_base_value(
                 state_key.clone(),
-                ValueWithLayout::RawFromStorage(Arc::new(from_storage)),
+                ValueWithLayout::RawFromStorage(TriompheArc::new(from_storage)),
             );
 
             // In case of concurrent storage fetches, we cannot use our value,
@@ -1511,7 +1510,7 @@ impl<'a, T: Transaction, S: TStateView<Key = T::Key>> LatestView<'a, T, S> {
             .set_raw_group_base_values(group_key.clone(), base_group_sentinel_ops)?;
         self.latest_view.get_resource_state().set_base_value(
             group_key.clone(),
-            ValueWithLayout::RawFromStorage(Arc::new(metadata_op)),
+            ValueWithLayout::RawFromStorage(TriompheArc::new(metadata_op)),
         );
         Ok(())
     }
