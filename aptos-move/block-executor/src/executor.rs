@@ -205,7 +205,7 @@ where
                     group_key,
                     idx_to_execute,
                     incarnation,
-                    group_ops.into_iter().map(|(tag, (value, layout))| (tag, (value, layout.map(|l| TriompheArc::from(l.as_ref().clone()))))),
+                    group_ops.into_iter().map(|(tag, (value, layout))| (tag, (TriompheArc::from(value.as_ref().clone()), layout.map(|l| TriompheArc::from(l.as_ref().clone()))))),
                     group_size,
                     prev_tags,
                 )? {
