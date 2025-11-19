@@ -110,6 +110,8 @@ members = [
     "aptos-move/aptos-resource-viewer",
     "aptos-move/aptos-sdk-builder",
     "aptos-move/aptos-transaction-benchmarks",
+    "aptos-move/aptos-transaction-simulation",
+    "aptos-move/aptos-transaction-simulation-session",
     "aptos-move/aptos-transactional-test-harness",
     "aptos-move/aptos-validator-interface",
     "aptos-move/aptos-vm",
@@ -134,7 +136,6 @@ members = [
     "aptos-move/script-composer",
     "aptos-move/vm-genesis",
     "aptos-node",
-    "aptos-utils",
     "config",
     "config/global-constants",
     "consensus",
@@ -189,6 +190,7 @@ members = [
     "crates/aptos-telemetry-service",
     "crates/aptos-temppath",
     "crates/aptos-time-service",
+    "crates/aptos-transaction-filters",
     "crates/aptos-warp-webserver",
     "crates/bounded-executor",
     "crates/channel",
@@ -532,6 +534,7 @@ aptos-storage-service-types = { path = "state-sync/storage-service/types" }
 aptos-storage-service-server = { path = "state-sync/storage-service/server" }
 aptos-system-utils = { path = "crates/aptos-system-utils" }
 aptos-transaction-filter = { path = "ecosystem/indexer-grpc/transaction-filter" }
+aptos-transaction-filters = { path = "crates/aptos-transaction-filters" }
 aptos-telemetry = { path = "crates/aptos-telemetry" }
 aptos-telemetry-service = { path = "crates/aptos-telemetry-service" }
 aptos-temppath = { path = "crates/aptos-temppath" }
@@ -542,9 +545,10 @@ aptos-time-service = { path = "crates/aptos-time-service", features = [
 aptos-transaction-emitter-lib = { path = "crates/transaction-emitter-lib" }
 aptos-transaction-generator-lib = { path = "crates/transaction-generator-lib" }
 aptos-transaction-workloads-lib = { path = "crates/transaction-workloads-lib" }
+aptos-transaction-simulation = { path = "aptos-move/aptos-transaction-simulation" }
+aptos-transaction-simulation-session = { path = "aptos-move/aptos-transaction-simulation-session" }
 aptos-transactional-test-harness = { path = "aptos-move/aptos-transactional-test-harness" }
 aptos-types = { path = "types" }
-aptos-utils = { path = "aptos-utils" }
 aptos-validator-interface = { path = "aptos-move/aptos-validator-interface" }
 aptos-validator-transaction-pool = { path = "crates/validator-transaction-pool" }
 aptos-vault-client = { path = "secure/storage/vault" }
@@ -802,6 +806,7 @@ quote = "1.0.18"
 rand = "0.7.3"
 rand_core = "0.5.1"
 random_word = "0.3.0"
+rapidhash = "1.4.0"
 rayon = "1.5.2"
 redis = { version = "0.22.3", features = [
     "tokio-comp",
