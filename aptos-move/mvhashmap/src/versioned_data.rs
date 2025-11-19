@@ -557,11 +557,15 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
         Q: Equivalent<K> + Hash + Debug,
     {
         use MVDataOutput::*;
-        let data_output = self.fetch_data_no_record(key, txn_idx).map_err(|e| {
-            code_invariant_error(format!("Failed to fetch data for exchange: {:?}", e))
-        })?;
+        let data_output = match self.fetch_data_no_record(key, txn_idx) {
+            Ok(output) => output,
+            Err(e) => {
+                return Err(code_invariant_error(format!("Failed to fetch data for exchange: {:?}", e)));
+            },
+        };
         match data_output {
             Versioned(_, ValueWithLayout::Exchanged(value, Some(layout))) => {
+                // value and layout are TriompheArc, convert to std::sync::Arc
                 Ok((Arc::from((*value).clone()), Arc::from((*layout).clone())))
             },
             _ => Err(code_invariant_error(format!(
