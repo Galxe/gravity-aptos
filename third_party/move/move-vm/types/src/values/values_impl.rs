@@ -4344,7 +4344,11 @@ impl Value {
 
     pub fn deserialize_constant(constant: &Constant) -> Option<Value> {
         let layout = Self::constant_sig_token_to_layout(&constant.type_)?;
-        ValueSerDeContext::new().deserialize(&constant.data, &layout)
+        // INVARIANT:
+        //   For constants, layout depth is bounded and cannot contain function values. Hence,
+        //   serialization depth is bounded. We still enable depth checks as a precaution.
+        ValueSerDeContext::new(Some(DEFAULT_MAX_VM_VALUE_NESTED_DEPTH))
+            .deserialize(&constant.data, &layout)
     }
 }
 
