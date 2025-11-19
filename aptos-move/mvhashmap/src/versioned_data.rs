@@ -566,7 +566,9 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
         match data_output {
             Versioned(_, ValueWithLayout::Exchanged(value, Some(layout))) => {
                 // value and layout are TriompheArc, convert to std::sync::Arc
-                Ok((Arc::from((*value).clone()), Arc::from((*layout).clone())))
+                let v_clone: V = (*value).clone();
+                let l_clone: MoveTypeLayout = (*layout).clone();
+                Ok((Arc::new(v_clone), Arc::new(l_clone)))
             },
             _ => Err(code_invariant_error(format!(
                 "Read value needing exchange {:?} does not exist or not in Exchanged format",
