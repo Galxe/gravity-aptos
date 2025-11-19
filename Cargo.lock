@@ -903,6 +903,7 @@ dependencies = [
  "aptos-secure-storage",
  "aptos-short-hex-str",
  "aptos-temppath",
+ "aptos-transaction-filters",
  "aptos-types",
  "arr_macro",
  "bcs 0.1.4",
@@ -917,6 +918,8 @@ dependencies = [
  "serde_json",
  "serde_merge",
  "serde_yaml 0.8.26",
+ "strum 0.24.1",
+ "strum_macros 0.24.3",
  "tempfile",
  "thiserror 1.0.69",
  "url",
@@ -962,6 +965,7 @@ dependencies = [
  "aptos-storage-interface",
  "aptos-temppath",
  "aptos-time-service",
+ "aptos-transaction-filters",
  "aptos-types",
  "aptos-validator-transaction-pool",
  "aptos-vm",
@@ -986,6 +990,7 @@ dependencies = [
  "mirai-annotations",
  "mockall",
  "move-core-types",
+ "move-vm-runtime",
  "num-derive",
  "num-traits",
  "once_cell",
@@ -998,8 +1003,8 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
- "serde_yaml 0.8.26",
  "sha3 0.9.1",
+ "strum 0.24.1",
  "strum_macros 0.24.3",
  "tempfile",
  "thiserror 1.0.69",
@@ -1581,6 +1586,7 @@ dependencies = [
  "aptos-block-partitioner",
  "aptos-config",
  "aptos-infallible",
+ "aptos-keygen",
  "aptos-language-e2e-tests",
  "aptos-logger",
  "aptos-metrics-core",
@@ -1588,6 +1594,7 @@ dependencies = [
  "aptos-push-metrics",
  "aptos-secure-net",
  "aptos-storage-interface",
+ "aptos-transaction-simulation",
  "aptos-types",
  "aptos-vm",
  "bcs 0.1.4",
@@ -1621,6 +1628,7 @@ dependencies = [
  "aptos-types",
  "aptos-vm",
  "aptos-vm-genesis",
+ "move-core-types",
  "rand 0.7.3",
 ]
 
@@ -2861,6 +2869,7 @@ dependencies = [
  "aptos-short-hex-str",
  "aptos-storage-interface",
  "aptos-time-service",
+ "aptos-transaction-filters",
  "aptos-types",
  "aptos-vm-validator",
  "async-trait",
@@ -4340,6 +4349,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "aptos-transaction-filters"
+version = "0.1.0"
+dependencies = [
+ "aptos-crypto",
+ "aptos-types",
+ "move-core-types",
+ "rand 0.7.3",
+ "serde",
+ "serde_yaml 0.8.26",
+]
+
+[[package]]
 name = "aptos-transaction-generator-lib"
 version = "0.0.0"
 dependencies = [
@@ -4354,6 +4375,50 @@ dependencies = [
  "once_cell",
  "rand 0.7.3",
  "serde",
+]
+
+[[package]]
+name = "aptos-transaction-simulation"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "aptos-crypto",
+ "aptos-keygen",
+ "aptos-types",
+ "aptos-vm-genesis",
+ "bcs 0.1.4",
+ "bytes",
+ "move-binary-format",
+ "move-core-types",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "proptest",
+ "serde",
+]
+
+[[package]]
+name = "aptos-transaction-simulation-session"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "aptos-api-types",
+ "aptos-resource-viewer",
+ "aptos-rest-client",
+ "aptos-transaction-simulation",
+ "aptos-types",
+ "aptos-validator-interface",
+ "aptos-vm",
+ "aptos-vm-environment",
+ "aptos-vm-logging",
+ "aptos-vm-types",
+ "bcs 0.1.4",
+ "hex",
+ "move-core-types",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "url",
 ]
 
 [[package]]
@@ -4448,8 +4513,10 @@ dependencies = [
  "hex",
  "itertools 0.13.0",
  "jsonwebtoken 8.3.0",
+ "lru 0.7.8",
  "move-binary-format",
  "move-core-types",
+ "move-model",
  "move-table-extension",
  "move-vm-types",
  "num-bigint 0.3.3",
@@ -4466,6 +4533,7 @@ dependencies = [
  "proptest-derive",
  "quick_cache",
  "rand 0.7.3",
+ "rapidhash",
  "rayon",
  "ref-cast",
  "reqwest 0.11.23",
@@ -4484,10 +4552,6 @@ dependencies = [
  "tracing",
  "url",
 ]
-
-[[package]]
-name = "aptos-utils"
-version = "0.1.0"
 
 [[package]]
 name = "aptos-validator-interface"
@@ -4563,7 +4627,6 @@ dependencies = [
  "aptos-native-interface",
  "aptos-table-natives",
  "aptos-types",
- "aptos-utils",
  "aptos-vm-environment",
  "aptos-vm-logging",
  "aptos-vm-types",
@@ -14161,6 +14224,12 @@ dependencies = [
  "once_cell",
  "rand 0.8.5",
 ]
+
+[[package]]
+name = "rapidhash"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9813f789f95ee4fe6b4d01834404d7cccacbc3f6c029343af910b3c2835eb9f1"
 
 [[package]]
 name = "rawpointer"

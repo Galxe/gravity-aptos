@@ -1,11 +1,6 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-<<<<<<< HEAD:storage/aptosdb/src/db/include/aptosdb_internal.rs
-use crate::metrics::CONCURRENCY_GAUGE;
-use aptos_metrics_core::IntGaugeHelper;
-use aptos_storage_interface::block_info::BlockInfo;
-=======
 use crate::{
     db::AptosDB,
     event_store::EventStore,
@@ -41,7 +36,6 @@ use std::{
     sync::Arc,
     time::Instant,
 };
->>>>>>> aptos-node-v1.37.4:storage/aptosdb/src/db/aptosdb_internal.rs
 
 impl AptosDB {
     fn new_with_dbs(

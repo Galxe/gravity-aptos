@@ -19,11 +19,8 @@ pub enum OnChainExecutionConfig {
     // Reminder: Add V4 and future versions here, after Missing (order matters for enums).
     V4(ExecutionConfigV4),
     V5(ExecutionConfigV5),
-<<<<<<< HEAD
-=======
     V6(ExecutionConfigV6),
     V7(ExecutionConfigV7),
->>>>>>> aptos-node-v1.37.4
 }
 
 /// The public interface that exposes all values with safe fallback.
@@ -37,11 +34,8 @@ impl OnChainExecutionConfig {
             OnChainExecutionConfig::V3(config) => config.transaction_shuffler_type.clone(),
             OnChainExecutionConfig::V4(config) => config.transaction_shuffler_type.clone(),
             OnChainExecutionConfig::V5(config) => config.transaction_shuffler_type.clone(),
-<<<<<<< HEAD
-=======
             OnChainExecutionConfig::V6(config) => config.transaction_shuffler_type.clone(),
             OnChainExecutionConfig::V7(config) => config.transaction_shuffler_type.clone(),
->>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -58,11 +52,8 @@ impl OnChainExecutionConfig {
                 .map_or(BlockGasLimitType::NoLimit, BlockGasLimitType::Limit),
             OnChainExecutionConfig::V4(config) => config.block_gas_limit_type.clone(),
             OnChainExecutionConfig::V5(config) => config.block_gas_limit_type.clone(),
-<<<<<<< HEAD
-=======
             OnChainExecutionConfig::V6(config) => config.block_gas_limit_type.clone(),
             OnChainExecutionConfig::V7(config) => config.block_gas_limit_type.clone(),
->>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -74,8 +65,6 @@ impl OnChainExecutionConfig {
             | OnChainExecutionConfig::V3(_)
             | OnChainExecutionConfig::V4(_) => false,
             OnChainExecutionConfig::V5(config) => config.enable_per_block_gas_limit,
-<<<<<<< HEAD
-=======
             OnChainExecutionConfig::V6(config) => config.enable_per_block_gas_limit,
             OnChainExecutionConfig::V7(config) => config.enable_per_block_gas_limit,
         }
@@ -104,7 +93,6 @@ impl OnChainExecutionConfig {
             | OnChainExecutionConfig::V5(_)
             | OnChainExecutionConfig::V6(_) => 0,
             OnChainExecutionConfig::V7(config) => config.persisted_auxiliary_info_version,
->>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -112,10 +100,7 @@ impl OnChainExecutionConfig {
         BlockExecutorConfigFromOnchain::new(
             self.block_gas_limit_type(),
             self.enable_per_block_gas_limit(),
-<<<<<<< HEAD
-=======
             self.gas_price_to_burn(),
->>>>>>> aptos-node-v1.37.4
         )
     }
 
@@ -129,22 +114,15 @@ impl OnChainExecutionConfig {
             OnChainExecutionConfig::V3(config) => config.transaction_deduper_type.clone(),
             OnChainExecutionConfig::V4(config) => config.transaction_deduper_type.clone(),
             OnChainExecutionConfig::V5(config) => config.transaction_deduper_type.clone(),
-<<<<<<< HEAD
-=======
             OnChainExecutionConfig::V6(config) => config.transaction_deduper_type.clone(),
             OnChainExecutionConfig::V7(config) => config.transaction_deduper_type.clone(),
->>>>>>> aptos-node-v1.37.4
         }
     }
 
     /// The default values to use for new networks, e.g., devnet, forge.
     /// Features that are ready for deployment can be enabled here.
     pub fn default_for_genesis() -> Self {
-<<<<<<< HEAD
-        OnChainExecutionConfig::V5(ExecutionConfigV5 {
-=======
         OnChainExecutionConfig::V7(ExecutionConfigV7 {
->>>>>>> aptos-node-v1.37.4
             transaction_shuffler_type: TransactionShufflerType::default_for_genesis(),
             block_gas_limit_type: BlockGasLimitType::default_for_genesis(),
             enable_per_block_gas_limit: false,
@@ -228,8 +206,6 @@ pub struct ExecutionConfigV5 {
     pub transaction_deduper_type: TransactionDeduperType,
 }
 
-<<<<<<< HEAD
-=======
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct ExecutionConfigV6 {
     pub transaction_shuffler_type: TransactionShufflerType,
@@ -249,7 +225,6 @@ pub struct ExecutionConfigV7 {
     pub persisted_auxiliary_info_version: u8,
 }
 
->>>>>>> aptos-node-v1.37.4
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")] // cannot use tag = "type" as nested enums cannot work, and bcs doesn't support it
 pub enum TransactionShufflerType {

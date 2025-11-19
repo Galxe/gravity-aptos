@@ -50,13 +50,8 @@ impl SignatureVerifiedTransaction {
 
     pub fn borrow_into_inner(&self) -> &Transaction {
         match self {
-<<<<<<< HEAD
-            SignatureVerifiedTransaction::Valid(ref txn) => txn,
-            SignatureVerifiedTransaction::Invalid(ref txn) => txn,
-=======
             SignatureVerifiedTransaction::Valid(txn) => txn,
             SignatureVerifiedTransaction::Invalid(txn) => txn,
->>>>>>> aptos-node-v1.37.4
         }
     }
 

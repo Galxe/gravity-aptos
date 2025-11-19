@@ -15,11 +15,7 @@ use move_core_types::{
     move_resource::{MoveResource, MoveStructType},
 };
 use serde::{Deserialize, Serialize};
-<<<<<<< HEAD
 use std::{marker::PhantomData, string::FromUtf8Error, u128};
-=======
-use std::{marker::PhantomData, string::FromUtf8Error};
->>>>>>> aptos-node-v1.37.4
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CoinInfoResource<C: CoinType> {

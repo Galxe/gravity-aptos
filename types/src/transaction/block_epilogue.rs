@@ -95,18 +95,12 @@ impl BlockEndInfo {
 
     pub fn block_effective_gas_units(&self) -> u64 {
         match self {
-<<<<<<< HEAD
-            Self::V0 {
-=======
             BlockEndInfo::V0 {
->>>>>>> aptos-node-v1.37.4
                 block_effective_block_gas_units,
                 ..
             } => *block_effective_block_gas_units,
         }
     }
-<<<<<<< HEAD
-=======
 }
 
 /// Wrapper type to temporarily host the hot_state_ops which will not serialize until
@@ -173,5 +167,4 @@ impl<Key: Debug + Ord> Arbitrary for TBlockEndInfoExt<Key> {
             .prop_map(|inner| Self::new(inner, BTreeSet::new()))
             .boxed()
     }
->>>>>>> aptos-node-v1.37.4
 }

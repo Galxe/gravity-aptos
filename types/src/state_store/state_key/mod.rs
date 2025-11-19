@@ -214,13 +214,8 @@ impl StateKey {
         &self.0.deserialized
     }
 
-<<<<<<< HEAD
-    pub fn get_shard_id(&self) -> u8 {
-        self.crypto_hash_ref().nibble(0)
-=======
     pub fn get_shard_id(&self) -> usize {
         usize::from(self.crypto_hash_ref().nibble(0))
->>>>>>> aptos-node-v1.37.4
     }
 
     pub fn is_aptos_code(&self) -> bool {

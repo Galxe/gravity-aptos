@@ -54,10 +54,7 @@ impl BlockExecutorLocalConfig {
     ///   - Default module cache configs.
     pub fn default_with_concurrency_level(concurrency_level: usize) -> Self {
         Self {
-<<<<<<< HEAD
-=======
             blockstm_v2: false,
->>>>>>> aptos-node-v1.37.4
             concurrency_level,
             allow_fallback: true,
             discard_failed_blocks: false,
@@ -73,12 +70,6 @@ pub struct BlockExecutorConfigFromOnchain {
     pub block_gas_limit_type: BlockGasLimitType,
     enable_per_block_gas_limit: bool,
     per_block_gas_limit: Option<u64>,
-<<<<<<< HEAD
-}
-
-impl BlockExecutorConfigFromOnchain {
-    pub fn new(block_gas_limit_type: BlockGasLimitType, enable_per_block_gas_limit: bool) -> Self {
-=======
     gas_price_to_burn: Option<u64>,
 }
 
@@ -88,15 +79,11 @@ impl BlockExecutorConfigFromOnchain {
         enable_per_block_gas_limit: bool,
         gas_price_to_burn: Option<u64>,
     ) -> Self {
->>>>>>> aptos-node-v1.37.4
         Self {
             block_gas_limit_type,
             enable_per_block_gas_limit,
             per_block_gas_limit: None,
-<<<<<<< HEAD
-=======
             gas_price_to_burn,
->>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -105,10 +92,7 @@ impl BlockExecutorConfigFromOnchain {
             block_gas_limit_type: BlockGasLimitType::NoLimit,
             enable_per_block_gas_limit: false,
             per_block_gas_limit: None,
-<<<<<<< HEAD
-=======
             gas_price_to_burn: None,
->>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -118,10 +102,7 @@ impl BlockExecutorConfigFromOnchain {
                 .map_or(BlockGasLimitType::NoLimit, BlockGasLimitType::Limit),
             enable_per_block_gas_limit: false,
             per_block_gas_limit: None,
-<<<<<<< HEAD
-=======
             gas_price_to_burn: None,
->>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -142,26 +123,7 @@ impl BlockExecutorConfigFromOnchain {
                 },
             enable_per_block_gas_limit: false,
             per_block_gas_limit: None,
-<<<<<<< HEAD
-        }
-    }
-
-    pub fn with_block_gas_limit_override(self, block_gas_limit_override: Option<u64>) -> Self {
-        Self {
-            block_gas_limit_type: self.block_gas_limit_type,
-            enable_per_block_gas_limit: self.enable_per_block_gas_limit,
-            per_block_gas_limit: block_gas_limit_override,
-        }
-    }
-
-    pub fn block_gas_limit_override(&self) -> Option<u64> {
-        if self.enable_per_block_gas_limit {
-            self.per_block_gas_limit
-        } else {
-            None
-=======
             gas_price_to_burn: None,
->>>>>>> aptos-node-v1.37.4
         }
     }
 

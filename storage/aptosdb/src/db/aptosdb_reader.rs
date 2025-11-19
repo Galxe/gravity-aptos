@@ -140,11 +140,7 @@ impl DbReader for AptosDB {
         })
     }
 
-<<<<<<< HEAD:storage/aptosdb/src/db/include/aptosdb_reader.rs
-    fn get_account_transaction(
-=======
     fn get_account_ordered_transaction(
->>>>>>> aptos-node-v1.37.4:storage/aptosdb/src/db/aptosdb_reader.rs
         &self,
         address: AccountAddress,
         seq_num: u64,
@@ -172,13 +168,8 @@ impl DbReader for AptosDB {
         limit: u64,
         include_events: bool,
         ledger_version: Version,
-<<<<<<< HEAD:storage/aptosdb/src/db/include/aptosdb_reader.rs
-    ) -> Result<AccountTransactionsWithProof> {
-        gauged_api("get_account_transactions", || {
-=======
     ) -> Result<AccountOrderedTransactionsWithProof> {
         gauged_api("get_account_ordered_transactions", || {
->>>>>>> aptos-node-v1.37.4:storage/aptosdb/src/db/aptosdb_reader.rs
             ensure!(
                 !self.state_kv_db.enabled_sharding(),
                 "This API is not supported with sharded DB"
@@ -687,16 +678,8 @@ impl DbReader for AptosDB {
         gauged_api("get_state_value_with_proof_by_version_ext", || {
             self.error_if_state_merkle_pruned("State merkle", version)?;
 
-<<<<<<< HEAD:storage/aptosdb/src/db/include/aptosdb_reader.rs
-            self.state_store.get_state_value_with_proof_by_version_ext(
-                key_hash,
-                version,
-                root_depth,
-            )
-=======
             self.state_store
                 .get_state_value_with_proof_by_version_ext(key_hash, version, root_depth)
->>>>>>> aptos-node-v1.37.4:storage/aptosdb/src/db/aptosdb_reader.rs
         })
     }
 
@@ -715,14 +698,10 @@ impl DbReader for AptosDB {
 
     fn get_pre_committed_ledger_summary(&self) -> Result<LedgerSummary> {
         gauged_api("get_pre_committed_ledger_summary", || {
-<<<<<<< HEAD:storage/aptosdb/src/db/include/aptosdb_reader.rs
-            let (state, state_summary) = self.state_store.current_state_locked().to_state_and_summary();
-=======
             let (state, state_summary) = self
                 .state_store
                 .current_state_locked()
                 .to_state_and_summary();
->>>>>>> aptos-node-v1.37.4:storage/aptosdb/src/db/aptosdb_reader.rs
             let num_txns = state.next_version();
 
             let frozen_subtrees = self
@@ -771,14 +750,7 @@ impl DbReader for AptosDB {
             for item in iter {
                 let (_block_height, block_info) = item?;
                 let first_version = block_info.first_version();
-<<<<<<< HEAD:storage/aptosdb/src/db/include/aptosdb_reader.rs
-                if latest_version
-                    .as_ref()
-                    .map_or(false, |v| first_version <= *v)
-                {
-=======
                 if latest_version.as_ref().is_some_and(|v| first_version <= *v) {
->>>>>>> aptos-node-v1.37.4:storage/aptosdb/src/db/aptosdb_reader.rs
                     let event = self
                         .ledger_db
                         .event_db()
@@ -829,15 +801,11 @@ impl DbReader for AptosDB {
 
     fn get_latest_state_checkpoint_version(&self) -> Result<Option<Version>> {
         gauged_api("get_latest_state_checkpoint_version", || {
-<<<<<<< HEAD:storage/aptosdb/src/db/include/aptosdb_reader.rs
-            Ok(self.state_store.current_state_locked().last_checkpoint().version())
-=======
             Ok(self
                 .state_store
                 .current_state_locked()
                 .last_checkpoint()
                 .version())
->>>>>>> aptos-node-v1.37.4:storage/aptosdb/src/db/aptosdb_reader.rs
         })
     }
 

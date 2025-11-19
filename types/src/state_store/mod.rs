@@ -4,47 +4,30 @@
 use crate::{
     account_address::AccountAddress,
     state_store::{
-<<<<<<< HEAD
-        errors::StateViewError, state_key::StateKey, state_storage_usage::StateStorageUsage,
-        state_value::StateValue,
-=======
         errors::StateViewError, state_key::StateKey, state_slot::StateSlot,
         state_storage_usage::StateStorageUsage, state_value::StateValue,
->>>>>>> aptos-node-v1.37.4
     },
     transaction::Version,
 };
 use aptos_crypto::HashValue;
 use bytes::Bytes;
-<<<<<<< HEAD
-use move_core_types::move_resource::MoveResource;
-=======
 use move_core_types::{language_storage::StructTag, move_resource::MoveResource};
->>>>>>> aptos-node-v1.37.4
 #[cfg(any(test, feature = "testing"))]
 use std::hash::Hash;
 use std::ops::Deref;
 
 pub mod errors;
-<<<<<<< HEAD
-=======
 pub mod hot_state;
->>>>>>> aptos-node-v1.37.4
 pub mod state_key;
 pub mod state_slot;
 pub mod state_storage_usage;
 pub mod state_value;
 pub mod table;
 
-<<<<<<< HEAD
-pub type StateViewResult<T, E = StateViewError> = std::result::Result<T, E>;
-
-=======
 pub const NUM_STATE_SHARDS: usize = 16;
 
 pub type StateViewResult<T, E = StateViewError> = std::result::Result<T, E>;
 
->>>>>>> aptos-node-v1.37.4
 /// A trait that defines a read-only snapshot of the global state. It is passed to the VM for
 /// transaction execution, during which the VM is guaranteed to read anything at the given state.
 pub trait TStateView {
@@ -91,13 +74,6 @@ pub trait TStateView {
         Ok(val_opt.map(|val| val.bytes().clone()))
     }
 
-<<<<<<< HEAD
-    /// Gets the state value for a given state key.
-    fn get_state_value(&self, state_key: &Self::Key) -> StateViewResult<Option<StateValue>>;
-
-    /// Get state storage usage info at epoch ending.
-    fn get_usage(&self) -> StateViewResult<StateStorageUsage>;
-=======
     /// Checks if a state keyed by the given state key exists.
     fn contains_state_value(&self, state_key: &Self::Key) -> StateViewResult<bool> {
         self.get_state_value(state_key).map(|opt| opt.is_some())
@@ -135,7 +111,6 @@ pub trait TStateView {
     ) -> Option<Option<Self::Key>> {
         unimplemented!();
     }
->>>>>>> aptos-node-v1.37.4
 }
 
 pub trait StateView: TStateView<Key = StateKey> {}
@@ -172,8 +147,6 @@ where
         self.deref().id()
     }
 
-<<<<<<< HEAD
-=======
     fn get_usage(&self) -> StateViewResult<StateStorageUsage> {
         self.deref().get_usage()
     }
@@ -186,15 +159,10 @@ where
         self.deref().get_state_slot(state_key)
     }
 
->>>>>>> aptos-node-v1.37.4
     fn get_state_value(&self, state_key: &K) -> StateViewResult<Option<StateValue>> {
         self.deref().get_state_value(state_key)
     }
 
-<<<<<<< HEAD
-    fn get_usage(&self) -> StateViewResult<StateStorageUsage> {
-        self.deref().get_usage()
-=======
     fn contains_hot_state_value(&self, state_key: &Self::Key) -> bool {
         self.deref().contains_hot_state_value(state_key)
     }
@@ -213,26 +181,17 @@ where
         state_key: Option<&Self::Key>,
     ) -> Option<Option<Self::Key>> {
         self.deref().get_next_old_key(shard_id, state_key)
->>>>>>> aptos-node-v1.37.4
     }
 }
 
 /// Test-only basic [StateView] implementation with generic keys.
 #[cfg(any(test, feature = "testing"))]
 pub struct MockStateView<K> {
-<<<<<<< HEAD
-    data: std::collections::HashMap<K, StateValue>,
-}
-
-#[cfg(any(test, feature = "testing"))]
-impl<K> MockStateView<K> {
-=======
     data: std::collections::HashMap<K, StateSlot>,
 }
 
 #[cfg(any(test, feature = "testing"))]
 impl<K: Eq + Hash> MockStateView<K> {
->>>>>>> aptos-node-v1.37.4
     pub fn empty() -> Self {
         Self {
             data: std::collections::HashMap::new(),
@@ -240,8 +199,6 @@ impl<K: Eq + Hash> MockStateView<K> {
     }
 
     pub fn new(data: std::collections::HashMap<K, StateValue>) -> Self {
-<<<<<<< HEAD
-=======
         Self {
             data: data
                 .into_iter()
@@ -251,7 +208,6 @@ impl<K: Eq + Hash> MockStateView<K> {
     }
 
     pub fn new_with_state_slot(data: std::collections::HashMap<K, StateSlot>) -> Self {
->>>>>>> aptos-node-v1.37.4
         Self { data }
     }
 }
@@ -260,16 +216,6 @@ impl<K: Eq + Hash> MockStateView<K> {
 impl<K: Clone + Eq + Hash> TStateView for MockStateView<K> {
     type Key = K;
 
-<<<<<<< HEAD
-    fn get_state_value(
-        &self,
-        state_key: &Self::Key,
-    ) -> StateViewResult<Option<StateValue>, StateViewError> {
-        Ok(self.data.get(state_key).cloned())
-    }
-
-    fn get_usage(&self) -> std::result::Result<StateStorageUsage, StateViewError> {
-=======
     fn get_state_slot(&self, state_key: &Self::Key) -> StateViewResult<StateSlot> {
         Ok(self
             .data
@@ -279,7 +225,6 @@ impl<K: Clone + Eq + Hash> TStateView for MockStateView<K> {
     }
 
     fn get_usage(&self) -> StateViewResult<StateStorageUsage> {
->>>>>>> aptos-node-v1.37.4
         unimplemented!("Irrelevant for tests");
     }
 }

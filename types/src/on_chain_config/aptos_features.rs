@@ -64,12 +64,8 @@ pub enum FeatureFlag {
     _DEPRECATED_RECONFIGURE_WITH_DKG = 45,
     KEYLESS_ACCOUNTS = 46,
     KEYLESS_BUT_ZKLESS_ACCOUNTS = 47,
-<<<<<<< HEAD
-    _DEPRECATED_REMOVE_DETAILED_ERROR_FROM_HASH = 48, // This feature is not used
-=======
     /// This feature was never used.
     _DEPRECATED_REMOVE_DETAILED_ERROR_FROM_HASH = 48,
->>>>>>> aptos-node-v1.37.4
     JWK_CONSENSUS = 49,
     CONCURRENT_FUNGIBLE_ASSETS = 50,
     REFUNDABLE_BYTES = 51,
@@ -101,12 +97,8 @@ pub enum FeatureFlag {
     _USE_COMPATIBILITY_CHECKER_V2 = 73,
     ENABLE_ENUM_TYPES = 74,
     ENABLE_RESOURCE_ACCESS_CONTROL = 75,
-<<<<<<< HEAD
-    REJECT_UNSTABLE_BYTECODE_FOR_SCRIPT = 76,
-=======
     /// Enabled on mainnet, can never be disabled.
     _REJECT_UNSTABLE_BYTECODE_FOR_SCRIPT = 76,
->>>>>>> aptos-node-v1.37.4
     FEDERATED_KEYLESS = 77,
     TRANSACTION_SIMULATION_ENHANCEMENT = 78,
     COLLECTION_OWNER = 79,
@@ -138,11 +130,6 @@ pub enum FeatureFlag {
     /// Enables bytecode version v8
     VM_BINARY_FORMAT_V8 = 86,
     BULLETPROOFS_BATCH_NATIVES = 87,
-<<<<<<< HEAD
-    DOMAIN_ACCOUNT_ABSTRACTION = 88,
-    /// Whether function values are enabled.
-    ENABLE_FUNCTION_VALUES = 89,
-=======
     DERIVABLE_ACCOUNT_ABSTRACTION = 88,
     /// Whether function values are enabled.
     ENABLE_FUNCTION_VALUES = 89,
@@ -161,7 +148,6 @@ pub enum FeatureFlag {
     /// Whether to allow trusted code optimizations.
     ENABLE_TRUSTED_CODE = 100,
     ENABLE_ENUM_OPTION = 101,
->>>>>>> aptos-node-v1.37.4
 }
 
 impl FeatureFlag {
@@ -228,11 +214,8 @@ impl FeatureFlag {
             FeatureFlag::COIN_TO_FUNGIBLE_ASSET_MIGRATION,
             FeatureFlag::OBJECT_NATIVE_DERIVED_ADDRESS,
             FeatureFlag::DISPATCHABLE_FUNGIBLE_ASSET,
-<<<<<<< HEAD
-=======
             FeatureFlag::NEW_ACCOUNTS_DEFAULT_TO_FA_APT_STORE,
             FeatureFlag::OPERATIONS_DEFAULT_TO_FA_APT_STORE,
->>>>>>> aptos-node-v1.37.4
             FeatureFlag::CONCURRENT_FUNGIBLE_ASSETS,
             FeatureFlag::AGGREGATOR_V2_IS_AT_LEAST_API,
             FeatureFlag::CONCURRENT_FUNGIBLE_BALANCE,
@@ -243,19 +226,6 @@ impl FeatureFlag {
             FeatureFlag::_USE_COMPATIBILITY_CHECKER_V2,
             FeatureFlag::ENABLE_ENUM_TYPES,
             FeatureFlag::ENABLE_RESOURCE_ACCESS_CONTROL,
-<<<<<<< HEAD
-            FeatureFlag::REJECT_UNSTABLE_BYTECODE_FOR_SCRIPT,
-            FeatureFlag::TRANSACTION_SIMULATION_ENHANCEMENT,
-            FeatureFlag::NATIVE_MEMORY_OPERATIONS,
-            FeatureFlag::COLLECTION_OWNER,
-            FeatureFlag::PERMISSIONED_SIGNER,
-            FeatureFlag::ENABLE_CALL_TREE_AND_INSTRUCTION_VM_CACHE,
-            FeatureFlag::ACCOUNT_ABSTRACTION,
-            FeatureFlag::BULLETPROOFS_BATCH_NATIVES,
-            FeatureFlag::DOMAIN_ACCOUNT_ABSTRACTION,
-            FeatureFlag::VM_BINARY_FORMAT_V8,
-            FeatureFlag::ENABLE_FUNCTION_VALUES,
-=======
             FeatureFlag::_REJECT_UNSTABLE_BYTECODE_FOR_SCRIPT,
             FeatureFlag::TRANSACTION_SIMULATION_ENHANCEMENT,
             FeatureFlag::NATIVE_MEMORY_OPERATIONS,
@@ -281,7 +251,6 @@ impl FeatureFlag {
             FeatureFlag::ENABLE_CAPTURE_OPTION,
             FeatureFlag::ENABLE_TRUSTED_CODE,
             FeatureFlag::ENABLE_ENUM_OPTION,
->>>>>>> aptos-node-v1.37.4
         ]
     }
 }
@@ -370,13 +339,8 @@ impl Features {
         self.is_enabled(FeatureFlag::ACCOUNT_ABSTRACTION)
     }
 
-<<<<<<< HEAD
-    pub fn is_domain_account_abstraction_enabled(&self) -> bool {
-        self.is_enabled(FeatureFlag::DOMAIN_ACCOUNT_ABSTRACTION)
-=======
     pub fn is_derivable_account_abstraction_enabled(&self) -> bool {
         self.is_enabled(FeatureFlag::DERIVABLE_ACCOUNT_ABSTRACTION)
->>>>>>> aptos-node-v1.37.4
     }
 
     pub fn is_module_event_enabled(&self) -> bool {
@@ -452,8 +416,6 @@ impl Features {
         self.is_enabled(FeatureFlag::ENABLE_CALL_TREE_AND_INSTRUCTION_VM_CACHE)
     }
 
-<<<<<<< HEAD
-=======
     pub fn is_lazy_loading_enabled(&self) -> bool {
         self.is_enabled(FeatureFlag::ENABLE_LAZY_LOADING)
     }
@@ -490,7 +452,6 @@ impl Features {
         self.is_enabled(FeatureFlag::ENABLE_ENUM_OPTION)
     }
 
->>>>>>> aptos-node-v1.37.4
     pub fn get_max_identifier_size(&self) -> u64 {
         if self.is_enabled(FeatureFlag::LIMIT_MAX_IDENTIFIER_LENGTH) {
             IDENTIFIER_SIZE_MAX

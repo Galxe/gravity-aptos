@@ -19,7 +19,7 @@ use crate::{
     epoch_state::EpochState,
     event::{EventHandle, EventKey},
     ledger_info::{generate_ledger_info_with_sig, LedgerInfo, LedgerInfoWithSignatures},
-    on_chain_config::ValidatorSet,
+    on_chain_config::{Features, ValidatorSet},
     proof::TransactionInfoListWithProof,
     state_store::state_key::StateKey,
     transaction::{
@@ -45,14 +45,10 @@ use aptos_crypto::{
     traits::*,
     HashValue,
 };
-<<<<<<< HEAD
-use move_core_types::language_storage::TypeTag;
-=======
 use move_core_types::{
     identifier::Identifier,
     language_storage::{ModuleId, TypeTag},
 };
->>>>>>> aptos-node-v1.37.4
 use proptest::{
     collection::{vec, SizeRange},
     option,
@@ -430,7 +426,6 @@ fn new_raw_transaction(
             expiration_time_secs,
             chain_id,
         ),
-        TransactionPayload::GTxnBytes(bytes) => todo!(),
     }
 }
 
@@ -1295,12 +1290,8 @@ impl BlockGen {
                 vec![ContractEvent::new_v2(
                     NEW_EPOCH_EVENT_V2_MOVE_TYPE_TAG.clone(),
                     bcs::to_bytes(&NewEpochEvent::dummy()).unwrap(),
-<<<<<<< HEAD
-                )]
-=======
                 )
                 .unwrap()]
->>>>>>> aptos-node-v1.37.4
             } else {
                 vec![]
             },

@@ -45,36 +45,22 @@ pub enum AuthenticationError {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AuthenticationProof {
     Key(Vec<u8>),
-<<<<<<< HEAD
-    Abstraction {
-        function_info: FunctionInfo,
-        auth_data: AbstractionAuthData,
-=======
     Abstract {
         function_info: FunctionInfo,
         auth_data: AbstractAuthenticationData,
->>>>>>> aptos-node-v1.37.4
     },
     None,
 }
 
 impl AuthenticationProof {
     pub fn is_abstracted(&self) -> bool {
-<<<<<<< HEAD
-        matches!(self, Self::Abstraction { .. })
-=======
         matches!(self, Self::Abstract { .. })
->>>>>>> aptos-node-v1.37.4
     }
 
     pub fn optional_auth_key(&self) -> Option<Vec<u8>> {
         match self {
             Self::Key(data) => Some(data.clone()),
-<<<<<<< HEAD
-            Self::Abstraction { .. } => None,
-=======
             Self::Abstract { .. } => None,
->>>>>>> aptos-node-v1.37.4
             Self::None => None,
         }
     }
@@ -403,11 +389,7 @@ impl TransactionAuthenticator {
                 AccountAuthenticator::NoAccountAuthenticator => {
                     //  This case adds no single key authenticators to the vector.
                 },
-<<<<<<< HEAD
-                AccountAuthenticator::Abstraction { .. } => {},
-=======
                 AccountAuthenticator::Abstract { .. } => {},
->>>>>>> aptos-node-v1.37.4
             };
         }
         Ok(single_key_authenticators)
@@ -559,21 +541,12 @@ pub enum AccountAuthenticator {
         authenticator: MultiKeyAuthenticator,
     },
     NoAccountAuthenticator,
-<<<<<<< HEAD
-    Abstraction {
-        function_info: FunctionInfo,
-        auth_data: AbstractionAuthData,
-=======
     Abstract {
         authenticator: AbstractAuthenticator,
->>>>>>> aptos-node-v1.37.4
     }, // ... add more schemes here
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash)]
-<<<<<<< HEAD
-pub enum AbstractionAuthData {
-=======
 pub struct AbstractAuthenticator {
     /// An abstract `authenticator` should be verifiable by the function in `function_info` over the signing_message_digest = sha3_256(signing_message(AASigningData(original_signing_message, function_info))))
     /// For example, consider the following authentication function:
@@ -622,16 +595,11 @@ impl AbstractAuthenticator {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Hash)]
 pub enum AbstractAuthenticationData {
->>>>>>> aptos-node-v1.37.4
     V1 {
         #[serde(with = "serde_bytes")]
         signing_message_digest: Vec<u8>,
         #[serde(with = "serde_bytes")]
-<<<<<<< HEAD
-        authenticator: Vec<u8>,
-=======
         abstract_signature: Vec<u8>,
->>>>>>> aptos-node-v1.37.4
     },
     DerivableV1 {
         #[serde(with = "serde_bytes")]
@@ -643,15 +611,9 @@ pub enum AbstractAuthenticationData {
     },
 }
 
-<<<<<<< HEAD
-impl AbstractionAuthData {
-    pub fn signing_message_digest(&self) -> &Vec<u8> {
-        match self {
-=======
 impl AbstractAuthenticationData {
     pub fn signing_message_digest(&self) -> &Vec<u8> {
         match &self {
->>>>>>> aptos-node-v1.37.4
             Self::V1 {
                 signing_message_digest,
                 ..
@@ -662,8 +624,6 @@ impl AbstractAuthenticationData {
             } => signing_message_digest,
         }
     }
-<<<<<<< HEAD
-=======
 
     pub fn abstract_signature(&self) -> &Vec<u8> {
         match &self {
@@ -718,7 +678,6 @@ impl AASigningData {
         )
         .to_vec())
     }
->>>>>>> aptos-node-v1.37.4
 }
 
 impl AccountAuthenticator {
@@ -730,11 +689,7 @@ impl AccountAuthenticator {
             Self::SingleKey { .. } => Scheme::SingleKey,
             Self::MultiKey { .. } => Scheme::MultiKey,
             Self::NoAccountAuthenticator => Scheme::NoScheme,
-<<<<<<< HEAD
-            Self::Abstraction { .. } => Scheme::Abstraction,
-=======
             Self::Abstract { .. } => Scheme::Abstraction,
->>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -771,16 +726,6 @@ impl AccountAuthenticator {
     pub fn abstraction(
         function_info: FunctionInfo,
         signing_message_digest: Vec<u8>,
-<<<<<<< HEAD
-        authenticator: Vec<u8>,
-    ) -> Self {
-        Self::Abstraction {
-            function_info,
-            auth_data: AbstractionAuthData::V1 {
-                signing_message_digest,
-                authenticator,
-            },
-=======
         abstract_signature: Vec<u8>,
     ) -> Self {
         Self::Abstract {
@@ -791,7 +736,6 @@ impl AccountAuthenticator {
                     abstract_signature,
                 },
             ),
->>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -802,15 +746,6 @@ impl AccountAuthenticator {
         abstract_signature: Vec<u8>,
         abstract_public_key: Vec<u8>,
     ) -> Self {
-<<<<<<< HEAD
-        Self::Abstraction {
-            function_info,
-            auth_data: AbstractionAuthData::DerivableV1 {
-                signing_message_digest,
-                abstract_signature,
-                abstract_public_key,
-            },
-=======
         Self::Abstract {
             authenticator: AbstractAuthenticator::new(
                 function_info,
@@ -820,16 +755,11 @@ impl AccountAuthenticator {
                     abstract_public_key,
                 },
             ),
->>>>>>> aptos-node-v1.37.4
         }
     }
 
     pub fn is_abstracted(&self) -> bool {
-<<<<<<< HEAD
-        matches!(self, Self::Abstraction { .. })
-=======
         matches!(self, Self::Abstract { .. })
->>>>>>> aptos-node-v1.37.4
     }
 
     /// Return Ok if the authenticator's public key matches its signature, Err otherwise
@@ -847,10 +777,6 @@ impl AccountAuthenticator {
             Self::MultiKey { authenticator } => authenticator.verify(message),
             Self::NoAccountAuthenticator => bail!("No signature to verify."),
             // Abstraction delayed the authentication after prologue.
-<<<<<<< HEAD
-            Self::Abstraction { auth_data, .. } => {
-                ensure!(auth_data.signing_message_digest() == &HashValue::sha3_256_of(signing_message(message)?.as_slice()).to_vec(), "The signing message digest provided in Abstraction Authenticator is not expected");
-=======
             Self::Abstract { authenticator } => {
                 let original_signing_message = signing_message(message)?;
                 ensure!(
@@ -861,7 +787,6 @@ impl AccountAuthenticator {
                         )?,
                     "The signing message digest provided in Abstract Authenticator is not expected"
                 );
->>>>>>> aptos-node-v1.37.4
                 Ok(())
             },
         }
@@ -875,11 +800,7 @@ impl AccountAuthenticator {
             Self::SingleKey { authenticator } => authenticator.public_key_bytes(),
             Self::MultiKey { authenticator } => authenticator.public_key_bytes(),
             Self::NoAccountAuthenticator => vec![],
-<<<<<<< HEAD
-            Self::Abstraction { .. } => vec![],
-=======
             Self::Abstract { .. } => vec![],
->>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -891,13 +812,9 @@ impl AccountAuthenticator {
             Self::SingleKey { authenticator } => authenticator.signature_bytes(),
             Self::MultiKey { authenticator } => authenticator.signature_bytes(),
             Self::NoAccountAuthenticator => vec![],
-<<<<<<< HEAD
-            Self::Abstraction { .. } => vec![],
-=======
             Self::Abstract { authenticator } => {
                 authenticator.auth_data().abstract_signature().clone()
             },
->>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -905,18 +822,9 @@ impl AccountAuthenticator {
     pub fn authentication_proof(&self) -> AuthenticationProof {
         match self {
             Self::NoAccountAuthenticator => AuthenticationProof::None,
-<<<<<<< HEAD
-            Self::Abstraction {
-                function_info,
-                auth_data,
-            } => AuthenticationProof::Abstraction {
-                function_info: function_info.clone(),
-                auth_data: auth_data.clone(),
-=======
             Self::Abstract { authenticator } => AuthenticationProof::Abstract {
                 function_info: authenticator.function_info().clone(),
                 auth_data: authenticator.auth_data().clone(),
->>>>>>> aptos-node-v1.37.4
             },
             Self::Ed25519 { .. }
             | Self::MultiEd25519 { .. }
@@ -935,11 +843,7 @@ impl AccountAuthenticator {
             Self::SingleKey { .. } => 1,
             Self::MultiKey { authenticator } => authenticator.signatures.len(),
             Self::NoAccountAuthenticator => 0,
-<<<<<<< HEAD
-            Self::Abstraction { .. } => 0,
-=======
             Self::Abstract { .. } => 0,
->>>>>>> aptos-node-v1.37.4
         }
     }
 }

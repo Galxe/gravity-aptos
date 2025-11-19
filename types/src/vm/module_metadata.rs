@@ -6,18 +6,12 @@ use crate::{
     transaction::{AbortInfo, EntryFunction},
     vm::code::CompiledCodeMetadata,
 };
-use aptos_vm_types::module_and_script_storage::module_storage::AptosModuleStorage;
 use lru::LruCache;
 use move_binary_format::{
     access::ModuleAccess,
     file_format::{
-<<<<<<< HEAD:aptos-move/framework/src/module_metadata.rs
-        CompiledScript, FunctionDefinition, FunctionHandle, IdentifierIndex, SignatureToken,
-        StructDefinition, StructFieldInformation, StructHandle, TableIndex,
-=======
         FunctionDefinition, FunctionHandle, IdentifierIndex, SignatureToken, StructDefinition,
         StructFieldInformation, StructHandle, TableIndex,
->>>>>>> aptos-node-v1.37.4:types/src/vm/module_metadata.rs
     },
     CompiledModule,
 };
@@ -28,14 +22,10 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
     metadata::Metadata,
 };
-<<<<<<< HEAD:aptos-move/framework/src/module_metadata.rs
-use move_model::metadata::{CompilationMetadata, COMPILATION_METADATA_KEY};
-=======
 use move_model::{
     metadata::{CompilationMetadata, COMPILATION_METADATA_KEY},
     model::StructEnv,
 };
->>>>>>> aptos-node-v1.37.4:types/src/vm/module_metadata.rs
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::BTreeMap, env, num::NonZeroUsize, str::FromStr, sync::Arc};
 use thiserror::Error;
@@ -239,28 +229,6 @@ pub fn get_metadata(md: &[Metadata]) -> Option<Arc<RuntimeModuleMetadataV1>> {
     }
 }
 
-<<<<<<< HEAD:aptos-move/framework/src/module_metadata.rs
-/// Extract metadata from the VM, upgrading V0 to V1 representation as needed
-pub fn get_vm_metadata(
-    module_storage: &impl AptosModuleStorage,
-    module_id: &ModuleId,
-) -> Option<Arc<RuntimeModuleMetadataV1>> {
-    let metadata = module_storage
-        .fetch_module_metadata(module_id.address(), module_id.name())
-        .ok()??;
-    get_metadata(&metadata)
-}
-
-/// Extract metadata from the VM, legacy V0 format upgraded to V1
-pub fn get_vm_metadata_v0(
-    module_storage: &impl AptosModuleStorage,
-    module_id: &ModuleId,
-) -> Option<Arc<RuntimeModuleMetadataV1>> {
-    let metadata = module_storage
-        .fetch_module_metadata(module_id.address(), module_id.name())
-        .ok()??;
-    get_metadata_v0(&metadata)
-=======
 /// For the specified entry function, tries to find randomness attribute in its metadata. If it
 /// does not exist, [None] is returned.
 pub fn get_randomness_annotation_for_entry_function(
@@ -279,7 +247,6 @@ pub fn get_randomness_annotation_for_entry_function(
             })
             .unwrap_or(None)
     })
->>>>>>> aptos-node-v1.37.4:types/src/vm/module_metadata.rs
 }
 
 /// Check if the metadata has unknown key/data types

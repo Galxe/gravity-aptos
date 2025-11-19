@@ -82,13 +82,6 @@ impl PersistedWriteOp {
     }
 }
 
-<<<<<<< HEAD
-#[derive(Clone, Eq, PartialEq)]
-pub enum WriteOp {
-    Creation(StateValue),
-    Modification(StateValue),
-    Deletion(StateValueMetadata),
-=======
 /// Shared in memory representation between the (value) WriteOp and the (hotness) HotStateOp
 #[derive(Clone, Debug, Eq, PartialEq, AsRefStr)]
 pub enum BaseStateOp {
@@ -96,7 +89,6 @@ pub enum BaseStateOp {
     Modification(StateValue),
     Deletion(StateValueMetadata),
     MakeHot,
->>>>>>> aptos-node-v1.37.4
 }
 
 impl BaseStateOp {
@@ -144,19 +136,6 @@ impl WriteOp {
 
         let metadata = self.metadata().clone().into_persistable();
         match metadata {
-<<<<<<< HEAD
-            None => match self {
-                WriteOp::Creation(v) => Creation(v.bytes().clone()),
-                WriteOp::Modification(v) => Modification(v.bytes().clone()),
-                WriteOp::Deletion { .. } => Deletion,
-            },
-            Some(metadata) => match self {
-                WriteOp::Creation(v) => CreationWithMetadata {
-                    data: v.bytes().clone(),
-                    metadata,
-                },
-                WriteOp::Modification(v) => ModificationWithMetadata {
-=======
             None => match &self.0 {
                 BaseStateOp::Creation(v) => Creation(v.bytes().clone()),
                 BaseStateOp::Modification(v) => Modification(v.bytes().clone()),
@@ -169,7 +148,6 @@ impl WriteOp {
                     metadata,
                 },
                 BaseStateOp::Modification(v) => ModificationWithMetadata {
->>>>>>> aptos-node-v1.37.4
                     data: v.bytes().clone(),
                     metadata,
                 },
@@ -196,29 +174,17 @@ impl WriteOp {
             (Creation(c) , Modification(m)) => {
                 Self::ensure_metadata_compatible(c.metadata(), m.metadata())?;
 
-<<<<<<< HEAD
-                *op = Creation(m)
-=======
                 *op = Self(Creation(m));
->>>>>>> aptos-node-v1.37.4
             },
             (Modification(c) , Modification(m)) => {
                 Self::ensure_metadata_compatible(c.metadata(), m.metadata())?;
 
-<<<<<<< HEAD
-                *op = Modification(m);
-=======
                 *op = Self(Modification(m));
->>>>>>> aptos-node-v1.37.4
             },
             (Modification(m), Deletion(d_meta)) => {
                 Self::ensure_metadata_compatible(m.metadata(), &d_meta)?;
 
-<<<<<<< HEAD
-                *op = Deletion(d_meta)
-=======
                 *op = Self(Deletion(d_meta))
->>>>>>> aptos-node-v1.37.4
             },
             (Deletion(d_meta), Creation(c)) => {
                 // n.b. With write sets from multiple sessions being squashed together, it's possible
@@ -227,11 +193,7 @@ impl WriteOp {
                 //   shouldn't change due to the squash.
                 // And because the deposit or refund happens after all squashing is finished, it's
                 // not a concern of fairness.
-<<<<<<< HEAD
-                *op = Modification(StateValue::new_with_metadata(c.into_bytes(), d_meta.clone()))
-=======
                 *op = Self(Modification(StateValue::new_with_metadata(c.into_bytes(), d_meta.clone())))
->>>>>>> aptos-node-v1.37.4
             },
             (Creation(c), Deletion(d_meta)) => {
                 Self::ensure_metadata_compatible(c.metadata(), &d_meta)?;
@@ -255,26 +217,12 @@ impl WriteOp {
         Ok(())
     }
 
-<<<<<<< HEAD
-    pub fn state_value_ref(&self) -> Option<&StateValue> {
-        use WriteOp::*;
-
-        match self {
-            Creation(v) | Modification(v) => Some(v),
-            Deletion(..) => None,
-        }
-    }
-
-    pub fn bytes(&self) -> Option<&Bytes> {
-        self.state_value_ref().map(StateValue::bytes)
-=======
     pub fn as_state_value_opt(&self) -> Option<&StateValue> {
         self.0.as_state_value_opt().expect("malformed write op")
     }
 
     pub fn bytes(&self) -> Option<&Bytes> {
         self.as_state_value_opt().map(StateValue::bytes)
->>>>>>> aptos-node-v1.37.4
     }
 
     /// Size not counting metadata.
@@ -285,79 +233,34 @@ impl WriteOp {
     pub fn metadata(&self) -> &StateValueMetadata {
         use BaseStateOp::*;
 
-<<<<<<< HEAD
-        match self {
-            Creation(v) | Modification(v) => v.metadata(),
-            Deletion(meta) => meta,
-=======
         match &self.0 {
             Creation(v) | Modification(v) => v.metadata(),
             Deletion(meta) => meta,
             MakeHot => unreachable!("malformed write op"),
->>>>>>> aptos-node-v1.37.4
         }
     }
 
     pub fn metadata_mut(&mut self) -> &mut StateValueMetadata {
-<<<<<<< HEAD
-        use WriteOp::*;
-
-        match self {
-            Creation(v) | Modification(v) => v.metadata_mut(),
-            Deletion(meta) => meta,
-=======
         use BaseStateOp::*;
 
         match &mut self.0 {
             Creation(v) | Modification(v) => v.metadata_mut(),
             Deletion(meta) => meta,
             MakeHot => unreachable!("malformed write op"),
->>>>>>> aptos-node-v1.37.4
         }
     }
 
     pub fn into_metadata(self) -> StateValueMetadata {
-<<<<<<< HEAD
-        use WriteOp::*;
-
-        match self {
-            Creation(v) | Modification(v) => v.into_metadata(),
-            Deletion(meta) => meta,
-=======
         use BaseStateOp::*;
 
         match self.0 {
             Creation(v) | Modification(v) => v.into_metadata(),
             Deletion(meta) => meta,
             MakeHot => unreachable!("malformed write op"),
->>>>>>> aptos-node-v1.37.4
         }
     }
 
     pub fn creation(data: Bytes, metadata: StateValueMetadata) -> Self {
-<<<<<<< HEAD
-        Self::Creation(StateValue::new_with_metadata(data, metadata))
-    }
-
-    pub fn modification(data: Bytes, metadata: StateValueMetadata) -> Self {
-        Self::Modification(StateValue::new_with_metadata(data, metadata))
-    }
-
-    pub fn deletion(metadata: StateValueMetadata) -> Self {
-        Self::Deletion(metadata)
-    }
-
-    pub fn legacy_creation(data: Bytes) -> Self {
-        Self::Creation(StateValue::new_legacy(data))
-    }
-
-    pub fn legacy_modification(data: Bytes) -> Self {
-        Self::Modification(StateValue::new_legacy(data))
-    }
-
-    pub fn legacy_deletion() -> Self {
-        Self::Deletion(StateValueMetadata::none())
-=======
         Self(BaseStateOp::Creation(StateValue::new_with_metadata(
             data, metadata,
         )))
@@ -423,7 +326,6 @@ impl WriteOp {
             Deletion(_) => true,
             MakeHot => unreachable!("malformed write op"),
         }
->>>>>>> aptos-node-v1.37.4
     }
 }
 
@@ -531,31 +433,19 @@ impl TransactionWrite for WriteOp {
     }
 
     fn as_state_value(&self) -> Option<StateValue> {
-<<<<<<< HEAD
-        self.state_value_ref().cloned()
-=======
         self.as_state_value_opt().cloned()
->>>>>>> aptos-node-v1.37.4
     }
 
     // Note that even if WriteOp is DeletionWithMetadata, the method returns None, as a later
     // read would not read the metadata of the deletion op.
     fn as_state_value_metadata(&self) -> Option<StateValueMetadata> {
-<<<<<<< HEAD
-        self.state_value_ref().map(StateValue::metadata).cloned()
-=======
         self.as_state_value_opt().map(StateValue::metadata).cloned()
->>>>>>> aptos-node-v1.37.4
     }
 
     fn from_state_value(maybe_state_value: Option<StateValue>) -> Self {
         match maybe_state_value {
             None => Self::legacy_deletion(),
-<<<<<<< HEAD
-            Some(state_value) => Self::Modification(state_value),
-=======
             Some(state_value) => Self(BaseStateOp::Modification(state_value)),
->>>>>>> aptos-node-v1.37.4
         }
     }
 
@@ -572,11 +462,7 @@ impl TransactionWrite for WriteOp {
     fn set_bytes(&mut self, bytes: Bytes) {
         use BaseStateOp::*;
 
-<<<<<<< HEAD
-        match self {
-=======
         match &mut self.0 {
->>>>>>> aptos-node-v1.37.4
             Creation(v) | Modification(v) => v.set_bytes(bytes),
             Deletion { .. } => (),
             MakeHot => unreachable!("malformed write op"),
@@ -587,15 +473,9 @@ impl TransactionWrite for WriteOp {
 #[allow(clippy::format_collect)]
 impl Debug for WriteOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-<<<<<<< HEAD
-        use WriteOp::*;
-
-        match self {
-=======
         use BaseStateOp::*;
 
         match &self.0 {
->>>>>>> aptos-node-v1.37.4
             Creation(v) => write!(
                 f,
                 "Creation({}, metadata:{:?})",
@@ -622,14 +502,9 @@ impl Debug for WriteOp {
     }
 }
 
-<<<<<<< HEAD
-#[derive(BCSCryptoHash, Clone, CryptoHasher, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum WriteSet {
-=======
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename = "WriteSet")]
 pub enum ValueWriteSet {
->>>>>>> aptos-node-v1.37.4
     V0(WriteSetV0),
 }
 
@@ -722,37 +597,6 @@ impl WriteSet {
     pub fn into_mut(self) -> WriteSetMut {
         self.into_v0().0
     }
-<<<<<<< HEAD
-
-    pub fn new(write_ops: impl IntoIterator<Item = (StateKey, WriteOp)>) -> Result<Self> {
-        WriteSetMut::new(write_ops).freeze()
-    }
-
-    pub fn new_for_test(kvs: impl IntoIterator<Item = (StateKey, Option<StateValue>)>) -> Self {
-        Self::new(kvs.into_iter().map(|(k, v_opt)| {
-            (
-                k,
-                v_opt.map_or_else(WriteOp::legacy_deletion, |v| {
-                    WriteOp::legacy_modification(v.bytes().clone())
-                }),
-            )
-        }))
-        .expect("Must succeed")
-    }
-
-    pub fn state_update_refs(&self) -> impl Iterator<Item = (&StateKey, Option<&StateValue>)> + '_ {
-        self.iter().map(|(key, op)| (key, op.state_value_ref()))
-    }
-
-    pub fn state_updates_cloned(
-        &self,
-    ) -> impl Iterator<Item = (StateKey, Option<StateValue>)> + '_ {
-        self.state_update_refs()
-            .map(|(k, v)| (k.clone(), v.cloned()))
-    }
-}
-=======
->>>>>>> aptos-node-v1.37.4
 
     pub fn new(write_ops: impl IntoIterator<Item = (StateKey, WriteOp)>) -> Result<Self> {
         WriteSetMut::new(write_ops).freeze()
