@@ -8,7 +8,14 @@ use crate::{
     zip_metadata, zip_metadata_str,
 };
 use anyhow::bail;
-use aptos_types::{account_address::AccountAddress, transaction::EntryABI};
+use aptos_types::{
+    account_address::AccountAddress,
+    transaction::EntryABI,
+    vm::module_metadata::{
+        RuntimeModuleMetadataV1, APTOS_METADATA_KEY, APTOS_METADATA_KEY_V1,
+        METADATA_V1_MIN_FILE_FORMAT_VERSION,
+    },
+};
 use clap::Parser;
 use codespan_reporting::{
     diagnostic::Severity,

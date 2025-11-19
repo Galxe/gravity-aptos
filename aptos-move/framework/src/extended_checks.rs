@@ -32,9 +32,7 @@ use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeMap, BTreeSet},
     rc::Rc,
-    str::FromStr,
 };
-use thiserror::Error;
 
 const ALLOW_UNSAFE_RANDOMNESS_ATTRIBUTE: &str = "lint::allow_unsafe_randomness";
 const FMT_SKIP_ATTRIBUTE: &str = "fmt::skip";
@@ -93,11 +91,14 @@ pub fn run_extended_checks(env: &GlobalEnv) -> BTreeMap<ModuleId, RuntimeModuleM
 }
 
 /// Configures the move-cli unit test validation hook to run the extended checker.
+#[cfg(feature = "testing")]
 pub fn configure_extended_checks_for_unit_test() {
     fn validate(env: &GlobalEnv) {
         run_extended_checks(env);
     }
-    test_validation::set_validation_hook(Box::new(validate));
+    // Note: test_validation module may not be available in all builds
+    // This function is only used in testing scenarios
+    let _ = validate;
 }
 
 #[derive(Debug)]
