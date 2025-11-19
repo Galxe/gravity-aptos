@@ -527,7 +527,7 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
     {
         self.values
             .get(key)
-            .map(|v| v.read(txn_idx, None))
+            .map(|v| v.value().read(txn_idx, None))
             .unwrap_or(Err(MVDataError::Uninitialized))
     }
 
