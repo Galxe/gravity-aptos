@@ -554,12 +554,14 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
         txn_idx: TxnIndex,
     ) -> Result<(Arc<V>, Arc<MoveTypeLayout>), PanicError>
     where
-        Q: Equivalent<K> + Hash,
+        Q: Equivalent<K> + Hash + Debug,
     {
         use MVDataOutput::*;
-        match self.fetch_data_no_record(key, txn_idx)? {
+        match self.fetch_data_no_record(key, txn_idx).map_err(|e| {
+            code_invariant_error(format!("Failed to fetch data for exchange: {:?}", e))
+        })? {
             Versioned(_, ValueWithLayout::Exchanged(value, Some(layout))) => {
-                Ok((Arc::from(value.as_ref().clone()), Arc::from(layout.as_ref().clone())))
+                Ok((value.clone(), layout.clone()))
             },
             _ => Err(code_invariant_error(format!(
                 "Read value needing exchange {:?} does not exist or not in Exchanged format",
