@@ -20,5 +20,5 @@ fuzz_target!(|fuzz_data: FuzzData| {
         return;
     }
     // TODO: How do we fuzz function resolution?
-    let _ = ValueSerDeContext::new().deserialize(&fuzz_data.data, &fuzz_data.layout);
+    let _ = ValueSerDeContext::new(None).deserialize(&fuzz_data.data, &fuzz_data.layout);
 });

@@ -542,7 +542,7 @@ fn display_return_values(return_values: SerializedReturnValues) -> Option<String
         let values = mutable_reference_outputs
             .iter()
             .map(|(idx, bytes, layout)| {
-                let value = ValueSerDeContext::new().deserialize(bytes, layout).unwrap();
+                let value = ValueSerDeContext::new(None).deserialize(bytes, layout).unwrap();
                 (idx, value)
             })
             .collect::<Vec<_>>();
