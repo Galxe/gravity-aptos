@@ -124,11 +124,12 @@ impl<'r, 'l> SessionExt<'r, 'l> {
                                   layout: MoveTypeLayout,
                                   has_aggregator_lifting: bool|
          -> PartialVMResult<BytesWithResourceLayout> {
+            let max_value_nest_depth = function_extension.max_value_nest_depth();
             let serialization_result = if has_aggregator_lifting {
                 // We allow serialization of native values here because we want to
                 // temporarily store native values (via encoding to ensure deterministic
                 // gas charging) in block storage.
-                ValueSerDeContext::new()
+                ValueSerDeContext::new(max_value_nest_depth)
                     .with_delayed_fields_serde()
                     .with_func_args_deserialization(&function_extension)
                     .serialize(&value, &layout)?
@@ -136,7 +137,7 @@ impl<'r, 'l> SessionExt<'r, 'l> {
             } else {
                 // Otherwise, there should be no native values so ensure
                 // serialization fails here if there are any.
-                ValueSerDeContext::new()
+                ValueSerDeContext::new(max_value_nest_depth)
                     .with_func_args_deserialization(&function_extension)
                     .serialize(&value, &layout)?
                     .map(|bytes| (bytes.into(), None))
