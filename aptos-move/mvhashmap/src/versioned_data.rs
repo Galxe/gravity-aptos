@@ -557,11 +557,12 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
         Q: Equivalent<K> + Hash + Debug,
     {
         use MVDataOutput::*;
-        match self.fetch_data_no_record(key, txn_idx).map_err(|e| {
+        let data_output = self.fetch_data_no_record(key, txn_idx).map_err(|e| {
             code_invariant_error(format!("Failed to fetch data for exchange: {:?}", e))
-        })? {
+        })?;
+        match data_output {
             Versioned(_, ValueWithLayout::Exchanged(value, Some(layout))) => {
-                Ok((Arc::from(value.as_ref().clone()), Arc::from(layout.as_ref().clone())))
+                Ok((Arc::from((*value).clone()), Arc::from((*layout).clone())))
             },
             _ => Err(code_invariant_error(format!(
                 "Read value needing exchange {:?} does not exist or not in Exchanged format",
