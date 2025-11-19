@@ -36,6 +36,7 @@ use aptos_types::{
     executable::ModulePath,
     state_store::{
         errors::StateViewError,
+        state_key::inner::StateKeyInner,
         state_storage_usage::StateStorageUsage,
         state_value::{StateValue, StateValueMetadata},
         StateViewId, TStateView,
