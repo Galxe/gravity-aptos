@@ -24,9 +24,9 @@ use std::{
     collections::btree_map::{self, BTreeMap},
     fmt::Debug,
     hash::Hash,
-    sync::{atomic::{AtomicBool, AtomicU64, Ordering}, Arc},
+    sync::{atomic::{AtomicBool, AtomicU64, Ordering}, Arc as StdArc},
 };
-use triomphe::Arc as TriompheArc;
+use triomphe::Arc;
 
 pub(crate) const FLAG_DONE: bool = false;
 pub(crate) const FLAG_ESTIMATE: bool = true;
@@ -552,7 +552,7 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
         &self,
         key: &Q,
         txn_idx: TxnIndex,
-    ) -> Result<(Arc<V>, Arc<MoveTypeLayout>), PanicError>
+    ) -> Result<(StdArc<V>, StdArc<MoveTypeLayout>), PanicError>
     where
         Q: Equivalent<K> + Hash + Debug,
     {
@@ -566,9 +566,7 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
         match data_output {
             Versioned(_, ValueWithLayout::Exchanged(value, Some(layout))) => {
                 // value and layout are TriompheArc, convert to std::sync::Arc
-                let v_clone: V = (*value).clone();
-                let l_clone: MoveTypeLayout = (*layout).clone();
-                Ok((Arc::new(v_clone), Arc::new(l_clone)))
+                Ok((StdArc::from((*value).clone()), StdArc::from((*layout).clone())))
             },
             _ => Err(code_invariant_error(format!(
                 "Read value needing exchange {:?} does not exist or not in Exchanged format",
