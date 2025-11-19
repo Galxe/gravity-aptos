@@ -91,14 +91,13 @@ fn native_write_to_event_store(
     )?;
     let ty_tag = context.type_to_type_tag(&ty)?;
     let (layout, contains_delayed_fields) = context
-        .type_to_type_layout_with_delayed_fields(&ty)?
-        .unpack();
+        .type_to_type_layout_with_delayed_fields(&ty)?;
 
     let function_value_extension = context.function_value_extension();
     let max_value_nest_depth = context.max_value_nest_depth();
     let blob = ValueSerDeContext::new(max_value_nest_depth)
         .with_delayed_fields_serde()
-        .with_func_args_deserialization(&function_value_extension)
+        .with_func_args_deserialization(function_value_extension)
         .serialize(&msg, &layout)?
         .ok_or_else(|| {
             SafeNativeError::InvariantViolation(PartialVMError::new(
@@ -165,7 +164,7 @@ fn native_emitted_events_by_handle(
             let function_value_extension = context.function_value_extension();
             let max_value_nest_depth = context.max_value_nest_depth();
             ValueSerDeContext::new(max_value_nest_depth)
-                .with_func_args_deserialization(&function_value_extension)
+                .with_func_args_deserialization(function_value_extension)
                 .deserialize(blob, &ty_layout)
                 .ok_or_else(|| {
                     SafeNativeError::InvariantViolation(PartialVMError::new(
@@ -199,7 +198,7 @@ fn native_emitted_events(
             let function_value_extension = context.function_value_extension();
             let max_value_nest_depth = context.max_value_nest_depth();
             ValueSerDeContext::new(max_value_nest_depth)
-                .with_func_args_deserialization(&function_value_extension)
+                .with_func_args_deserialization(function_value_extension)
                 .with_delayed_fields_serde()
                 .deserialize(blob, &ty_layout)
                 .ok_or_else(|| {
@@ -263,14 +262,13 @@ fn native_write_module_event_to_store(
     }
 
     let (layout, contains_delayed_fields) = context
-        .type_to_type_layout_with_delayed_fields(&ty)?
-        .unpack();
+        .type_to_type_layout_with_delayed_fields(&ty)?;
 
     let function_value_extension = context.function_value_extension();
     let max_value_nest_depth = context.max_value_nest_depth();
     let blob = ValueSerDeContext::new(max_value_nest_depth)
         .with_delayed_fields_serde()
-        .with_func_args_deserialization(&function_value_extension)
+        .with_func_args_deserialization(function_value_extension)
         .serialize(&msg, &layout)?
         .ok_or_else(|| {
             SafeNativeError::InvariantViolation(PartialVMError::new_invariant_violation(

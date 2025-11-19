@@ -9,6 +9,7 @@ use aptos_gas_schedule::{AbstractValueSizeGasParameters, MiscGasParameters, Nati
 use aptos_types::on_chain_config::{Features, TimedFeatureFlag, TimedFeatures};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
+use move_core_types::value::MoveTypeLayout;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::values::Value;
 use std::ops::{Deref, DerefMut};
@@ -110,6 +111,19 @@ impl<'a, 'b, 'c, 'd> SafeNativeContext<'a, 'b, 'c, 'd> {
     /// Returns the current gas feature version.
     pub fn gas_feature_version(&self) -> u64 {
         self.gas_feature_version
+    }
+
+    pub fn max_value_nest_depth(&self) -> Option<u64> {
+        self.inner
+            .function_value_extension()
+            .max_value_nest_depth()
+    }
+
+    pub fn type_to_type_layout_with_delayed_fields(
+        &self,
+        ty: &move_vm_types::loaded_data::runtime_types::Type,
+    ) -> PartialVMResult<(MoveTypeLayout, bool)> {
+        self.inner.type_to_type_layout_with_identifier_mappings(ty)
     }
 
     /// Returns a reference to the struct representing on-chain features.
