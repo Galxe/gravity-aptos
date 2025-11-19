@@ -46,10 +46,12 @@ use triomphe::Arc as TriompheArc;
 
 /// The enum variants should not be re-ordered, as it defines a relation
 /// Existence < Metadata < Value.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum ReadKind {
     Exists,
     Metadata,
+    ResourceSize,
+    MetadataAndResourceSize,
     Value,
 }
 
@@ -70,7 +72,13 @@ pub(crate) enum DataRead<V> {
         #[derivative(PartialEq = "ignore", Debug = "ignore")] TriompheArc<V>,
         #[derivative(PartialEq = "ignore", Debug = "ignore")] Option<TriompheArc<MoveTypeLayout>>,
     ),
+    // Metadata and ResourceSize are insufficient to determine each other, but both
+    // can be determined from Versioned. When both are available, the information
+    // is stored in the MetadataAndResourceSize variant.
+    MetadataAndResourceSize(Option<StateValueMetadata>, Option<u64>),
     Metadata(Option<StateValueMetadata>),
+    ResourceSize(Option<u64>),
+    // Exists is a lower tier, can be determined both from Metadata and ResourceSize.
     Exists(bool),
     /// Read resolved an aggregatorV1 delta to a value.
     /// TODO[agg_v1](cleanup): deprecate.
@@ -99,7 +107,9 @@ impl<V: TransactionWrite> DataRead<V> {
         use DataRead::*;
         match self {
             Versioned(_, _, _) | Resolved(_) => ReadKind::Value,
+            MetadataAndResourceSize(_, _) => ReadKind::MetadataAndResourceSize,
             Metadata(_) => ReadKind::Metadata,
+            ResourceSize(_) => ReadKind::ResourceSize,
             Exists(_) => ReadKind::Exists,
         }
     }
@@ -158,12 +168,20 @@ impl<V: TransactionWrite> DataRead<V> {
 
     pub(crate) fn from_value_with_layout(version: Version, value: ValueWithLayout<V>) -> Self {
         match value {
-            // If value was never exchanged, then metadata can be the highest one without full value.
-            ValueWithLayout::RawFromStorage(v) => DataRead::Metadata(v.as_state_value_metadata()),
+            // If value was never exchanged, then value shouldn't be used, and so we construct
+            // a MetadataAndResourceSize variant that implies everything non-value. This also
+            // ensures that RawFromStorage can't be consistent with any other value read.
+            ValueWithLayout::RawFromStorage(v) => {
+                DataRead::MetadataAndResourceSize(v.as_state_value_metadata(), Self::value_size(&v))
+            },
             ValueWithLayout::Exchanged(v, layout) => {
                 DataRead::Versioned(version, v.clone(), layout)
             },
         }
+    }
+
+    fn value_size(v: &V) -> Option<u64> {
+        v.bytes().map(|b| b.len() as u64)
     }
 }
 
