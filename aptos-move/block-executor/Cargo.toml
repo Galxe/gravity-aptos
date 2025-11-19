@@ -61,7 +61,7 @@ proptest = { workspace = true }
 proptest-derive = { workspace = true }
 rand = { workspace = true }
 test-case = { workspace = true }
-triomphe = { workspace = true }
+triomphe = "0.1.9"
 
 [features]
 testing = []
