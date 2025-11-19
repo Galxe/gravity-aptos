@@ -796,7 +796,7 @@ pub fn create_vm_change_set_with_module_write_set_when_delayed_field_optimizatio
     let mut resource_write_set = BTreeMap::new();
     let mut module_write_ops = BTreeMap::new();
 
-    for (state_key, write_op) in write_set {
+    for (state_key, write_op) in write_set.expect_into_write_op_iter() {
         if let StateKeyInner::AccessPath(ap) = state_key.inner() {
             if let Some(module_id) = ap.try_get_module_id() {
                 module_write_ops.insert(state_key, ModuleWrite::new(module_id, write_op));
