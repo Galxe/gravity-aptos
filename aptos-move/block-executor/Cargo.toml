@@ -47,6 +47,7 @@ proptest-derive = { workspace = true, optional = true }
 rand = { workspace = true }
 rayon = { workspace = true }
 scopeguard = { workspace = true }
+triomphe = "0.1.9"
 
 [dev-dependencies]
 aptos-aggregator = { workspace = true, features = ["testing"] }
@@ -61,7 +62,6 @@ proptest = { workspace = true }
 proptest-derive = { workspace = true }
 rand = { workspace = true }
 test-case = { workspace = true }
-triomphe = "0.1.9"
 
 [features]
 testing = []

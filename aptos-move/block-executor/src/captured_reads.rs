@@ -186,16 +186,16 @@ impl<V: TransactionWrite> DataRead<V> {
 
     fn resolved_convert_to(v: u128, kind: &ReadKind) -> Option<DataRead<V>> {
         match kind {
-            ReadKind::Value => Some(DataRead::Resolved(v)),
-            ReadKind::MetadataAndResourceSize => Some(DataRead::MetadataAndResourceSize(
+            ReadKind::Value => Some(DataRead::<V>::Resolved(v)),
+            ReadKind::MetadataAndResourceSize => Some(DataRead::<V>::MetadataAndResourceSize(
                 Some(StateValueMetadata::none()),
                 Some(serialize(&v).len() as u64),
             )),
-            ReadKind::Metadata => Some(DataRead::Metadata(Some(StateValueMetadata::none()))),
+            ReadKind::Metadata => Some(DataRead::<V>::Metadata(Some(StateValueMetadata::none()))),
             ReadKind::ResourceSize => {
-                Some(DataRead::ResourceSize(Some(serialize(&v).len() as u64)))
+                Some(DataRead::<V>::ResourceSize(Some(serialize(&v).len() as u64)))
             },
-            ReadKind::Exists => Some(DataRead::Exists(true)),
+            ReadKind::Exists => Some(DataRead::<V>::Exists(true)),
         }
     }
 
@@ -206,13 +206,13 @@ impl<V: TransactionWrite> DataRead<V> {
     ) -> Option<DataRead<V>> {
         match kind {
             ReadKind::Value => None,
-            ReadKind::MetadataAndResourceSize => Some(DataRead::MetadataAndResourceSize(
+            ReadKind::MetadataAndResourceSize => Some(DataRead::<V>::MetadataAndResourceSize(
                 maybe_metadata.clone(),
                 maybe_size,
             )),
-            ReadKind::Metadata => Some(DataRead::Metadata(maybe_metadata.clone())),
-            ReadKind::ResourceSize => Some(DataRead::ResourceSize(maybe_size)),
-            ReadKind::Exists => Some(DataRead::Exists(maybe_metadata.is_some())),
+            ReadKind::Metadata => Some(DataRead::<V>::Metadata(maybe_metadata.clone())),
+            ReadKind::ResourceSize => Some(DataRead::<V>::ResourceSize(maybe_size)),
+            ReadKind::Exists => Some(DataRead::<V>::Exists(maybe_metadata.is_some())),
         }
     }
 
@@ -222,16 +222,16 @@ impl<V: TransactionWrite> DataRead<V> {
     ) -> Option<DataRead<V>> {
         match kind {
             ReadKind::Value | ReadKind::MetadataAndResourceSize | ReadKind::ResourceSize => None,
-            ReadKind::Metadata => Some(DataRead::Metadata(maybe_metadata.clone())),
-            ReadKind::Exists => Some(DataRead::Exists(maybe_metadata.is_some())),
+            ReadKind::Metadata => Some(DataRead::<V>::Metadata(maybe_metadata.clone())),
+            ReadKind::Exists => Some(DataRead::<V>::Exists(maybe_metadata.is_some())),
         }
     }
 
     fn resource_size_convert_to(maybe_size: Option<u64>, kind: &ReadKind) -> Option<DataRead<V>> {
         match kind {
             ReadKind::Value | ReadKind::MetadataAndResourceSize | ReadKind::Metadata => None,
-            ReadKind::ResourceSize => Some(DataRead::ResourceSize(maybe_size)),
-            ReadKind::Exists => Some(DataRead::Exists(maybe_size.is_some())),
+            ReadKind::ResourceSize => Some(DataRead::<V>::ResourceSize(maybe_size)),
+            ReadKind::Exists => Some(DataRead::<V>::Exists(maybe_size.is_some())),
         }
     }
 
@@ -241,7 +241,7 @@ impl<V: TransactionWrite> DataRead<V> {
             | ReadKind::MetadataAndResourceSize
             | ReadKind::Metadata
             | ReadKind::ResourceSize => None,
-            ReadKind::Exists => Some(DataRead::Exists(exists)),
+            ReadKind::Exists => Some(DataRead::<V>::Exists(exists)),
         }
     }
 
@@ -276,7 +276,7 @@ impl<V: TransactionWrite> DataRead<V> {
             // a MetadataAndResourceSize variant that implies everything non-value. This also
             // ensures that RawFromStorage can't be consistent with any other value read.
             ValueWithLayout::RawFromStorage(v) => {
-                DataRead::MetadataAndResourceSize(v.as_state_value_metadata(), Some(serialize(&v).len() as u64))
+                DataRead::MetadataAndResourceSize(v.as_state_value_metadata(), v.bytes().map(|b| b.len() as u64))
             },
             ValueWithLayout::Exchanged(v, layout) => {
                 DataRead::Versioned(version, v.clone(), layout)
@@ -285,7 +285,7 @@ impl<V: TransactionWrite> DataRead<V> {
     }
 
     fn value_size(v: &TriompheArc<V>) -> Option<u64> {
-        Some(serialize(v).len() as u64)
+        v.bytes().map(|b| b.len() as u64)
     }
 }
 
