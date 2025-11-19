@@ -144,6 +144,109 @@ impl<V: TransactionWrite> DataRead<V> {
 
     /// If the reads contains sufficient information, extract this information and generate
     /// a new DataRead of the desired kind (e.g. Metadata kind from Value).
+    ///
+    /// Note that metadata or size do not contain sufficient information to determine
+    /// MetadataAndResourceSize variant, but it is possible to convert in the other direction.
+    pub(crate) fn convert_to(&self, kind: &ReadKind) -> Option<DataRead<V>> {
+        match self {
+            DataRead::Versioned(version, v, layout) => {
+                Self::versioned_convert_to(version, v, layout, kind)
+            },
+            DataRead::Resolved(v) => Self::resolved_convert_to(*v, kind),
+            DataRead::MetadataAndResourceSize(metadata, size) => {
+                Self::metadata_and_size_convert_to(metadata, *size, kind)
+            },
+            DataRead::Metadata(metadata) => Self::metadata_convert_to(metadata, kind),
+            DataRead::ResourceSize(size) => Self::resource_size_convert_to(*size, kind),
+            DataRead::Exists(exists) => Self::exists_convert_to(*exists, kind),
+        }
+    }
+
+    fn versioned_convert_to(
+        version: &Version,
+        v: &TriompheArc<V>,
+        layout: &Option<TriompheArc<MoveTypeLayout>>,
+        kind: &ReadKind,
+    ) -> Option<DataRead<V>> {
+        match kind {
+            ReadKind::Value => Some(DataRead::Versioned(
+                version.clone(),
+                v.clone(),
+                layout.clone(),
+            )),
+            ReadKind::MetadataAndResourceSize => Some(DataRead::MetadataAndResourceSize(
+                v.as_state_value_metadata(),
+                Self::value_size(v),
+            )),
+            ReadKind::Metadata => Some(DataRead::Metadata(v.as_state_value_metadata())),
+            ReadKind::ResourceSize => Some(DataRead::ResourceSize(Self::value_size(v))),
+            ReadKind::Exists => Some(DataRead::Exists(!v.is_deletion())),
+        }
+    }
+
+    fn resolved_convert_to(v: u128, kind: &ReadKind) -> Option<DataRead<V>> {
+        match kind {
+            ReadKind::Value => Some(DataRead::Resolved(v)),
+            ReadKind::MetadataAndResourceSize => Some(DataRead::MetadataAndResourceSize(
+                Some(StateValueMetadata::none()),
+                Some(serialize(&v).len() as u64),
+            )),
+            ReadKind::Metadata => Some(DataRead::Metadata(Some(StateValueMetadata::none()))),
+            ReadKind::ResourceSize => {
+                Some(DataRead::ResourceSize(Some(serialize(&v).len() as u64)))
+            },
+            ReadKind::Exists => Some(DataRead::Exists(true)),
+        }
+    }
+
+    fn metadata_and_size_convert_to(
+        maybe_metadata: &Option<StateValueMetadata>,
+        maybe_size: Option<u64>,
+        kind: &ReadKind,
+    ) -> Option<DataRead<V>> {
+        match kind {
+            ReadKind::Value => None,
+            ReadKind::MetadataAndResourceSize => Some(DataRead::MetadataAndResourceSize(
+                maybe_metadata.clone(),
+                maybe_size,
+            )),
+            ReadKind::Metadata => Some(DataRead::Metadata(maybe_metadata.clone())),
+            ReadKind::ResourceSize => Some(DataRead::ResourceSize(maybe_size)),
+            ReadKind::Exists => Some(DataRead::Exists(maybe_metadata.is_some())),
+        }
+    }
+
+    fn metadata_convert_to(
+        maybe_metadata: &Option<StateValueMetadata>,
+        kind: &ReadKind,
+    ) -> Option<DataRead<V>> {
+        match kind {
+            ReadKind::Value | ReadKind::MetadataAndResourceSize | ReadKind::ResourceSize => None,
+            ReadKind::Metadata => Some(DataRead::Metadata(maybe_metadata.clone())),
+            ReadKind::Exists => Some(DataRead::Exists(maybe_metadata.is_some())),
+        }
+    }
+
+    fn resource_size_convert_to(maybe_size: Option<u64>, kind: &ReadKind) -> Option<DataRead<V>> {
+        match kind {
+            ReadKind::Value | ReadKind::MetadataAndResourceSize | ReadKind::Metadata => None,
+            ReadKind::ResourceSize => Some(DataRead::ResourceSize(maybe_size)),
+            ReadKind::Exists => Some(DataRead::Exists(maybe_size.is_some())),
+        }
+    }
+
+    fn exists_convert_to(exists: bool, kind: &ReadKind) -> Option<DataRead<V>> {
+        match kind {
+            ReadKind::Value
+            | ReadKind::MetadataAndResourceSize
+            | ReadKind::Metadata
+            | ReadKind::ResourceSize => None,
+            ReadKind::Exists => Some(DataRead::Exists(exists)),
+        }
+    }
+
+    /// If the reads contains sufficient information, extract this information and generate
+    /// a new DataRead of the desired kind (e.g. Metadata kind from Value).
     pub(crate) fn downcast(&self, kind: ReadKind) -> Option<DataRead<V>> {
         let self_kind = self.get_kind();
         if self_kind == kind {

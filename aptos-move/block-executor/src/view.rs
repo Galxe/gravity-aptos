@@ -90,6 +90,7 @@ pub(crate) enum ReadResult {
 #[derive(Debug, Eq, PartialEq)]
 pub enum GroupReadResult {
     Value(Option<Bytes>, Option<TriompheArc<MoveTypeLayout>>),
+    Size(ResourceGroupSize),
     ResourceSize(Option<u64>),
     Exists(bool),
     Uninitialized,
@@ -224,6 +225,7 @@ pub(crate) struct ParallelState<'a, T: Transaction> {
     scheduler: &'a Scheduler,
     start_counter: u32,
     counter: &'a AtomicU32,
+    incarnation: Incarnation,
     pub(crate) captured_reads:
         RefCell<CapturedReads<T, ModuleId, CompiledModule, Module, AptosModuleExtension>>,
 }
@@ -545,11 +547,12 @@ impl<'a, T: Transaction> ParallelState<'a, T> {
         }
 
         loop {
-            match self
+            let group_size = self
                 .versioned_map
                 .group_data()
-                .get_group_size(group_key, txn_idx)
-            {
+                .get_group_size_no_record(group_key, txn_idx);
+
+            match group_size {
                 Ok(group_size) => {
                     assert_ok!(
                         self.captured_reads
@@ -606,15 +609,7 @@ impl<'a, T: Transaction> ResourceState<T> for ParallelState<'a, T> {
         }
 
         loop {
-            let data = if self.scheduler.is_v2() {
-                self.versioned_map.data().fetch_data_and_record_dependency(
-                    key,
-                    txn_idx,
-                    self.incarnation,
-                )
-            } else {
-                self.versioned_map.data().fetch_data_no_record(key, txn_idx)
-            };
+            let data = self.versioned_map.data().fetch_data_no_record(key, txn_idx);
 
             match data {
                 Ok(Versioned(version, value)) => {
@@ -766,20 +761,11 @@ impl<'a, T: Transaction> ResourceGroupState<T> for ParallelState<'a, T> {
         }
 
         loop {
-            let data = if self.scheduler.is_v2() {
-                self.versioned_map.group_data().fetch_tagged_data_and_record_dependency(
-                    group_key,
-                    resource_tag,
-                    txn_idx,
-                    self.incarnation,
-                )
-            } else {
-                self.versioned_map.group_data().fetch_tagged_data_no_record(
-                    group_key,
-                    resource_tag,
-                    txn_idx,
-                )
-            };
+            let data = self.versioned_map.group_data().fetch_tagged_data_no_record(
+                group_key,
+                resource_tag,
+                txn_idx,
+            );
 
             match data {
                 Ok((version, value_with_layout)) => {
@@ -932,7 +918,7 @@ impl<'a, T: Transaction> ResourceState<T> for SequentialState<'a, T> {
                     }
                 }
 
-                if let Some(ret) = ReadResult::from_value_with_layout(value, target_kind.clone()) {
+                if let Ok(ret) = ReadResult::from_value(value, &target_kind) {
                     if target_kind == ReadKind::Value {
                         self.read_set
                             .borrow_mut()
@@ -1201,7 +1187,7 @@ impl<'a, T: Transaction, S: TStateView<Key = T::Key>> LatestView<'a, T, S> {
     ) -> anyhow::Result<(StateValue, HashSet<DelayedFieldID>)> {
         let mapping = TemporaryValueToIdentifierMapping::new(self, self.txn_idx);
         let function_value_extension = self.as_function_value_extension();
-        let max_value_nest_depth = function_value_extension.max_value_nest_depth();
+        let max_value_nest_depth = None;
 
         state_value
             .map_bytes(|bytes| {
@@ -1242,7 +1228,7 @@ impl<'a, T: Transaction, S: TStateView<Key = T::Key>> LatestView<'a, T, S> {
         // This call will replace all occurrences of aggregator / snapshot
         // identifiers with values with the same type layout.
         let function_value_extension = self.as_function_value_extension();
-        let max_value_nest_depth = function_value_extension.max_value_nest_depth();
+        let max_value_nest_depth = None;
         let value = ValueSerDeContext::new(max_value_nest_depth)
             .with_func_args_deserialization(&function_value_extension)
             .with_delayed_fields_serde()
