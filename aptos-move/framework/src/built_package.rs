@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    docgen::DocgenOptions,
+    docgen::{get_docgen_output_dir, DocgenOptions},
     extended_checks,
-    natives::code::{ModuleMetadata, PackageDep, PackageMetadata, UpgradePolicy},
+    natives::code::{MoveOption, ModuleMetadata, PackageDep, PackageMetadata, UpgradePolicy},
     zip_metadata, zip_metadata_str,
 };
 use anyhow::bail;
