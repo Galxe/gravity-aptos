@@ -31,6 +31,7 @@ especially useful for systems requiring cross-chain message interpretation or of
 -  [Function `deserialize_vector`](#0x1_bcs_stream_deserialize_vector)
 -  [Function `deserialize_string`](#0x1_bcs_stream_deserialize_string)
 -  [Function `deserialize_option`](#0x1_bcs_stream_deserialize_option)
+-  [Function `has_remaining`](#0x1_bcs_stream_has_remaining)
 -  [Specification](#@Specification_1)
 
 
@@ -643,6 +644,31 @@ The <code>elem_deserializer</code> lambda expression is used to deserialize the 
     } <b>else</b> {
         <a href="../../move-stdlib/doc/option.md#0x1_option_none">option::none</a>()
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a id="0x1_bcs_stream_has_remaining"></a>
+
+## Function `has_remaining`
+
+Checks if there are remaining bytes in the stream.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs_stream.md#0x1_bcs_stream_has_remaining">has_remaining</a>(stream: &<b>mut</b> <a href="bcs_stream.md#0x1_bcs_stream_BCSStream">bcs_stream::BCSStream</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs_stream.md#0x1_bcs_stream_has_remaining">has_remaining</a>(stream: &<b>mut</b> <a href="bcs_stream.md#0x1_bcs_stream_BCSStream">BCSStream</a>): bool {
+    stream.cur &lt; <a href="../../move-stdlib/doc/vector.md#0x1_vector_length">vector::length</a>(&stream.data)
 }
 </code></pre>
 
