@@ -606,7 +606,7 @@ fn serialize_key(
     layout: &MoveTypeLayout,
     key: &Value,
 ) -> PartialVMResult<Vec<u8>> {
-    ValueSerDeContext::new()
+    ValueSerDeContext::new(function_value_extension.max_value_nest_depth())
         .with_func_args_deserialization(function_value_extension)
         .serialize(key, layout)?
         .ok_or_else(|| partial_extension_error("cannot serialize table key"))
@@ -617,9 +617,10 @@ fn serialize_value(
     layout_info: &LayoutInfo,
     val: &Value,
 ) -> PartialVMResult<(Bytes, Option<Arc<MoveTypeLayout>>)> {
+    let max_value_nest_depth = function_value_extension.max_value_nest_depth();
     let serialization_result = if layout_info.has_identifier_mappings {
         // Value contains delayed fields, so we should be able to serialize it.
-        ValueSerDeContext::new()
+        ValueSerDeContext::new(max_value_nest_depth)
             .with_delayed_fields_serde()
             .with_func_args_deserialization(function_value_extension)
             .serialize(val, layout_info.layout.as_ref())?
@@ -627,7 +628,7 @@ fn serialize_value(
     } else {
         // No delayed fields, make sure serialization fails if there are any
         // native values.
-        ValueSerDeContext::new()
+        ValueSerDeContext::new(max_value_nest_depth)
             .with_func_args_deserialization(function_value_extension)
             .serialize(val, layout_info.layout.as_ref())?
             .map(|bytes| (bytes.into(), None))
@@ -641,13 +642,14 @@ fn deserialize_value(
     layout_info: &LayoutInfo,
 ) -> PartialVMResult<Value> {
     let layout = layout_info.layout.as_ref();
+    let max_value_nest_depth = function_value_extension.max_value_nest_depth();
     let deserialization_result = if layout_info.has_identifier_mappings {
-        ValueSerDeContext::new()
+        ValueSerDeContext::new(max_value_nest_depth)
             .with_func_args_deserialization(function_value_extension)
             .with_delayed_fields_serde()
             .deserialize(bytes, layout)
     } else {
-        ValueSerDeContext::new()
+        ValueSerDeContext::new(max_value_nest_depth)
             .with_func_args_deserialization(function_value_extension)
             .deserialize(bytes, layout)
     };

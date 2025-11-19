@@ -7,6 +7,7 @@ use aptos_gas_algebra::{
 };
 use aptos_gas_schedule::{AbstractValueSizeGasParameters, MiscGasParameters, NativeGasParameters};
 use aptos_types::on_chain_config::{Features, TimedFeatureFlag, TimedFeatures};
+use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::values::Value;
@@ -88,17 +89,17 @@ impl<'a, 'b, 'c, 'd> SafeNativeContext<'a, 'b, 'c, 'd> {
     }
 
     /// Computes the abstract size of the input value.
-    pub fn abs_val_size(&self, val: &Value) -> AbstractValueSize {
-        self.misc_gas_params
+    pub fn abs_val_size(&self, val: &Value) -> PartialVMResult<AbstractValueSize> {
+        Ok(self.misc_gas_params
             .abs_val
-            .abstract_value_size(val, self.gas_feature_version)
+            .abstract_value_size(val, self.gas_feature_version))
     }
 
     /// Computes the abstract size of the input value.
-    pub fn abs_val_size_dereferenced(&self, val: &Value) -> AbstractValueSize {
-        self.misc_gas_params
+    pub fn abs_val_size_dereferenced(&self, val: &Value) -> PartialVMResult<AbstractValueSize> {
+        Ok(self.misc_gas_params
             .abs_val
-            .abstract_value_size_dereferenced(val, self.gas_feature_version)
+            .abstract_value_size_dereferenced(val, self.gas_feature_version))
     }
 
     /// Returns the gas parameters that are used to define abstract value sizes.

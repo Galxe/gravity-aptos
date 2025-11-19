@@ -23,7 +23,7 @@ bytes = { workspace = true }
 claims = { workspace = true }
 crossbeam = { workspace = true }
 dashmap = { workspace = true }
-equivalent = "1.0"
+equivalent = { workspace = true }
 fail = { workspace = true }
 move-binary-format = { workspace = true }
 move-core-types = { workspace = true }

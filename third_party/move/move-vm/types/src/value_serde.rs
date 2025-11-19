@@ -81,16 +81,18 @@ pub struct ValueSerDeContext<'a> {
     pub(crate) function_extension: Option<&'a dyn FunctionValueExtension>,
     pub(crate) delayed_fields_extension: Option<DelayedFieldsExtension<'a>>,
     pub(crate) legacy_signer: bool,
+    /// Maximum allowed depth of a VM value. Enforced by serializer.
+    pub(crate) max_value_nested_depth: Option<u64>,
 }
 
 impl<'a> ValueSerDeContext<'a> {
     /// Default (de)serializer that disallows delayed fields.
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
+    pub fn new(max_value_nested_depth: Option<u64>) -> Self {
         Self {
             function_extension: None,
             delayed_fields_extension: None,
             legacy_signer: false,
+            max_value_nested_depth,
         }
     }
 
@@ -124,6 +126,7 @@ impl<'a> ValueSerDeContext<'a> {
             function_extension: self.function_extension,
             delayed_fields_extension: None,
             legacy_signer: self.legacy_signer,
+            max_value_nested_depth: self.max_value_nested_depth,
         }
     }
 

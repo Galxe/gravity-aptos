@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    docgen::{get_docgen_output_dir, DocgenOptions},
+    docgen::DocgenOptions,
     extended_checks,
-    natives::code::{ModuleMetadata, MoveOption, PackageDep, PackageMetadata, UpgradePolicy},
-    zip_metadata, zip_metadata_str, RuntimeModuleMetadataV1, APTOS_METADATA_KEY,
-    APTOS_METADATA_KEY_V1, METADATA_V1_MIN_FILE_FORMAT_VERSION,
+    natives::code::{ModuleMetadata, PackageDep, PackageMetadata, UpgradePolicy},
+    zip_metadata, zip_metadata_str,
 };
 use anyhow::bail;
 use aptos_types::{account_address::AccountAddress, transaction::EntryABI};

@@ -1,10 +1,11 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{KnownAttribute, RandomnessAnnotation, RuntimeModuleMetadataV1};
+use aptos_types::vm::module_metadata::{
+    KnownAttribute, RandomnessAnnotation, ResourceGroupScope, RuntimeModuleMetadataV1,
+};
+use legacy_move_compiler::shared::known_attributes;
 use move_binary_format::file_format::Visibility;
-use move_cli::base::test_validation;
-use move_compiler::shared::known_attributes;
 use move_core_types::{
     ability::{Ability, AbilitySet},
     account_address::AccountAddress,
@@ -31,9 +32,7 @@ use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeMap, BTreeSet},
     rc::Rc,
-    str::FromStr,
 };
-use thiserror::Error;
 
 const ALLOW_UNSAFE_RANDOMNESS_ATTRIBUTE: &str = "lint::allow_unsafe_randomness";
 const FMT_SKIP_ATTRIBUTE: &str = "fmt::skip";

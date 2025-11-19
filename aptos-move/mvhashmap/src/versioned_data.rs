@@ -521,13 +521,10 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
     ) -> anyhow::Result<MVDataOutput<V>, MVDataError>
     where
         Q: Equivalent<K> + Hash,
-        K: Hash + Eq,
     {
-        // Use DashMap's get method with Equivalent trait
         self.values
-            .iter()
-            .find(|entry| key.equivalent(entry.key()))
-            .map(|entry| entry.value().read(txn_idx, None))
+            .get(key)
+            .map(|v| v.read(txn_idx, None))
             .unwrap_or(Err(MVDataError::Uninitialized))
     }
 

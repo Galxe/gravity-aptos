@@ -162,8 +162,10 @@ fn native_emitted_events_by_handle(
         .emitted_v1_events(&key, &ty_tag)
         .into_iter()
         .map(|blob| {
-            ValueSerDeContext::new()
-                .with_func_args_deserialization(context.function_value_extension())
+            let function_value_extension = context.function_value_extension();
+            let max_value_nest_depth = context.max_value_nest_depth();
+            ValueSerDeContext::new(max_value_nest_depth)
+                .with_func_args_deserialization(&function_value_extension)
                 .deserialize(blob, &ty_layout)
                 .ok_or_else(|| {
                     SafeNativeError::InvariantViolation(PartialVMError::new(
@@ -194,8 +196,10 @@ fn native_emitted_events(
         .emitted_v2_events(&ty_tag)
         .into_iter()
         .map(|blob| {
-            ValueSerDeContext::new()
-                .with_func_args_deserialization(context.function_value_extension())
+            let function_value_extension = context.function_value_extension();
+            let max_value_nest_depth = context.max_value_nest_depth();
+            ValueSerDeContext::new(max_value_nest_depth)
+                .with_func_args_deserialization(&function_value_extension)
                 .with_delayed_fields_serde()
                 .deserialize(blob, &ty_layout)
                 .ok_or_else(|| {
