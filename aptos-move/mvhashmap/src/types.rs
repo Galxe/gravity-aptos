@@ -2,16 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use aptos_aggregator::{delta_change_set::DeltaOp, types::DelayedFieldsSpeculativeError};
-use aptos_crypto::hash::HashValue;
 use aptos_types::{
     error::PanicOr,
-    executable::ExecutableDescriptor,
     write_set::{TransactionWrite, WriteOpKind},
 };
-use aptos_vm_types::resolver::ResourceGroupSize;
-use bytes::Bytes;
+use fail::fail_point;
 use move_core_types::value::MoveTypeLayout;
-use std::sync::{atomic::AtomicU32, Arc};
+use std::sync::atomic::AtomicU32;
+use triomphe::Arc;
 
 pub type AtomicTxnIndex = AtomicU32;
 pub type TxnIndex = u32;

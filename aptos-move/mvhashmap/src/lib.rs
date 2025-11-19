@@ -5,12 +5,9 @@
 use crate::{
     types::TxnIndex, versioned_data::VersionedData,
     versioned_delayed_fields::VersionedDelayedFields, versioned_group_data::VersionedGroupData,
-    versioned_modules::VersionedModules,
 };
 use aptos_types::{
-    executable::{ExecutableTestType, ModulePath},
-    vm::modules::AptosModuleExtension,
-    write_set::TransactionWrite,
+    executable::ModulePath, vm::modules::AptosModuleExtension, write_set::TransactionWrite,
 };
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
 use move_core_types::language_storage::ModuleId;
@@ -24,7 +21,6 @@ pub mod unsync_map;
 pub mod versioned_data;
 pub mod versioned_delayed_fields;
 pub mod versioned_group_data;
-pub mod versioned_modules;
 
 #[cfg(test)]
 mod unit_tests;
