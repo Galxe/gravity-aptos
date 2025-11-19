@@ -597,7 +597,7 @@ where
         use MVDataError::*;
         use MVDataOutput::*;
         self.data_reads.iter().all(|(k, r)| {
-            match data_map.fetch_data(k, idx_to_validate) {
+            match data_map.fetch_data_no_record(k, idx_to_validate) {
                 Ok(Versioned(version, v)) => {
                     matches!(
                         DataRead::from_value_with_layout(version, v).contains(r),
@@ -690,7 +690,7 @@ where
             }
 
             ret && group.inner_reads.iter().all(|(tag, r)| {
-                match group_map.fetch_tagged_data(key, tag, idx_to_validate) {
+                match group_map.fetch_tagged_data_no_record(key, tag, idx_to_validate) {
                     Ok((version, v)) => {
                         matches!(
                             DataRead::from_value_with_layout(version, v).contains(r),
@@ -699,7 +699,7 @@ where
                     },
                     Err(TagNotFound) => {
                         let sentinel_deletion =
-                            Arc::<T::Value>::new(TransactionWrite::from_state_value(None));
+                            TriompheArc::<T::Value>::new(TransactionWrite::from_state_value(None));
                         assert!(sentinel_deletion.is_deletion());
                         matches!(
                             DataRead::Versioned(Err(StorageVersion), sentinel_deletion, None)

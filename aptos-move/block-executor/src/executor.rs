@@ -70,6 +70,7 @@ use std::{
         Arc,
     },
 };
+use triomphe::Arc as TriompheArc;
 
 pub struct BlockExecutor<T, E, S, L, TP> {
     // Number of active concurrent tasks, corresponding to the maximum number of rayon
@@ -218,7 +219,7 @@ where
                 output
                     .aggregator_v1_write_set()
                     .into_iter()
-                    .map(|(state_key, write_op)| (state_key, Arc::new(write_op), None)),
+                    .map(|(state_key, write_op)| (state_key, TriompheArc::new(write_op), None)),
             ) {
                 if prev_modified_keys.remove(&k).is_none() {
                     needs_suffix_validation = true;
@@ -417,7 +418,7 @@ where
                         // Execution may wait for estimates.
                         versioned_cache
                             .group_data()
-                            .mark_estimate(&k, txn_idx, tags);
+                            .mark_estimate(&k, txn_idx, tags.iter().collect());
 
                         // Group metadata lives in same versioned cache as data / resources.
                         // We are not marking metadata change as estimate, but after
@@ -762,7 +763,7 @@ where
 
                     versioned_cache
                         .data()
-                        .set_base_value(k.clone(), ValueWithLayout::RawFromStorage(Arc::new(w)));
+                        .set_base_value(k.clone(), ValueWithLayout::RawFromStorage(TriompheArc::new(w)));
                     op.apply_to(value_u128)
                         .expect("Materializing delta w. base value set must succeed")
                 });
@@ -1225,11 +1226,11 @@ where
             output.resource_group_write_set().into_iter()
         {
             unsync_map.insert_group_ops(&group_key, group_ops, group_size)?;
-            unsync_map.write(group_key, Arc::new(metadata_op), None);
+            unsync_map.write(group_key, TriompheArc::new(metadata_op), None);
         }
 
         for (key, write_op) in output.aggregator_v1_write_set().into_iter() {
-            unsync_map.write(key, Arc::new(write_op), None);
+            unsync_map.write(key, TriompheArc::new(write_op), None);
         }
 
         for (_, write) in output.module_write_set().into_iter() {
