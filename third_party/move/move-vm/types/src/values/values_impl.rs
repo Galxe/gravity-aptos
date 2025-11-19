@@ -40,6 +40,15 @@ use std::{
     rc::Rc,
 };
 
+/// Values can be recursive, and so it is important that we do not use recursive algorithms over
+/// deeply nested values as it can cause stack overflow. Since it is not always possible to avoid
+/// recursion, we opt for a reasonable limit on VM value depth. It is defined in Move VM config,
+/// but since it is difficult to propagate config context everywhere, we use this constant.
+///
+/// IMPORTANT: When changing this constant, make sure it is in-sync with one in VM config (it is
+/// used there now).
+pub const DEFAULT_MAX_VM_VALUE_NESTED_DEPTH: u64 = 128;
+
 /***************************************************************************************
  *
  * Internal Types
