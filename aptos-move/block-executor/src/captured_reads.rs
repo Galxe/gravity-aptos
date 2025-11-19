@@ -4,6 +4,7 @@
 use crate::{code_cache_global::GlobalModuleCache, types::InputOutputKey, view::LatestView};
 use anyhow::bail;
 use aptos_aggregator::{
+    delta_change_set::serialize,
     delta_math::DeltaHistory,
     types::{DelayedFieldValue, DelayedFieldsSpeculativeError, ReadPosition},
 };
@@ -172,7 +173,7 @@ impl<V: TransactionWrite> DataRead<V> {
             // a MetadataAndResourceSize variant that implies everything non-value. This also
             // ensures that RawFromStorage can't be consistent with any other value read.
             ValueWithLayout::RawFromStorage(v) => {
-                DataRead::MetadataAndResourceSize(v.as_state_value_metadata(), Self::value_size(&v))
+                DataRead::MetadataAndResourceSize(v.as_state_value_metadata(), Some(serialize(&v).len() as u64))
             },
             ValueWithLayout::Exchanged(v, layout) => {
                 DataRead::Versioned(version, v.clone(), layout)
@@ -180,8 +181,8 @@ impl<V: TransactionWrite> DataRead<V> {
         }
     }
 
-    fn value_size(v: &V) -> Option<u64> {
-        v.bytes().map(|b| b.len() as u64)
+    fn value_size(v: &TriompheArc<V>) -> Option<u64> {
+        Some(serialize(v).len() as u64)
     }
 }
 
