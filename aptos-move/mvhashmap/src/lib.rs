@@ -16,6 +16,7 @@ use move_vm_types::code::{ModuleCache, ModuleCode, SyncModuleCache, SyncScriptCa
 use serde::Serialize;
 use std::{fmt::Debug, hash::Hash, sync::Arc};
 
+pub mod registered_dependencies;
 pub mod types;
 pub mod unsync_map;
 pub mod versioned_data;
@@ -39,9 +40,6 @@ pub struct MVHashMap<K, T, V: TransactionWrite, I: Clone> {
     group_data: VersionedGroupData<K, T, V>,
     delayed_fields: VersionedDelayedFields<I>,
 
-    #[deprecated]
-    deprecated_modules: VersionedModules<K, V, ExecutableTestType>,
-
     module_cache:
         SyncModuleCache<ModuleId, CompiledModule, Module, AptosModuleExtension, Option<TxnIndex>>,
     script_cache: SyncScriptCache<[u8; 32], CompiledScript, Script>,
@@ -61,7 +59,6 @@ where
             data: VersionedData::empty(),
             group_data: VersionedGroupData::empty(),
             delayed_fields: VersionedDelayedFields::empty(),
-            deprecated_modules: VersionedModules::empty(),
 
             module_cache: SyncModuleCache::empty(),
             script_cache: SyncScriptCache::empty(),
@@ -69,8 +66,6 @@ where
     }
 
     pub fn stats(&self) -> BlockStateStats {
-        #[allow(deprecated)]
-        let num_modules = self.deprecated_modules.num_keys() + self.module_cache.num_modules();
         BlockStateStats {
             num_resources: self.data.num_keys(),
             num_resource_groups: self.group_data.num_keys(),
@@ -94,12 +89,6 @@ where
 
     pub fn delayed_fields(&self) -> &VersionedDelayedFields<I> {
         &self.delayed_fields
-    }
-
-    #[deprecated]
-    pub fn deprecated_modules(&self) -> &VersionedModules<K, V, ExecutableTestType> {
-        #[allow(deprecated)]
-        &self.deprecated_modules
     }
 
     /// Returns the module cache. While modules in it are associated with versions, at any point

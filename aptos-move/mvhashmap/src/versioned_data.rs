@@ -2,25 +2,28 @@
 // Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::{
-    Incarnation, MVDataError, MVDataOutput, ShiftedTxnIndex, TxnIndex, ValueWithLayout,
+use crate::{
+    registered_dependencies::{
+        check_lowest_dependency_idx, take_dependencies, RegisteredReadDependencies,
+    },
+    types::{Incarnation, MVDataError, MVDataOutput, ShiftedTxnIndex, TxnIndex, ValueWithLayout},
 };
 use anyhow::Result;
 use aptos_aggregator::delta_change_set::DeltaOp;
+use aptos_infallible::Mutex;
 use aptos_types::write_set::TransactionWrite;
-use claims::assert_some;
+use claims::{assert_ok, assert_some};
 use crossbeam::utils::CachePadded;
 use dashmap::DashMap;
+use equivalent::Equivalent;
 use move_core_types::value::MoveTypeLayout;
 use std::{
     collections::btree_map::{self, BTreeMap},
     fmt::Debug,
     hash::Hash,
-    sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
 };
+use triomphe::Arc;
 
 pub(crate) const FLAG_DONE: bool = false;
 pub(crate) const FLAG_ESTIMATE: bool = true;
@@ -43,7 +46,11 @@ enum EntryCell<V> {
     /// has: 1) Incarnation number of the transaction that wrote the entry (note
     /// that TxnIndex is part of the key and not recorded here), 2) actual data
     /// stored in a shared pointer (to ensure ownership and avoid clones).
-    Write(Incarnation, ValueWithLayout<V>),
+    ResourceWrite {
+        incarnation: Incarnation,
+        value_with_layout: ValueWithLayout<V>,
+        dependencies: Mutex<RegisteredReadDependencies>,
+    },
 
     /// Recorded in the shared multi-version data-structure for each delta.
     /// Option<u128> is a shortcut to aggregated value (to avoid traversing down
@@ -63,8 +70,16 @@ pub struct VersionedData<K, V> {
     total_base_value_size: AtomicU64,
 }
 
-fn new_write_entry<V>(incarnation: Incarnation, value: ValueWithLayout<V>) -> Entry<EntryCell<V>> {
-    Entry::new(EntryCell::Write(incarnation, value))
+fn new_write_entry<V>(
+    incarnation: Incarnation,
+    value: ValueWithLayout<V>,
+    dependencies: BTreeMap<TxnIndex, Incarnation>,
+) -> Entry<EntryCell<V>> {
+    Entry::new(EntryCell::ResourceWrite {
+        incarnation,
+        value_with_layout: value,
+        dependencies: Mutex::new(RegisteredReadDependencies::from_dependencies(dependencies)),
+    })
 }
 
 fn new_delta_entry<V>(data: DeltaOp) -> Entry<EntryCell<V>> {
@@ -115,14 +130,24 @@ impl<V: TransactionWrite> Default for VersionedValue<V> {
     }
 }
 
-impl<V: TransactionWrite> VersionedValue<V> {
-    fn read(&self, txn_idx: TxnIndex) -> anyhow::Result<MVDataOutput<V>, MVDataError> {
+// TODO(BlockSTMv2): remove TransactionWrite trait requirement from V, even if
+// AggregatorV1 code is not removed by definining a more specialized trait that can
+// runtime assert in other variants. Add other variants to stored cells that allow
+// storing group metadata and group size together at the group key (currently metadata
+// is stored in a fake write entry, and group size is stored in MVGroupData map).
+impl<V: TransactionWrite + PartialEq> VersionedValue<V> {
+    // 'maybe_reader_incarnation' is None for BlockSTMv1 and always set for BlockSTMv2.
+    fn read(
+        &self,
+        reader_txn_idx: TxnIndex,
+        maybe_reader_incarnation: Option<Incarnation>,
+    ) -> Result<MVDataOutput<V>, MVDataError> {
         use MVDataError::*;
         use MVDataOutput::*;
 
         let mut iter = self
             .versioned_map
-            .range(ShiftedTxnIndex::zero_idx()..ShiftedTxnIndex::new(txn_idx));
+            .range(ShiftedTxnIndex::zero_idx()..ShiftedTxnIndex::new(reader_txn_idx));
 
         // If read encounters a delta, it must traverse the block of transactions
         // (top-down) until it encounters a write or reaches the end of the block.
@@ -130,6 +155,10 @@ impl<V: TransactionWrite> VersionedValue<V> {
         let mut accumulator: Option<Result<DeltaOp, ()>> = None;
         while let Some((idx, entry)) = iter.next_back() {
             if entry.is_estimate() {
+                debug_assert!(
+                    maybe_reader_incarnation.is_none(),
+                    "Entry must not be marked as estimate for BlockSTMv2"
+                );
                 // Found a dependency.
                 return Err(Dependency(
                     idx.idx().expect("May not depend on storage version"),
@@ -137,17 +166,41 @@ impl<V: TransactionWrite> VersionedValue<V> {
             }
 
             match (&entry.value, accumulator.as_mut()) {
-                (EntryCell::Write(incarnation, data), None) => {
+                (
+                    EntryCell::ResourceWrite {
+                        incarnation,
+                        value_with_layout,
+                        dependencies,
+                    },
+                    None,
+                ) => {
+                    // Record the read dependency (only in V2 case, not to add contention to V1).
+                    if let Some(reader_incarnation) = maybe_reader_incarnation {
+                        // TODO(BlockSTMv2): convert to PanicErrors after MVHashMap refactoring.
+                        assert_ok!(dependencies
+                            .lock()
+                            .insert(reader_txn_idx, reader_incarnation));
+                    }
+
                     // Resolve to the write if no deltas were applied in between.
                     return Ok(Versioned(
                         idx.idx().map(|idx| (idx, *incarnation)),
-                        data.clone(),
+                        value_with_layout.clone(),
                     ));
                 },
-                (EntryCell::Write(incarnation, data), Some(accumulator)) => {
+                (
+                    EntryCell::ResourceWrite {
+                        incarnation,
+                        value_with_layout,
+                        // We ignore dependencies here because accumulator is set, i.e.
+                        // we are dealing with AggregatorV1 flow w.o. push validation.
+                        dependencies: _,
+                    },
+                    Some(accumulator),
+                ) => {
                     // Deltas were applied. We must deserialize the value
                     // of the write and apply the aggregated delta accumulator.
-                    let value = data.extract_value_no_layout();
+                    let value = value_with_layout.extract_value_no_layout();
                     return match value
                         .as_u128()
                         .expect("Aggregator value must deserialize to u128")
@@ -158,7 +211,7 @@ impl<V: TransactionWrite> VersionedValue<V> {
                             // over any speculative delta accumulation errors on top.
                             Ok(Versioned(
                                 idx.idx().map(|idx| (idx, *incarnation)),
-                                data.clone(),
+                                value_with_layout.clone(),
                             ))
                         },
                         Some(value) => {
@@ -273,7 +326,7 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite> VersionedData<K, V> {
     ) -> anyhow::Result<MVDataOutput<V>, MVDataError> {
         self.values
             .get(key)
-            .map(|v| v.read(txn_idx))
+            .map(|v| v.read(txn_idx, None))
             .unwrap_or(Err(MVDataError::Uninitialized))
     }
 
@@ -303,12 +356,17 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite> VersionedData<K, V> {
                     self.total_base_value_size
                         .fetch_add(base_size as u64, Ordering::Relaxed);
                 }
-                v.insert(CachePadded::new(new_write_entry(0, value)));
+                v.insert(CachePadded::new(new_write_entry(0, value, BTreeMap::new())));
             },
             Occupied(mut o) => {
-                if let EntryCell::Write(i, existing_value) = &o.get().value {
-                    assert!(*i == 0);
-                    match (existing_value, &value) {
+                if let EntryCell::ResourceWrite {
+                    incarnation,
+                    value_with_layout: existing_value_with_layout,
+                    dependencies: _,
+                } = &o.get().value
+                {
+                    assert!(*incarnation == 0);
+                    match (existing_value_with_layout, &value) {
                         (RawFromStorage(ev), RawFromStorage(v)) => {
                             // Base value from storage needs to be identical
                             // Assert the length of bytes for efficiency (instead of full equality)
@@ -319,7 +377,11 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite> VersionedData<K, V> {
                         },
                         (RawFromStorage(_), Exchanged(_, _)) => {
                             // Received more info, update.
-                            o.insert(CachePadded::new(new_write_entry(0, value)));
+                            o.insert(CachePadded::new(new_write_entry(
+                                0,
+                                value,
+                                BTreeMap::new(),
+                            )));
                         },
                         (Exchanged(ev, e_layout), Exchanged(v, layout)) => {
                             // base value may have already been provided by another transaction
@@ -341,6 +403,36 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite> VersionedData<K, V> {
         };
     }
 
+    fn write_impl(
+        versioned_values: &mut VersionedValue<V>,
+        txn_idx: TxnIndex,
+        incarnation: Incarnation,
+        value: ValueWithLayout<V>,
+        dependencies: BTreeMap<TxnIndex, Incarnation>,
+    ) {
+        let prev_entry = versioned_values.versioned_map.insert(
+            ShiftedTxnIndex::new(txn_idx),
+            CachePadded::new(new_write_entry(incarnation, value, dependencies)),
+        );
+
+        // Assert that the previous entry for txn_idx, if present, had lower incarnation.
+        assert!(prev_entry.map_or(true, |entry| -> bool {
+            if let EntryCell::ResourceWrite {
+                incarnation: prev_incarnation,
+                ..
+            } = &entry.value
+            {
+                // For BlockSTMv1, the dependencies are always empty.
+                *prev_incarnation < incarnation
+                // TODO(BlockSTMv2): when AggregatorV1 is deprecated, we can assert that
+                // prev_dependencies is empty: they must have been drained beforehand
+                // (into dependencies) if there was an entry at the same index before.
+            } else {
+                true
+            }
+        }));
+    }
+
     /// Versioned write of data at a given key (and version).
     pub fn write(
         &self,
@@ -351,22 +443,13 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite> VersionedData<K, V> {
         maybe_layout: Option<Arc<MoveTypeLayout>>,
     ) {
         let mut v = self.values.entry(key).or_default();
-        let prev_entry = v.versioned_map.insert(
-            ShiftedTxnIndex::new(txn_idx),
-            CachePadded::new(new_write_entry(
-                incarnation,
-                ValueWithLayout::Exchanged(data, maybe_layout),
-            )),
+        Self::write_impl(
+            &mut v,
+            txn_idx,
+            incarnation,
+            ValueWithLayout::Exchanged(data, maybe_layout),
+            BTreeMap::new(),
         );
-
-        // Assert that the previous entry for txn_idx, if present, had lower incarnation.
-        assert!(prev_entry.map_or(true, |entry| -> bool {
-            if let EntryCell::Write(i, _) = entry.value {
-                i < incarnation
-            } else {
-                true
-            }
-        }));
     }
 
     /// Versioned write of metadata at a given resource group key (and version). Returns true
@@ -387,14 +470,19 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite> VersionedData<K, V> {
             CachePadded::new(new_write_entry(
                 incarnation,
                 ValueWithLayout::Exchanged(arc_data.clone(), None),
+                BTreeMap::new(),
             )),
         );
 
         // Changes versioned metadata that was stored.
         prev_entry.map_or(true, |entry| -> bool {
-            if let EntryCell::Write(_, existing_v) = &entry.value {
+            if let EntryCell::ResourceWrite {
+                value_with_layout: existing_value_with_layout,
+                ..
+            } = &entry.value
+            {
                 arc_data.as_state_value_metadata()
-                    != existing_v
+                    != existing_value_with_layout
                         .extract_value_no_layout()
                         .as_state_value_metadata()
             } else {
@@ -414,7 +502,7 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite> VersionedData<K, V> {
         let mut v = self.values.get_mut(key).expect("Path must exist");
 
         // +1 makes sure we include the delta from txn_idx.
-        match v.read(txn_idx + 1) {
+        match v.read(txn_idx + 1, None) {
             Ok(MVDataOutput::Resolved(value)) => {
                 v.versioned_map
                     .get_mut(&ShiftedTxnIndex::new(txn_idx))

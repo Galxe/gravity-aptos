@@ -336,7 +336,7 @@ impl<
         &self,
         group_key: &K,
         txn_idx: TxnIndex,
-    ) -> anyhow::Result<(Vec<(T, ValueWithLayout<V>)>, ResourceGroupSize)> {
+    ) -> Result<(Vec<(T, ValueWithLayout<V>)>, ResourceGroupSize), PanicError> {
         let superset_tags = self
             .group_tags
             .get(group_key)
@@ -346,23 +346,29 @@ impl<
         let committed_group = superset_tags
             .into_iter()
             .map(
-                |tag| match self.fetch_tagged_data(group_key, &tag, txn_idx + 1) {
+                |tag| match self.fetch_tagged_data_no_record(group_key, &tag, txn_idx + 1) {
                     Ok((_, value)) => Ok((value.write_op_kind() != WriteOpKind::Deletion)
                         .then(|| (tag, value.clone()))),
                     Err(MVGroupError::TagNotFound) => Ok(None),
-                    Err(e) => {
-                        bail!("Unexpected error in finalize group fetching value {:?}", e)
-                    },
+                    Err(e) => Err(code_invariant_error(format!(
+                        "Unexpected error in finalize group fetching value {:?}",
+                        e
+                    ))),
                 },
             )
-            .collect::<anyhow::Result<Vec<_>>>()?
+            .collect::<Result<Vec<_>, PanicError>>()?
             .into_iter()
             .flatten()
             .collect();
         Ok((
             committed_group,
-            self.get_group_size(group_key, txn_idx + 1)
-                .map_err(|e| anyhow!("Unexpected error in finalize group get size {:?}", e))?,
+            self.get_group_size_no_record(group_key, txn_idx + 1)
+                .map_err(|e| {
+                    code_invariant_error(format!(
+                        "Unexpected error in finalize group get size {:?}",
+                        e
+                    ))
+                })?,
         ))
     }
 }
