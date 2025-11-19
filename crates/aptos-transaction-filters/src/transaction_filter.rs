@@ -343,6 +343,7 @@ fn matches_entry_function(
                 },
             }
         },
+        TransactionPayload::GTxnBytes(_) => todo!(),
     }
 }
 
@@ -374,6 +375,7 @@ fn matches_entry_function_module_address(
                 },
             }
         },
+        TransactionPayload::GTxnBytes(_) => todo!(),
     }
 }
 
@@ -397,6 +399,7 @@ fn matches_multisig_address(
                     .unwrap_or(false),
             }
         },
+        TransactionPayload::GTxnBytes(_) => todo!(),
     }
 }
 
@@ -421,6 +424,7 @@ fn matches_script_argument_address(
                 },
             }
         },
+        TransactionPayload::GTxnBytes(_) => todo!(),
     }
 }
 
