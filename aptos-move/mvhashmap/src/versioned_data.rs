@@ -24,9 +24,9 @@ use std::{
     collections::btree_map::{self, BTreeMap},
     fmt::Debug,
     hash::Hash,
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::{atomic::{AtomicBool, AtomicU64, Ordering}, Arc},
 };
-use triomphe::Arc;
+use triomphe::Arc as TriompheArc;
 
 pub(crate) const FLAG_DONE: bool = false;
 pub(crate) const FLAG_ESTIMATE: bool = true;
@@ -561,7 +561,7 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
             code_invariant_error(format!("Failed to fetch data for exchange: {:?}", e))
         })? {
             Versioned(_, ValueWithLayout::Exchanged(value, Some(layout))) => {
-                Ok((value.clone(), layout.clone()))
+                Ok((Arc::from(value.as_ref().clone()), Arc::from(layout.as_ref().clone())))
             },
             _ => Err(code_invariant_error(format!(
                 "Read value needing exchange {:?} does not exist or not in Exchanged format",
