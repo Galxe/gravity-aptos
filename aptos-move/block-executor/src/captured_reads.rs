@@ -42,6 +42,7 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
+use triomphe::Arc as TriompheArc;
 
 /// The enum variants should not be re-ordered, as it defines a relation
 /// Existence < Metadata < Value.
@@ -66,8 +67,8 @@ pub(crate) enum DataRead<V> {
         // Currently, we are conservative and check the version for equality
         // (version implies value equality, but not vice versa). TODO: when
         // comparing the instances of V is cheaper, compare those instead.
-        #[derivative(PartialEq = "ignore", Debug = "ignore")] Arc<V>,
-        #[derivative(PartialEq = "ignore", Debug = "ignore")] Option<Arc<MoveTypeLayout>>,
+        #[derivative(PartialEq = "ignore", Debug = "ignore")] TriompheArc<V>,
+        #[derivative(PartialEq = "ignore", Debug = "ignore")] Option<TriompheArc<MoveTypeLayout>>,
     ),
     Metadata(Option<StateValueMetadata>),
     Exists(bool),

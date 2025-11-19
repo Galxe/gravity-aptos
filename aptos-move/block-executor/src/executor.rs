@@ -1041,7 +1041,7 @@ where
         signature_verified_block: &TP,
         base_view: &S,
         module_cache_manager_guard: &mut AptosModuleCacheManagerGuard,
-    ) -> Result<BlockOutput<E::Output>, ()> {
+    ) -> Result<BlockOutput<T, E::Output>, ()> {
         let _timer = PARALLEL_EXECUTION_SECONDS.start_timer();
         // Using parallel execution with 1 thread currently will not work as it
         // will only have a coordinator role but no workers for rolling commit.
@@ -1058,7 +1058,7 @@ where
 
         let num_txns = signature_verified_block.num_txns();
         if num_txns == 0 {
-            return Ok(BlockOutput::new(vec![], self.empty_block_end_info()));
+            return Ok(BlockOutput::new(vec![], None));
         }
 
         let num_workers = self.config.local.concurrency_level.min(num_txns / 2).max(2);
@@ -1149,7 +1149,7 @@ where
         };
 
         (!shared_maybe_error.load(Ordering::SeqCst))
-            .then(|| BlockOutput::new(final_results.into_inner(), block_end_info))
+            .then(|| BlockOutput::new(final_results.into_inner(), None))
             .ok_or(())
     }
 
@@ -1298,7 +1298,7 @@ where
         base_view: &S,
         module_cache_manager_guard: &mut AptosModuleCacheManagerGuard,
         resource_group_bcs_fallback: bool,
-    ) -> Result<BlockOutput<E::Output>, SequentialBlockExecutionError<E::Error>> {
+    ) -> Result<BlockOutput<T, E::Output>, SequentialBlockExecutionError<E::Error>> {
         let num_txns = signature_verified_block.num_txns();
         let init_timer = VM_INIT_SECONDS.start_timer();
         let environment = module_cache_manager_guard.environment();
@@ -1604,7 +1604,7 @@ where
             None
         };
 
-        Ok(BlockOutput::new(ret, block_end_info))
+        Ok(BlockOutput::new(ret, None))
     }
 
     fn empty_block_end_info(&self) -> Option<BlockEndInfo> {
@@ -1630,7 +1630,7 @@ where
         signature_verified_block: &TP,
         base_view: &S,
         module_cache_manager_guard: &mut AptosModuleCacheManagerGuard,
-    ) -> BlockExecutionResult<BlockOutput<E::Output>, E::Error> {
+    ) -> BlockExecutionResult<BlockOutput<T, E::Output>, E::Error> {
         let _timer = BLOCK_EXECUTOR_INNER_EXECUTE_BLOCK.start_timer();
 
         if self.config.local.concurrency_level > 1 {

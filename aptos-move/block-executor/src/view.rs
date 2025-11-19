@@ -533,23 +533,6 @@ impl<'a, T: Transaction> ParallelState<'a, T> {
             .set_base_value(id, base_value)
     }
 
-    #[deprecated]
-    fn fetch_module(
-        &self,
-        key: &T::Key,
-        txn_idx: TxnIndex,
-    ) -> anyhow::Result<MVModulesOutput<T::Value, ExecutableTestType>, MVModulesError> {
-        // Record for the R/W path intersection fallback for modules.
-        #[allow(deprecated)]
-        self.captured_reads
-            .borrow_mut()
-            .deprecated_module_reads
-            .push(key.clone());
-        #[allow(deprecated)]
-        self.versioned_map
-            .deprecated_modules()
-            .fetch_module(key, txn_idx)
-    }
 
     fn read_group_size(
         &self,
@@ -624,7 +607,17 @@ impl<'a, T: Transaction> ResourceState<T> for ParallelState<'a, T> {
         }
 
         loop {
-            match self.versioned_map.data().fetch_data(key, txn_idx) {
+            let data = if self.scheduler.is_v2() {
+                self.versioned_map.data().fetch_data_and_record_dependency(
+                    key,
+                    txn_idx,
+                    self.incarnation,
+                )
+            } else {
+                self.versioned_map.data().fetch_data_no_record(key, txn_idx)
+            };
+
+            match data {
                 Ok(Versioned(version, value)) => {
                     // If we have a known layout, upgrade RawFromStorage value to Exchanged.
                     if let UnknownOrLayout::Known(layout) = layout {
@@ -774,11 +767,22 @@ impl<'a, T: Transaction> ResourceGroupState<T> for ParallelState<'a, T> {
         }
 
         loop {
-            match self.versioned_map.group_data().fetch_tagged_data(
-                group_key,
-                resource_tag,
-                txn_idx,
-            ) {
+            let data = if self.scheduler.is_v2() {
+                self.versioned_map.group_data().fetch_tagged_data_and_record_dependency(
+                    group_key,
+                    resource_tag,
+                    txn_idx,
+                    self.incarnation,
+                )
+            } else {
+                self.versioned_map.group_data().fetch_tagged_data_no_record(
+                    group_key,
+                    resource_tag,
+                    txn_idx,
+                )
+            };
+
+            match data {
                 Ok((version, value_with_layout)) => {
                     // If we have a known layout, upgrade RawFromStorage value to Exchanged.
                     match value_with_layout {
@@ -906,8 +910,8 @@ impl<'a, T: Transaction> ResourceState<T> for SequentialState<'a, T> {
                         match patch_base_value(v.as_ref(), layout) {
                             Ok(patched_value) => {
                                 let exchanged_value = ValueWithLayout::Exchanged(
-                                    Arc::new(patched_value.clone()),
-                                    layout.cloned().map(Arc::new),
+                                    TriompheArc::new(patched_value.clone()),
+                                    layout.cloned().map(TriompheArc::new),
                                 );
                                 self.unsync_map
                                     .set_base_value(key.clone(), exchanged_value.clone());
