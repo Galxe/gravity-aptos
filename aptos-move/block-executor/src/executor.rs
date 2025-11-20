@@ -560,6 +560,7 @@ where
                         scheduler,
                         start_shared_counter,
                         shared_counter,
+                        incarnation + 1,
                     ),
                 )?;
 
@@ -1012,6 +1013,7 @@ where
                             scheduler,
                             start_shared_counter,
                             shared_counter,
+                            incarnation,
                         ),
                     )?;
                     scheduler.finish_execution(txn_idx, incarnation, needs_suffix_validation)?
