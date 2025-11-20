@@ -74,6 +74,63 @@ pub static ERROR_COUNT: Lazy<IntGauge> = Lazy::new(|| {
     .unwrap()
 });
 
+pub static APTOS_EXECUTION_TXNS: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram!(
+        "aptos_execution_transactions",
+        "Number of transactions handled in one request/response between mempool and execution layer",
+    )
+    .unwrap()
+});
+
+pub static APTOS_COMMIT_BLOCKS: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "aptos_commit_blocks",
+        "Number of transactions committed by consensus",
+    )
+    .unwrap()
+});
+
+pub static SEND_TO_EXECUTION_BLOCK_COUNTER: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "aptos_consensus_buffer_manager_send_to_execution_block_counter",
+        "Number of blocks sent to execution layer"
+    )
+    .unwrap()
+});
+
+pub static SEND_TO_PERSISTING_BLOCK_COUNTER: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "aptos_consensus_buffer_manager_send_to_persisting_block_counter",
+        "Number of blocks sent to do persisting in execution layer"
+    )
+    .unwrap()
+});
+
+pub static EXECUTED_BLOCK_COUNTER: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "aptos_consensus_buffer_manager_executed_block_counter",
+        "Number of blocks processed by buffer manager"
+    )
+    .unwrap()
+});
+
+pub static CREATED_EXECUTED_BLOCK_COUNTER: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "aptos_consensus_buffer_manager_created_executed_block_counter",
+        "Number of blocks created by buffer manager"
+    )
+    .unwrap()
+});
+
+pub static FINALIZED_EXECUTED_BLOCK_COUNTER: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "aptos_consensus_buffer_manager_finalized_executed_block_counter",
+        "Number of blocks finalized by buffer manager"
+    )
+    .unwrap()
+});
+
+
 /// This counter is set to the round of the highest committed block.
 pub static LAST_COMMITTED_ROUND: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!(

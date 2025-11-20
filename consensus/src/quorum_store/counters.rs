@@ -144,6 +144,47 @@ pub static BATCH_GENERATOR_MAIN_LOOP: Lazy<DurationHistogram> = Lazy::new(|| {
     )
 });
 
+pub static PROOF_CREAT_COUNT: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "quorum_store_proof_create_count",
+        "Counter for the number of proofs created"
+    )
+    .unwrap()
+});
+
+pub static PROCESS_TXN_IN_BATCH_GENERATOR: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "process_txn_in_batch_generator",
+        "Counter for the number of batches created"
+    )
+    .unwrap()
+});
+
+pub static PROOF_CREAT_COUNT: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "quorum_store_proof_create_count",
+        "Counter for the number of proofs created"
+    )
+    .unwrap()
+});
+
+pub static NUM_PROOF_OF_STORE_IN_PROPOSAL: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram!(
+        "num_proof_of_store_in_proposal",
+        "Counter for the number of proof-of-store in block proposal"
+    )
+    .unwrap()
+});
+
+pub static NUM_BATCH_PER_BLOCK: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram!(
+        "quorum_store_num_batch_per_block",
+        "Histogram for the number of batches per (committed) blocks.",
+        TRANSACTION_COUNT_BUCKETS.clone(),
+    )
+    .unwrap()
+});
+
 //////////////////////
 // NEW QUORUM STORE
 //////////////////////
