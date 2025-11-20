@@ -190,7 +190,7 @@ impl AptosDB {
             is_reconfig: transactions_to_keep.is_reconfig(),
         };
 
-        self.save_transactions(chunk, ledger_info_with_sigs, sync_commit)
+        self.save_transactions(Some(chunk), ledger_info_with_sigs, sync_commit)
     }
 
     fn disassemble_txns_to_commit(
