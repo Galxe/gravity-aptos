@@ -84,3 +84,23 @@ impl IntCounterHelper for IntCounterVec {
         self.with_label_values(labels).inc_by(v)
     }
 }
+
+pub trait IntCounterVecHelper {
+    type IntType;
+
+    fn inc_with(&'static self, labels: &[&str]);
+
+    fn inc_with_by(&'static self, labels: &[&str], by: Self::IntType);
+}
+
+impl IntCounterVecHelper for IntCounterVec {
+    type IntType = u64;
+
+    fn inc_with(&'static self, labels: &[&str]) {
+        self.with_label_values(labels).inc()
+    }
+
+    fn inc_with_by(&'static self, labels: &[&str], v: Self::IntType) {
+        self.with_label_values(labels).inc_by(v)
+    }
+}
