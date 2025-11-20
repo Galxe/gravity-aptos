@@ -35,6 +35,7 @@ impl ArmedLock {
         }
     }
 
+    // try_lock succeeds when the lock is unlocked and armed (there is work to do).
     pub fn try_lock(&self) -> bool {
         self.locked
             .compare_exchange_weak(3, 0, Ordering::Acquire, Ordering::Relaxed)
@@ -146,7 +147,21 @@ enum ExecutionStatus {
     // it gets committed later, without scheduler tracking.
     Committed(Incarnation),
     Aborting(Incarnation),
-    ExecutionHalted,
+    // The bool in ExecutionHalted tracks an useful invariant for the block epilogue txn
+    // when the block is cut, and the final execution of the epilogue txn occurs at
+    // some idx < num_txns. In this case, it must be ensured that any control flow that
+    // started to apply changes to the shared data structures was completed despite
+    // a concurrent halt (which must be invoked due to block cutting).
+    // - in case of Aborting, finish_abort must be called (after estimates are marked).
+    // - in case of Executing, finish_execution must be called, which happens after
+    // the caller records the input/output (needed to mark outputs as estimates or
+    // clear the prior write-set).
+    //
+    // In particular, [Scheduler::set_aborted_status] & [Scheduler::set_executed_status]
+    // must be called to reset the flag to true. The flag is set to false if when halting,
+    // the txn status is aborting or executing, or if right before applying the outputs
+    // to the shared data structures the txn is already halted.
+    ExecutionHalted(bool),
 }
 
 impl PartialEq for ExecutionStatus {
@@ -296,10 +311,6 @@ pub struct Scheduler {
 
     has_halted: CachePadded<AtomicBool>,
 
-    /// Set to true if we do not need to validate module reads. Most of the time this is the case,
-    /// unless modules are published.
-    skip_module_reads_validation: CachePadded<AtomicBool>,
-
     queueing_commits_lock: CachePadded<ArmedLock>,
 
     commit_queue: ConcurrentQueue<u32>,
@@ -329,14 +340,9 @@ impl Scheduler {
             validation_idx: AtomicU64::new(0),
             done_marker: CachePadded::new(AtomicBool::new(false)),
             has_halted: CachePadded::new(AtomicBool::new(false)),
-            skip_module_reads_validation: CachePadded::new(AtomicBool::new(true)),
             queueing_commits_lock: CachePadded::new(ArmedLock::new()),
             commit_queue: ConcurrentQueue::<u32>::bounded(num_txns as usize),
         }
-    }
-
-    pub fn num_txns(&self) -> TxnIndex {
-        self.num_txns
     }
 
     pub fn add_to_commit_queue(&self, txn_idx: u32) {
@@ -420,6 +426,33 @@ impl Scheduler {
     pub fn commit_state(&self) -> (TxnIndex, u32) {
         let commit_state = self.commit_state.dereference();
         (commit_state.0, commit_state.1)
+    }
+
+    pub(crate) fn prepare_for_block_epilogue(
+        &self,
+        block_epilogue_idx: TxnIndex,
+    ) -> Result<Incarnation, PanicError> {
+        if block_epilogue_idx == self.num_txns {
+            return Ok(0);
+        }
+
+        let mut status = self.txn_status[block_epilogue_idx as usize].0.write();
+        if let ExecutionStatus::ExecutionHalted(safely_finished) = *status {
+            if !safely_finished {
+                return Err(code_invariant_error(format!(
+                    "Status at block epilogue txn {} not safely finished after ExecutionHalted but not finished",
+                    block_epilogue_idx
+                )));
+            }
+        } else {
+            return Err(code_invariant_error(format!(
+                "Status {:?} at block epilogue txn {} not ExecutionHalted",
+                &*status, block_epilogue_idx
+            )));
+        }
+
+        *status = ExecutionStatus::Ready(1, ExecutionTaskType::Execution);
+        Ok(1)
     }
 
     /// Try to abort version = (txn_idx, incarnation), called upon validation failure.
@@ -653,6 +686,7 @@ impl Scheduler {
         !self.has_halted.swap(true, Ordering::SeqCst)
     }
 
+    #[inline]
     pub(crate) fn has_halted(&self) -> bool {
         self.has_halted.load(Ordering::Relaxed)
     }
@@ -665,6 +699,7 @@ impl TWaitForDependency for Scheduler {
     /// transaction txn_idx will be resumed, and corresponding execution task created.
     /// If false is returned, it is caller's responsibility to repeat the read that caused the
     /// dependency and continue the ongoing execution of txn_idx.
+    #[allow(clippy::literal_string_with_formatting_args)]
     fn wait_for_dependency(
         &self,
         txn_idx: TxnIndex,
@@ -739,7 +774,7 @@ impl Scheduler {
         let mut status = self.txn_status[txn_idx as usize].0.write();
 
         // Always replace the status.
-        match std::mem::replace(&mut *status, ExecutionStatus::ExecutionHalted) {
+        match std::mem::replace(&mut *status, ExecutionStatus::ExecutionHalted(true)) {
             ExecutionStatus::Suspended(_, condvar)
             | ExecutionStatus::Ready(_, ExecutionTaskType::Wakeup(condvar))
             | ExecutionStatus::Executing(_, ExecutionTaskType::Wakeup(condvar)) => {
@@ -749,6 +784,11 @@ impl Scheduler {
                 let mut lock = lock.lock();
                 *lock = DependencyStatus::ExecutionHalted;
                 cvar.notify_one();
+            },
+            ExecutionStatus::Executing(_, _) | ExecutionStatus::Aborting(_) => {
+                // If Executing or Aborting, set safely_finished to false, which can only be
+                // reset by finish_execution or finish_abort.
+                *status = ExecutionStatus::ExecutionHalted(false);
             },
             _ => (),
         }
@@ -943,7 +983,7 @@ impl Scheduler {
                 *status = ExecutionStatus::Suspended(incarnation, dep_condvar);
                 Ok(true)
             },
-            ExecutionStatus::ExecutionHalted => Ok(false),
+            ExecutionStatus::ExecutionHalted(_) => Ok(false),
             _ => Err(code_invariant_error(format!(
                 "Unexpected status {:?} in suspend",
                 &*status,
@@ -963,7 +1003,7 @@ impl Scheduler {
                 );
                 Ok(())
             },
-            ExecutionStatus::ExecutionHalted => Ok(()),
+            ExecutionStatus::ExecutionHalted(_) => Ok(()),
             _ => Err(code_invariant_error(format!(
                 "Unexpected status {:?} in resume",
                 &*status,
@@ -978,14 +1018,15 @@ impl Scheduler {
         incarnation: Incarnation,
     ) -> Result<(), PanicError> {
         let mut status = self.txn_status[txn_idx as usize].0.write();
-        match *status {
+        match &mut *status {
             ExecutionStatus::Executing(stored_incarnation, _)
-                if stored_incarnation == incarnation =>
+                if *stored_incarnation == incarnation =>
             {
                 *status = ExecutionStatus::Executed(incarnation);
                 Ok(())
             },
-            ExecutionStatus::ExecutionHalted => {
+            ExecutionStatus::ExecutionHalted(safely_finished) => {
+                *safely_finished = true;
                 // The execution is already halted.
                 Ok(())
             },
@@ -1004,12 +1045,13 @@ impl Scheduler {
         incarnation: Incarnation,
     ) -> Result<(), PanicError> {
         let mut status = self.txn_status[txn_idx as usize].0.write();
-        match *status {
-            ExecutionStatus::Aborting(stored_incarnation) if stored_incarnation == incarnation => {
+        match &mut *status {
+            ExecutionStatus::Aborting(stored_incarnation) if *stored_incarnation == incarnation => {
                 *status = ExecutionStatus::Ready(incarnation + 1, ExecutionTaskType::Execution);
                 Ok(())
             },
-            ExecutionStatus::ExecutionHalted => {
+            ExecutionStatus::ExecutionHalted(safely_finished) => {
+                *safely_finished = true;
                 // The execution is already halted.
                 Ok(())
             },
@@ -1023,17 +1065,6 @@ impl Scheduler {
     /// Checks whether the done marker is set. The marker can only be set by 'try_commit'.
     fn done(&self) -> bool {
         self.done_marker.load(Ordering::Acquire)
-    }
-
-    /// Sets the flag to validate module reads.
-    pub(crate) fn validate_module_reads(&self) {
-        self.skip_module_reads_validation
-            .store(false, Ordering::Release);
-    }
-
-    /// Returns true if module validation can be skipped.
-    pub(crate) fn skip_module_reads_validation(&self) -> bool {
-        self.skip_module_reads_validation.load(Ordering::Acquire)
     }
 }
 
