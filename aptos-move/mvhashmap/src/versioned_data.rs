@@ -570,7 +570,7 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
                 // value and layout are TriompheArc, convert to std::sync::Arc
                 // Use bytes() to get the underlying data and create new Arc
                 let v_bytes = value.bytes().cloned().unwrap_or_else(Bytes::new);
-                let new_value = StdArc::new(TransactionWrite::from_state_value(Some(StateValue::new(v_bytes))));
+                let new_value = StdArc::new(TransactionWrite::from_state_value(Some(StateValue::new_legacy(v_bytes))));
                 let new_layout = StdArc::new((*layout).clone());
                 Ok((new_value, new_layout))
             },
