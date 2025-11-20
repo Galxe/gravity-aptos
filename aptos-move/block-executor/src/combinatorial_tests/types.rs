@@ -4,7 +4,7 @@
 
 use crate::types::delayed_field_mock_serialization::serialize_delayed_field_tuple;
 use aptos_aggregator::delta_change_set::{delta_add, delta_sub, serialize, DeltaOp};
-use aptos_types::HashValue;
+use aptos_crypto::hash::HashValue;
 use aptos_types::{
     account_address::AccountAddress,
     contract_event::TransactionEvent,
