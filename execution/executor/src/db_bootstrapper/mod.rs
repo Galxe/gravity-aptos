@@ -102,7 +102,7 @@ impl GenesisCommitter {
             Some(self.output
                 .output
                 .expect_complete_result()
-                .as_chunk_to_commit())),
+                .as_chunk_to_commit()),
             self.output.ledger_info_opt.as_ref(),
             true, /* sync_commit */
         )?;
