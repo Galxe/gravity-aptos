@@ -716,12 +716,14 @@ dependencies = [
  "ambassador",
  "anyhow",
  "aptos-aggregator",
+ "aptos-crypto",
  "aptos-drop-helper",
+ "aptos-gas-schedule",
  "aptos-infallible",
- "aptos-language-e2e-tests",
  "aptos-logger",
  "aptos-metrics-core",
  "aptos-mvhashmap",
+ "aptos-transaction-simulation",
  "aptos-types",
  "aptos-vm-environment",
  "aptos-vm-logging",
@@ -729,6 +731,7 @@ dependencies = [
  "arc-swap",
  "bcs 0.1.4",
  "bytes",
+ "cfg-if",
  "claims",
  "concurrent-queue",
  "criterion",
@@ -748,7 +751,6 @@ dependencies = [
  "proptest-derive",
  "rand 0.7.3",
  "rayon",
- "scopeguard",
  "test-case",
  "triomphe",
 ]
@@ -4774,7 +4776,7 @@ dependencies = [
  "aptos-aggregator",
  "aptos-gas-algebra",
  "aptos-gas-schedule",
- "aptos-language-e2e-tests",
+ "aptos-transaction-simulation",
  "aptos-types",
  "aptos-vm",
  "bcs 0.1.4",
@@ -4788,6 +4790,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "test-case",
+ "triomphe",
 ]
 
 [[package]]

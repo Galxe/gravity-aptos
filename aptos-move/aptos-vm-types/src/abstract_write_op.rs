@@ -8,7 +8,8 @@ use aptos_types::{
 };
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{language_storage::StructTag, value::MoveTypeLayout};
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
+use triomphe::Arc as TriompheArc;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum AbstractResourceWriteOp {
@@ -70,19 +71,41 @@ impl AbstractResourceWriteOp {
         &self,
         state_key: &StateKey,
         executor_view: &dyn ExecutorView,
+        fix_prev_materialized_size: bool,
     ) -> PartialVMResult<u64> {
         use AbstractResourceWriteOp::*;
-        match self {
-            Write(_)
-            | WriteWithDelayedFields(WriteWithDelayedFieldsOp { .. })
-            | InPlaceDelayedFieldChange(_)
-            | ResourceGroupInPlaceDelayedFieldChange(_) => Ok(executor_view
-                .get_resource_state_value_size(state_key)?
-                .unwrap_or(0)),
-            WriteResourceGroup(GroupWrite {
-                prev_group_size, ..
-            }) => Ok(*prev_group_size),
-        }
+        let size = if fix_prev_materialized_size {
+            match self {
+                Write(_) | WriteWithDelayedFields(_) => {
+                    executor_view.get_resource_state_value_size(state_key)?
+                },
+                InPlaceDelayedFieldChange(InPlaceDelayedFieldChangeOp {
+                    materialized_size,
+                    ..
+                }) => *materialized_size,
+                ResourceGroupInPlaceDelayedFieldChange(
+                    ResourceGroupInPlaceDelayedFieldChangeOp {
+                        materialized_size, ..
+                    },
+                ) => *materialized_size,
+                WriteResourceGroup(GroupWrite {
+                    prev_group_size, ..
+                }) => *prev_group_size,
+            }
+        } else {
+            match self {
+                Write(_)
+                | WriteWithDelayedFields(WriteWithDelayedFieldsOp { .. })
+                | InPlaceDelayedFieldChange(_)
+                | ResourceGroupInPlaceDelayedFieldChange(_) => {
+                    executor_view.get_resource_state_value_size(state_key)?
+                },
+                WriteResourceGroup(GroupWrite {
+                    prev_group_size, ..
+                }) => *prev_group_size,
+            }
+        };
+        Ok(size)
     }
 
     /// Deposit amount is inserted into metadata at a different time than the WriteOp is created.
@@ -106,7 +129,7 @@ impl AbstractResourceWriteOp {
 
     pub fn from_resource_write_with_maybe_layout(
         write_op: WriteOp,
-        maybe_layout: Option<Arc<MoveTypeLayout>>,
+        maybe_layout: Option<TriompheArc<MoveTypeLayout>>,
     ) -> Self {
         match maybe_layout {
             Some(layout) => {
@@ -140,7 +163,7 @@ pub struct GroupWrite {
     /// exist in the group. Note: During parallel block execution, due to speculative
     /// reads, this invariant may be violated (and lead to speculation error if observed)
     /// but guaranteed to fail validation and lead to correct re-execution in that case.
-    pub(crate) inner_ops: BTreeMap<StructTag, (WriteOp, Option<Arc<MoveTypeLayout>>)>,
+    pub(crate) inner_ops: BTreeMap<StructTag, (WriteOp, Option<TriompheArc<MoveTypeLayout>>)>,
     /// Group size as used for gas charging, None if (metadata_)op is Deletion.
     pub(crate) maybe_group_op_size: Option<ResourceGroupSize>,
     // TODO: consider Option<u64> to be able to represent a previously non-existent group,
@@ -154,7 +177,7 @@ impl GroupWrite {
     /// and ensures inner ops do not contain any metadata.
     pub fn new(
         metadata_op: WriteOp,
-        inner_ops: BTreeMap<StructTag, (WriteOp, Option<Arc<MoveTypeLayout>>)>,
+        inner_ops: BTreeMap<StructTag, (WriteOp, Option<TriompheArc<MoveTypeLayout>>)>,
         group_size: ResourceGroupSize,
         prev_group_size: u64,
     ) -> Self {
@@ -194,7 +217,9 @@ impl GroupWrite {
         &self.metadata_op
     }
 
-    pub fn inner_ops(&self) -> &BTreeMap<StructTag, (WriteOp, Option<Arc<MoveTypeLayout>>)> {
+    pub fn inner_ops(
+        &self,
+    ) -> &BTreeMap<StructTag, (WriteOp, Option<TriompheArc<MoveTypeLayout>>)> {
         &self.inner_ops
     }
 }
@@ -204,7 +229,7 @@ impl GroupWrite {
 /// a delayed field. This simplifies squashing session outputs, in particular.
 pub struct WriteWithDelayedFieldsOp {
     pub write_op: WriteOp,
-    pub layout: Arc<MoveTypeLayout>,
+    pub layout: TriompheArc<MoveTypeLayout>,
     pub materialized_size: Option<u64>,
 }
 
@@ -214,7 +239,7 @@ pub struct WriteWithDelayedFieldsOp {
 /// If future implementation needs those - they can be added.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct InPlaceDelayedFieldChangeOp {
-    pub layout: Arc<MoveTypeLayout>,
+    pub layout: TriompheArc<MoveTypeLayout>,
     pub materialized_size: u64,
     pub metadata: StateValueMetadata,
 }
