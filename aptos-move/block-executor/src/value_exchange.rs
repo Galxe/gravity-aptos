@@ -1,6 +1,11 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
+// Cfg due to delayed_field_mock_serialization use and to avoid warning.
+#[cfg(test)]
+use crate::types::delayed_field_mock_serialization::{
+    deserialize_to_delayed_field_id, mock_layout,
+};
 use crate::view::{LatestView, ViewState};
 use aptos_aggregator::{
     resolver::TDelayedFieldView,
@@ -14,6 +19,9 @@ use aptos_types::{
     write_set::TransactionWrite,
 };
 use bytes::Bytes;
+// Cfg due to delayed_field_mock_serialization use and to avoid warning.
+#[cfg(test)]
+use fail::fail_point;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::value::{IdentifierMappingKind, MoveTypeLayout};
 use move_vm_runtime::AsFunctionValueExtension;
@@ -23,7 +31,8 @@ use move_vm_types::{
     value_traversal::find_identifiers_in_value,
     values::Value,
 };
-use std::{cell::RefCell, collections::HashSet, sync::Arc};
+use std::{cell::RefCell, collections::HashSet};
+use triomphe::Arc as TriompheArc;
 
 pub(crate) struct TemporaryValueToIdentifierMapping<'a, T: Transaction, S: TStateView<Key = T::Key>>
 {
@@ -55,8 +64,8 @@ impl<'a, T: Transaction, S: TStateView<Key = T::Key>> TemporaryValueToIdentifier
 // For aggregators V2, values are replaced with identifiers at deserialization time,
 // and are replaced back when the value is serialized. The "lifted" values are cached
 // by the `LatestView` in the aggregators multi-version data structure.
-impl<'a, T: Transaction, S: TStateView<Key = T::Key>> ValueToIdentifierMapping
-    for TemporaryValueToIdentifierMapping<'a, T, S>
+impl<T: Transaction, S: TStateView<Key = T::Key>> ValueToIdentifierMapping
+    for TemporaryValueToIdentifierMapping<'_, T, S>
 {
     fn value_to_identifier(
         &self,
@@ -98,7 +107,7 @@ impl<'a, T: Transaction, S: TStateView<Key = T::Key>> ValueToIdentifierMapping
     }
 }
 
-impl<'a, T, S> LatestView<'a, T, S>
+impl<T, S> LatestView<'_, T, S>
 where
     T: Transaction,
     S: TStateView<Key = T::Key>,
@@ -110,14 +119,27 @@ where
         bytes: &Bytes,
         layout: &MoveTypeLayout,
     ) -> anyhow::Result<HashSet<DelayedFieldID>> {
+        // Cfg due to deserialize_to_delayed_field_id use.
+        #[cfg(test)]
+        fail_point!("delayed_field_test", |_| {
+            assert_eq!(
+                *layout,
+                mock_layout(),
+                "Layout does not match expected mock layout"
+            );
+
+            let (id, _) = deserialize_to_delayed_field_id(bytes)
+                .expect("Mock deserialization failed in delayed field test.");
+            Ok(HashSet::from([id]))
+        });
+
         // TODO[agg_v2](optimize): this performs 2 traversals of a value:
         //   1) deserialize,
         //   2) find identifiers to populate the set.
         //   See if can cache identifiers in advance, or combine it with
         //   deserialization.
         let function_value_extension = self.as_function_value_extension();
-        let max_value_nest_depth = function_value_extension.max_value_nest_depth();
-        let value = ValueSerDeContext::new(max_value_nest_depth)
+        let value = ValueSerDeContext::new(function_value_extension.max_value_nest_depth())
             .with_func_args_deserialization(&function_value_extension)
             .with_delayed_fields_serde()
             .deserialize(bytes, layout)
@@ -156,10 +178,18 @@ where
     pub(crate) fn filter_value_for_exchange(
         &self,
         value: &T::Value,
-        layout: &Arc<MoveTypeLayout>,
+        layout: &TriompheArc<MoveTypeLayout>,
         delayed_write_set_ids: &HashSet<DelayedFieldID>,
         key: &T::Key,
-    ) -> Option<Result<(T::Key, (StateValueMetadata, u64, Arc<MoveTypeLayout>)), PanicError>> {
+    ) -> Option<
+        Result<
+            (
+                T::Key,
+                (StateValueMetadata, u64, TriompheArc<MoveTypeLayout>),
+            ),
+            PanicError,
+        >,
+    > {
         if value.is_deletion() {
             None
         } else {
