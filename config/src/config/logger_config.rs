@@ -57,6 +57,8 @@ impl Default for LoggerConfig {
             // Setting this to None will disable tokio-console
             // even if the "tokio-console" feature is enabled.
             tokio_console_port: None,
+            max_log_file_size_mbs: 200,
+            max_log_files: 10,
         }
     }
 }
