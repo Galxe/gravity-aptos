@@ -4,11 +4,11 @@
 
 //! Objects used by/related to shared mempool
 use crate::{
-    core_mempool::{CoreMempool, TimelineState}, logging::TxnsLog, network::{BroadcastPeerPriority, MempoolNetworkInterface, MempoolSyncMsg}, shared_mempool::use_case_history::UseCaseHistory
+    core_mempool::{CoreMempool, TimelineState, TimelineId}, logging::TxnsLog, network::{BroadcastPeerPriority, MempoolNetworkInterface, MempoolSyncMsg}, shared_mempool::use_case_history::UseCaseHistory
 };
 use anyhow::Result;
 use aptos_config::{
-    config::{MempoolConfig, NodeConfig, NodeType},
+    config::{MempoolConfig, NodeConfig, NodeType, TransactionFilterConfig},
     network_id::PeerNetworkId,
 };
 use aptos_consensus_types::common::{
@@ -19,7 +19,7 @@ use aptos_infallible::{Mutex, RwLock};
 use aptos_network::application::interface::NetworkClientInterface;
 use aptos_storage_interface::DbReader;
 use aptos_types::{
-    account_address::AccountAddress, mempool_status::MempoolStatus, transaction::{use_case::UseCaseKey, SignedTransaction},
+    account_address::AccountAddress, mempool_status::MempoolStatus, transaction::{use_case::UseCaseKey, ReplayProtector, SignedTransaction},
     vm_status::DiscardedVMStatus,
 };
 use aptos_vm_validator::vm_validator::TransactionValidation;
@@ -76,17 +76,17 @@ pub trait CoreMempoolTrait: 'static + Send + Sync {
 
     fn get_by_hash(&self, hash: HashValue) -> Option<SignedTransaction>;
 
-    async fn add_txn(&mut self, txn: SignedTransaction, ranking_score: u64, sequence_info: u64, timeline_state: TimelineState, client_submitted: bool, ready_time_at_sender: Option<u64>, priority: Option<BroadcastPeerPriority>) -> MempoolStatus;
+    async fn add_txn(&mut self, txn: SignedTransaction, ranking_score: u64, sequence_info: Option<u64>, timeline_state: TimelineState, client_submitted: bool, ready_time_at_sender: Option<u64>, priority: Option<BroadcastPeerPriority>) -> MempoolStatus;
 
     fn gc_by_expiration_time(&mut self, block_time: Duration);
 
     fn get_batch(&self, max_txns: u64, max_bytes: u64, return_non_full: bool, exclude_transactions: BTreeMap<TransactionSummary, TransactionInProgress>) -> Vec<SignedTransaction>;
 
-    async fn reject_transaction(&mut self, sender: &AccountAddress, sequence_number: u64, hash: &HashValue, reason: &DiscardedVMStatus);
+    async fn reject_transaction(&mut self, sender: &AccountAddress, replay_protector: ReplayProtector, hash: &HashValue, reason: &DiscardedVMStatus);
 
-    fn commit_transaction(&mut self, sender: &AccountAddress, sequence_number: u64);
+    fn commit_transaction(&mut self, sender: &AccountAddress, replay_protector: ReplayProtector);
 
-    fn log_commit_transaction(&self, sender: &AccountAddress, sequence_number: u64, tracked_use_case: Option<(UseCaseKey, &String)>, block_timestamp: Duration);
+    fn log_commit_transaction(&self, sender: &AccountAddress, replay_protector: ReplayProtector, tracked_use_case: Option<(UseCaseKey, &String)>, block_timestamp: Duration);
 }
 
 pub struct GravityCoreMempool(CoreMempool);
@@ -155,7 +155,7 @@ impl CoreMempoolTrait for GravityCoreMempool {
         self.0.get_by_hash(hash)
     }
 
-    async fn add_txn(&mut self, txn: SignedTransaction, ranking_score: u64, sequence_info: u64, timeline_state: TimelineState, client_submitted: bool, ready_time_at_sender: Option<u64>, priority: Option<BroadcastPeerPriority>) -> MempoolStatus {
+    async fn add_txn(&mut self, txn: SignedTransaction, ranking_score: u64, sequence_info: Option<u64>, timeline_state: TimelineState, client_submitted: bool, ready_time_at_sender: Option<u64>, priority: Option<BroadcastPeerPriority>) -> MempoolStatus {
         self.0.add_txn(txn, ranking_score, sequence_info, timeline_state, client_submitted, ready_time_at_sender, priority)
     }
 
@@ -163,16 +163,16 @@ impl CoreMempoolTrait for GravityCoreMempool {
         self.0.gc_by_expiration_time(block_time)
     }
 
-    async fn reject_transaction(&mut self, sender: &AccountAddress, sequence_number: u64, hash: &HashValue, reason: &DiscardedVMStatus) {
-        self.0.reject_transaction(sender, sequence_number, hash, reason)
+    async fn reject_transaction(&mut self, sender: &AccountAddress, replay_protector: ReplayProtector, hash: &HashValue, reason: &DiscardedVMStatus) {
+        self.0.reject_transaction(sender, replay_protector, hash, reason)
     }
 
-    fn commit_transaction(&mut self, sender: &AccountAddress, sequence_number: u64) {
-        self.0.commit_transaction(sender, sequence_number)
+    fn commit_transaction(&mut self, sender: &AccountAddress, replay_protector: ReplayProtector) {
+        self.0.commit_transaction(sender, replay_protector)
     }
 
-    fn log_commit_transaction(&self, sender: &AccountAddress, sequence_number: u64, tracked_use_case: Option<(UseCaseKey, &String)>, block_timestamp: Duration) {
-        self.0.log_commit_transaction(sender, sequence_number, tracked_use_case, block_timestamp)
+    fn log_commit_transaction(&self, sender: &AccountAddress, replay_protector: ReplayProtector, tracked_use_case: Option<(UseCaseKey, &String)>, block_timestamp: Duration) {
+        self.0.log_commit_transaction(sender, replay_protector, tracked_use_case, block_timestamp)
     }
 }
 
