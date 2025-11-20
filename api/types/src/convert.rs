@@ -14,8 +14,7 @@ use crate::{
     HexEncodedBytes, MoveFunction, MoveModuleBytecode, MoveResource, MoveScriptBytecode, MoveType,
     MoveValue, PendingTransaction, ResourceGroup, ScriptPayload, ScriptWriteSet,
     SubmitTransactionRequest, Transaction, TransactionInfo, TransactionOnChainData,
-    TransactionPayload, UserTransactionRequest, VersionedEvent, WriteSet, WriteSetChange,
-    WriteSetPayload,
+    TransactionPayload, VersionedEvent, WriteSet, WriteSetChange, WriteSetPayload,
 };
 use anyhow::{bail, ensure, format_err, Context as AnyhowContext, Result};
 use aptos_crypto::{hash::CryptoHash, HashValue};
@@ -33,14 +32,14 @@ use aptos_types::{
         StateView,
     },
     transaction::{
-        BlockEndInfo, BlockEpiloguePayload, EntryFunction, ExecutionStatus, Multisig,
-        RawTransaction, Script, SignedTransaction, TransactionAuxiliaryData,
+        BlockEndInfo, EntryFunction, ExecutionStatus, Multisig, RawTransaction, Script,
+        SignedTransaction, TransactionAuxiliaryData,
     },
+    vm::module_metadata::get_metadata,
     vm_status::AbortLocation,
     write_set::WriteOp,
 };
 use bytes::Bytes;
-use move_binary_format::file_format::FunctionHandleIndex;
 use move_core_types::{
     account_address::AccountAddress,
     ident_str,
@@ -98,7 +97,7 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
 
     pub fn is_resource_group(&self, tag: &StructTag) -> bool {
         if let Ok(Some(module)) = self.inner.view_module(&tag.module_id()) {
-            if let Some(md) = aptos_framework::get_metadata(&module.metadata) {
+            if let Some(md) = get_metadata(&module.metadata) {
                 if let Some(attrs) = md.struct_attributes.get(tag.name.as_ident_str().as_str()) {
                     return attrs
                         .iter()
@@ -140,11 +139,7 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
         bytes: &[u8],
     ) -> Result<Vec<MoveResource>> {
         let resources_with_tag: Vec<(StructTag, Vec<u8>)> = bcs::from_bytes::<ResourceGroup>(bytes)
-            .map(|map| {
-                map.into_iter()
-                    .map(|(key, value)| (key, value))
-                    .collect::<Vec<_>>()
-            })?;
+            .map(|map| map.into_iter().collect::<Vec<_>>())?;
 
         resources_with_tag
             .iter()
@@ -218,26 +213,27 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
                 })
             },
             BlockEpilogue(block_epilogue_payload) => {
+                let block_end_info = block_epilogue_payload
+                    .try_as_block_end_info()
+                    .unwrap()
+                    .clone();
+                let block_end_info = match block_end_info {
+                    BlockEndInfo::V0 {
+                        block_gas_limit_reached,
+                        block_output_limit_reached,
+                        block_effective_block_gas_units,
+                        block_approx_output_size,
+                    } => Some(crate::transaction::BlockEndInfo {
+                        block_gas_limit_reached,
+                        block_output_limit_reached,
+                        block_effective_block_gas_units,
+                        block_approx_output_size,
+                    }),
+                };
                 Transaction::BlockEpilogueTransaction(BlockEpilogueTransaction {
                     info,
                     timestamp: timestamp.into(),
-                    block_end_info: match block_epilogue_payload {
-                        BlockEpiloguePayload::V0 {
-                            block_end_info:
-                                BlockEndInfo::V0 {
-                                    block_gas_limit_reached,
-                                    block_output_limit_reached,
-                                    block_effective_block_gas_units,
-                                    block_approx_output_size,
-                                },
-                            ..
-                        } => Some(crate::transaction::BlockEndInfo {
-                            block_gas_limit_reached,
-                            block_output_limit_reached,
-                            block_effective_block_gas_units,
-                            block_approx_output_size,
-                        }),
-                    },
+                    block_end_info,
                 })
             },
             aptos_types::transaction::Transaction::ValidatorTransaction(txn) => {
@@ -266,7 +262,7 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
             accumulator_root_hash: accumulator_root_hash.into(),
             // TODO: the resource value is interpreted by the type definition at the version of the converter, not the version of the tx: must be fixed before we allow module updates
             changes: write_set
-                .into_iter()
+                .into_write_op_iter()
                 .filter_map(|(sk, wo)| self.try_into_write_set_changes(sk, wo).ok())
                 .flatten()
                 .collect(),
@@ -279,53 +275,61 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
         &self,
         payload: aptos_types::transaction::TransactionPayload,
     ) -> Result<TransactionPayload> {
-        use aptos_types::transaction::TransactionPayload::*;
+        use aptos_types::transaction::{EntryFunction, Script, TransactionPayload::*};
+
+        let try_into_script_payload = |s: Script| -> Result<ScriptPayload> {
+            let (code, ty_args, args) = s.into_inner();
+            let script_args = self.inner.view_script_arguments(&code, &args, &ty_args);
+
+            let json_args = match script_args {
+                Ok(values) => values
+                    .into_iter()
+                    .map(|v| MoveValue::try_from(v)?.json())
+                    .collect::<Result<_>>()?,
+                Err(_e) => convert_txn_args(&args)
+                    .into_iter()
+                    .map(|arg| HexEncodedBytes::from(arg).json())
+                    .collect::<Result<_>>()?,
+            };
+
+            Ok(ScriptPayload {
+                code: MoveScriptBytecode::new(code).try_parse_abi(),
+                type_arguments: ty_args.iter().map(|arg| arg.into()).collect(),
+                arguments: json_args,
+            })
+        };
+
+        let try_into_entry_function_payload = |fun: EntryFunction| -> Result<EntryFunctionPayload> {
+            let (module, function, ty_args, args) = fun.into_inner();
+            let func_args = self
+                .inner
+                .view_function_arguments(&module, &function, &ty_args, &args);
+
+            let json_args = match func_args {
+                Ok(values) => values
+                    .into_iter()
+                    .map(|v| MoveValue::try_from(v)?.json())
+                    .collect::<Result<_>>()?,
+                Err(_e) => args
+                    .into_iter()
+                    .map(|arg| HexEncodedBytes::from(arg).json())
+                    .collect::<Result<_>>()?,
+            };
+
+            Ok(EntryFunctionPayload {
+                arguments: json_args,
+                function: EntryFunctionId {
+                    module: module.into(),
+                    name: function.into(),
+                },
+                type_arguments: ty_args.iter().map(|arg| arg.into()).collect(),
+            })
+        };
+
         let ret = match payload {
-            Script(s) => {
-                let (code, ty_args, args) = s.into_inner();
-                let script_args = self.inner.view_script_arguments(&code, &args, &ty_args);
-
-                let json_args = match script_args {
-                    Ok(values) => values
-                        .into_iter()
-                        .map(|v| MoveValue::try_from(v)?.json())
-                        .collect::<Result<_>>()?,
-                    Err(_e) => convert_txn_args(&args)
-                        .into_iter()
-                        .map(|arg| HexEncodedBytes::from(arg).json())
-                        .collect::<Result<_>>()?,
-                };
-                TransactionPayload::ScriptPayload(ScriptPayload {
-                    code: MoveScriptBytecode::new(code).try_parse_abi(),
-                    type_arguments: ty_args.iter().map(|arg| arg.into()).collect(),
-                    arguments: json_args,
-                })
-            },
+            Script(s) => TransactionPayload::ScriptPayload(try_into_script_payload(s)?),
             EntryFunction(fun) => {
-                let (module, function, ty_args, args) = fun.into_inner();
-                let func_args = self
-                    .inner
-                    .view_function_arguments(&module, &function, &ty_args, &args);
-
-                let json_args = match func_args {
-                    Ok(values) => values
-                        .into_iter()
-                        .map(|v| MoveValue::try_from(v)?.json())
-                        .collect::<Result<_>>()?,
-                    Err(_e) => args
-                        .into_iter()
-                        .map(|arg| HexEncodedBytes::from(arg).json())
-                        .collect::<Result<_>>()?,
-                };
-
-                TransactionPayload::EntryFunctionPayload(EntryFunctionPayload {
-                    arguments: json_args,
-                    function: EntryFunctionId {
-                        module: module.into(),
-                        name: function.into(),
-                    },
-                    type_arguments: ty_args.iter().map(|arg| arg.into()).collect(),
-                })
+                TransactionPayload::EntryFunctionPayload(try_into_entry_function_payload(fun)?)
             },
             Multisig(multisig) => {
                 let transaction_payload = if let Some(payload) = multisig.transaction_payload {
@@ -333,30 +337,10 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
                         aptos_types::transaction::MultisigTransactionPayload::EntryFunction(
                             entry_function,
                         ) => {
-                            let (module, function, ty_args, args) = entry_function.into_inner();
-                            let func_args = self
-                                .inner
-                                .view_function_arguments(&module, &function, &ty_args, &args);
-                            let json_args = match func_args {
-                                Ok(values) => values
-                                    .into_iter()
-                                    .map(|v| MoveValue::try_from(v)?.json())
-                                    .collect::<Result<_>>()?,
-                                Err(_e) => args
-                                    .into_iter()
-                                    .map(|arg| HexEncodedBytes::from(arg).json())
-                                    .collect::<Result<_>>()?,
-                            };
-
+                            let entry_function_payload =
+                                try_into_entry_function_payload(entry_function)?;
                             Some(MultisigTransactionPayload::EntryFunctionPayload(
-                                EntryFunctionPayload {
-                                    arguments: json_args,
-                                    function: EntryFunctionId {
-                                        module: module.into(),
-                                        name: function.into(),
-                                    },
-                                    type_arguments: ty_args.iter().map(|arg| arg.into()).collect(),
-                                },
+                                entry_function_payload,
                             ))
                         },
                     }
@@ -368,8 +352,58 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
                     transaction_payload,
                 })
             },
+            Payload(aptos_types::transaction::TransactionPayloadInner::V1 {
+                executable,
+                extra_config,
+            }) => match extra_config {
+                aptos_types::transaction::TransactionExtraConfig::V1 {
+                    multisig_address,
+                    replay_protection_nonce: _,
+                } => {
+                    if let Some(multisig_address) = multisig_address {
+                        match executable {
+                            aptos_types::transaction::TransactionExecutable::EntryFunction(
+                                entry_function,
+                            ) => TransactionPayload::MultisigPayload(MultisigPayload {
+                                multisig_address: multisig_address.into(),
+                                transaction_payload: Some(
+                                    MultisigTransactionPayload::EntryFunctionPayload(
+                                        try_into_entry_function_payload(entry_function)?,
+                                    ),
+                                ),
+                            }),
+                            aptos_types::transaction::TransactionExecutable::Script(_) => {
+                                bail!(
+                                    "Script executable is not supported for multisig transactions"
+                                )
+                            },
+                            aptos_types::transaction::TransactionExecutable::Empty => {
+                                TransactionPayload::MultisigPayload(MultisigPayload {
+                                    multisig_address: multisig_address.into(),
+                                    transaction_payload: None,
+                                })
+                            },
+                        }
+                    } else {
+                        match executable {
+                            aptos_types::transaction::TransactionExecutable::EntryFunction(
+                                entry_function,
+                            ) => TransactionPayload::EntryFunctionPayload(
+                                try_into_entry_function_payload(entry_function)?,
+                            ),
+                            aptos_types::transaction::TransactionExecutable::Script(script) => {
+                                TransactionPayload::ScriptPayload(try_into_script_payload(script)?)
+                            },
+                            aptos_types::transaction::TransactionExecutable::Empty => {
+                                bail!("Empty executable is not supported for non-multisig transactions")
+                            },
+                        }
+                    }
+                },
+            },
+            GTxnBytes(_) => bail!("GTxnBytes variant is not supported"),
+            // Deprecated.
             ModuleBundle(_) => bail!("Module bundle payload has been removed"),
-            GTxnBytes(_) => todo!(),
         };
         Ok(ret)
     }
@@ -389,7 +423,7 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
             Direct(d) => {
                 let (write_set, events) = d.into_inner();
                 let nested_writeset_changes: Vec<Vec<WriteSetChange>> = write_set
-                    .into_iter()
+                    .into_write_op_iter()
                     .map(|(state_key, op)| self.try_into_write_set_changes(state_key, op))
                     .collect::<Result<Vec<Vec<_>>>>()?;
                 WriteSetPayload {
@@ -536,9 +570,9 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
 
         Ok(Some(DecodedTableData {
             key: key.json().unwrap(),
-            key_type: table_info.key_type.to_string(),
+            key_type: table_info.key_type.to_canonical_string(),
             value: value.json().unwrap(),
-            value_type: table_info.value_type.to_string(),
+            value_type: table_info.value_type.to_canonical_string(),
         }))
     }
 
@@ -559,7 +593,7 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
 
         Ok(Some(DeletedTableData {
             key: key.json().unwrap(),
-            key_type: table_info.key_type.to_string(),
+            key_type: table_info.key_type.to_canonical_string(),
         }))
     }
 
@@ -588,22 +622,6 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
         Ok(ret)
     }
 
-    pub fn try_into_signed_transaction(
-        &self,
-        txn: UserTransactionRequest,
-        chain_id: ChainId,
-    ) -> Result<SignedTransaction> {
-        let auth = txn
-            .signature
-            .as_ref()
-            .ok_or_else(|| format_err!("missing signature"))?
-            .try_into();
-        Ok(SignedTransaction::new_signed_transaction(
-            self.try_into_raw_transaction(txn, chain_id)?,
-            auth?,
-        ))
-    }
-
     pub fn try_into_signed_transaction_poem(
         &self,
         submit_transaction_request: SubmitTransactionRequest,
@@ -623,31 +641,6 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
         ))
     }
 
-    pub fn try_into_raw_transaction(
-        &self,
-        txn: UserTransactionRequest,
-        chain_id: ChainId,
-    ) -> Result<RawTransaction> {
-        let UserTransactionRequest {
-            sender,
-            sequence_number,
-            max_gas_amount,
-            gas_unit_price,
-            expiration_timestamp_secs,
-            payload,
-            signature: _,
-        } = txn;
-        Ok(RawTransaction::new(
-            sender.into(),
-            sequence_number.into(),
-            self.try_into_aptos_core_transaction_payload(payload)?,
-            max_gas_amount.into(),
-            gas_unit_price.into(),
-            expiration_timestamp_secs.into(),
-            chain_id,
-        ))
-    }
-
     pub fn try_into_raw_transaction_poem(
         &self,
         user_transaction_request: UserTransactionRequestInner,
@@ -660,12 +653,23 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
             gas_unit_price,
             expiration_timestamp_secs,
             payload,
+            replay_protection_nonce,
         } = user_transaction_request;
         Ok(RawTransaction::new(
             sender.into(),
-            sequence_number.into(),
-            self.try_into_aptos_core_transaction_payload(payload)
-                .context("Failed to parse transaction payload")?,
+            // The `sequence_number` field is not used for processing orderless transactions.
+            // However, the `SignedTransaction` strucut has a mandatory sequence_number field.
+            // So, for orderless transactions, we chose to set the sequence_number to u64::MAX.
+            if replay_protection_nonce.is_none() {
+                sequence_number.into()
+            } else {
+                u64::MAX
+            },
+            self.try_into_aptos_core_transaction_payload(
+                payload,
+                replay_protection_nonce.map(|nonce| nonce.into()),
+            )
+            .context("Failed to parse transaction payload")?,
             max_gas_amount.into(),
             gas_unit_price.into(),
             expiration_timestamp_secs.into(),
@@ -676,11 +680,15 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
     pub fn try_into_aptos_core_transaction_payload(
         &self,
         payload: TransactionPayload,
+        nonce: Option<u64>,
     ) -> Result<aptos_types::transaction::TransactionPayload> {
-        use aptos_types::transaction::TransactionPayload as Target;
+        use aptos_types::transaction::{
+            TransactionExecutable as Executable, TransactionExtraConfig as ExtraConfig,
+            TransactionPayload as Target, TransactionPayloadInner as TargetInner,
+        };
 
-        let ret = match payload {
-            TransactionPayload::EntryFunctionPayload(entry_func_payload) => {
+        let try_into_entry_function =
+            |entry_func_payload: EntryFunctionPayload| -> Result<EntryFunction> {
                 let EntryFunctionPayload {
                     function,
                     type_arguments,
@@ -705,96 +713,119 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
                     .map(bcs::to_bytes)
                     .collect::<Result<_, bcs::Error>>()?;
 
-                Target::EntryFunction(EntryFunction::new(
+                Ok(EntryFunction::new(
                     module_id,
-                    function.name.clone().into(),
+                    function.name.into(),
                     type_arguments
                         .iter()
                         .map(|v| v.try_into())
                         .collect::<Result<_>>()?,
                     args,
                 ))
-            },
-            TransactionPayload::ScriptPayload(script) => {
-                let ScriptPayload {
-                    code,
-                    type_arguments,
-                    arguments,
-                } = script;
+            };
 
-                let MoveScriptBytecode { bytecode, abi } = code.clone().try_parse_abi();
-                match abi {
-                    Some(func) => {
-                        let args = self.try_into_vm_values(&func, arguments.as_slice())?;
-                        Target::Script(Script::new(
-                            bytecode.into(),
-                            type_arguments
-                                .iter()
-                                .map(|v| v.try_into())
-                                .collect::<Result<_>>()?,
-                            args.into_iter()
-                                .map(|arg| arg.try_into())
-                                .collect::<Result<_>>()?,
-                        ))
-                    },
-                    None => return Err(anyhow::anyhow!("invalid transaction script bytecode")),
+        let try_into_script_payload = |script: ScriptPayload| -> Result<Script> {
+            let ScriptPayload {
+                code,
+                type_arguments,
+                arguments,
+            } = script;
+
+            let MoveScriptBytecode { bytecode, abi } = code.try_parse_abi();
+            match abi {
+                Some(func) => {
+                    let args = self.try_into_vm_values(&func, arguments.as_slice())?;
+                    Ok(Script::new(
+                        bytecode.into(),
+                        type_arguments
+                            .iter()
+                            .map(|v| v.try_into())
+                            .collect::<Result<_>>()?,
+                        args.into_iter()
+                            .map(|arg| arg.try_into())
+                            .collect::<Result<_>>()?,
+                    ))
+                },
+                None => Err(anyhow::anyhow!("invalid transaction script bytecode")),
+            }
+        };
+        // TODO[Orderless]: After the new TransactionPayload format is fully deployed, output the TransactionPayload in V2 format here.
+        let ret = match payload {
+            TransactionPayload::EntryFunctionPayload(entry_func_payload) => {
+                if let Some(nonce) = nonce {
+                    Target::Payload(TargetInner::V1 {
+                        executable: Executable::EntryFunction(try_into_entry_function(
+                            entry_func_payload,
+                        )?),
+                        extra_config: ExtraConfig::V1 {
+                            multisig_address: None,
+                            replay_protection_nonce: Some(nonce),
+                        },
+                    })
+                } else {
+                    Target::EntryFunction(try_into_entry_function(entry_func_payload)?)
                 }
             },
-            TransactionPayload::MultisigPayload(multisig) => {
-                let transaction_payload = if let Some(ref payload) = multisig.transaction_payload {
-                    match payload {
-                        MultisigTransactionPayload::EntryFunctionPayload(entry_function) => {
-                            let EntryFunctionPayload {
-                                function,
-                                type_arguments,
-                                arguments,
-                            } = entry_function;
-
-                            let module = function.module.clone();
-                            let code = self.inner.view_existing_module(&module.clone().into())?
-                                as Arc<dyn Bytecode>;
-                            let func = code
-                                .find_entry_function(function.name.0.as_ident_str())
-                                .ok_or_else(|| {
-                                    format_err!("could not find entry function by {}", function)
-                                })?;
-                            ensure!(
-                                func.generic_type_params.len() == type_arguments.len(),
-                                "expect {} type arguments for entry function {}, but got {}",
-                                func.generic_type_params.len(),
-                                function,
-                                type_arguments.len()
-                            );
-
-                            let args = self
-                                .try_into_vm_values(&func, arguments)?
-                                .iter()
-                                .map(bcs::to_bytes)
-                                .collect::<Result<_, bcs::Error>>()?;
-                            Some(
-                                aptos_types::transaction::MultisigTransactionPayload::EntryFunction(
-                                    EntryFunction::new(
-                                        module.into(),
-                                        (&function.name).into(),
-                                        type_arguments
-                                            .iter()
-                                            .map(|v| v.try_into())
-                                            .collect::<Result<_>>()?,
-                                        args,
-                                    ),
-                                ),
-                            )
+            TransactionPayload::ScriptPayload(script) => {
+                if let Some(nonce) = nonce {
+                    Target::Payload(TargetInner::V1 {
+                        executable: Executable::Script(try_into_script_payload(script)?),
+                        extra_config: ExtraConfig::V1 {
+                            multisig_address: None,
+                            replay_protection_nonce: Some(nonce),
                         },
-                    }
+                    })
                 } else {
-                    None
-                };
-                Target::Multisig(Multisig {
-                    multisig_address: multisig.multisig_address.into(),
-                    transaction_payload,
-                })
+                    Target::Script(try_into_script_payload(script)?)
+                }
             },
 
+            TransactionPayload::MultisigPayload(multisig) => {
+                if let Some(nonce) = nonce {
+                    let executable = if let Some(payload) = multisig.transaction_payload {
+                        match payload {
+                            MultisigTransactionPayload::EntryFunctionPayload(
+                                entry_func_payload,
+                            ) => Executable::EntryFunction(try_into_entry_function(
+                                entry_func_payload,
+                            )?),
+                        }
+                    } else {
+                        Executable::Empty
+                    };
+                    Target::Payload(TargetInner::V1 {
+                        executable,
+                        extra_config: ExtraConfig::V1 {
+                            multisig_address: Some(multisig.multisig_address.into()),
+                            replay_protection_nonce: Some(nonce),
+                        },
+                    })
+                } else {
+                    let transaction_payload: Option<
+                        aptos_types::transaction::MultisigTransactionPayload,
+                    > = if let Some(payload) = multisig.transaction_payload {
+                        match payload {
+                            MultisigTransactionPayload::EntryFunctionPayload(
+                                entry_func_payload,
+                            ) => {
+                                let entry_function: EntryFunction =
+                                    try_into_entry_function(entry_func_payload)?;
+                                Some(
+                                    aptos_types::transaction::MultisigTransactionPayload::EntryFunction(
+                                        entry_function,
+                                    ),
+                                )
+                            },
+                        }
+                    } else {
+                        None
+                    };
+                    Target::Multisig(Multisig {
+                        multisig_address: multisig.multisig_address.into(),
+                        transaction_payload,
+                    })
+                }
+            },
             // Deprecated.
             TransactionPayload::ModuleBundlePayload(_) => {
                 bail!("Module bundle payload has been removed")
@@ -893,7 +924,7 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
             MoveTypeLayout::Struct(struct_layout) => {
                 self.try_into_vm_value_struct(struct_layout, val)?
             },
-            MoveTypeLayout::Function(..) => {
+            MoveTypeLayout::Function => {
                 // TODO(#15664): do we actually need this? It appears the code here is dead and
                 //   nowhere used
                 bail!("unexpected move type {:?} for value {:?}", layout, val)
@@ -994,10 +1025,10 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
         let code = self.inner.view_existing_module(&module.clone().into())? as Arc<dyn Bytecode>;
         let func = code
             .find_function(function.name.0.as_ident_str())
-            .ok_or_else(|| format_err!("could not find entry function by {}", function))?;
+            .ok_or_else(|| format_err!("could not find view function by {}", function))?;
         ensure!(
             func.generic_type_params.len() == type_arguments.len(),
-            "expected {} type arguments for entry function {}, but got {}",
+            "expected {} type arguments for view function {}, but got {}",
             func.generic_type_params.len(),
             function,
             type_arguments.len()
@@ -1026,7 +1057,7 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
         Ok(None)
     }
 
-    fn explain_vm_status(
+    pub fn explain_vm_status(
         &self,
         status: &ExecutionStatus,
         txn_aux_data: Option<TransactionAuxiliaryData>,
@@ -1070,10 +1101,16 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
                 function,
                 code_offset,
             } => {
-                let func_name = match location {
+                let func_name_and_instruction = match location {
                     AbortLocation::Module(module_id) => self
-                        .explain_function_index(module_id, function)
-                        .map(|name| format!("{}::{}", abort_location_to_str(location), name))
+                        .explain_function_and_code_index(module_id, function, code_offset)
+                        .map(|name_and_instruction| {
+                            format!(
+                                "{}::{}",
+                                abort_location_to_str(location),
+                                name_and_instruction
+                            )
+                        })
                         .unwrap_or_else(|_| {
                             format!(
                                 "{}::<#{} function>",
@@ -1085,7 +1122,7 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
                 };
                 format!(
                     "Execution failed in {} at code offset {}",
-                    func_name, code_offset
+                    func_name_and_instruction, code_offset
                 )
             },
             ExecutionStatus::MiscellaneousError(code) => {
@@ -1098,10 +1135,26 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
         }
     }
 
-    fn explain_function_index(&self, module_id: &ModuleId, function: &u16) -> Result<String> {
+    fn explain_function_and_code_index(
+        &self,
+        module_id: &ModuleId,
+        function: &u16,
+        code_offset: &u16,
+    ) -> Result<String> {
         let code = self.inner.view_existing_module(module_id)?;
-        let func = code.function_handle_at(FunctionHandleIndex::new(*function));
+        let function_def = code
+            .function_defs
+            .get(*function as usize)
+            .ok_or_else(|| anyhow::anyhow!("could not find function at index {}", function))?;
+        let func = code.function_handle_at(function_def.function);
         let id = code.identifier_at(func.name);
+
+        if let Some(code) = function_def.code.as_ref() {
+            if let Some(instruction) = code.code.get(*code_offset as usize) {
+                return Ok(format!("{} (on instruction {:?})", id, instruction));
+            }
+        }
+
         Ok(id.to_string())
     }
 }
@@ -1121,7 +1174,7 @@ pub trait AsConverter<R> {
         &self,
         db: Arc<dyn DbReader>,
         indexer_reader: Option<Arc<dyn IndexerReader>>,
-    ) -> MoveConverter<R>;
+    ) -> MoveConverter<'_, R>;
 }
 
 impl<R: StateView> AsConverter<R> for R {
@@ -1129,7 +1182,7 @@ impl<R: StateView> AsConverter<R> for R {
         &self,
         db: Arc<dyn DbReader>,
         indexer_reader: Option<Arc<dyn IndexerReader>>,
-    ) -> MoveConverter<R> {
+    ) -> MoveConverter<'_, R> {
         MoveConverter::new(self, db, indexer_reader)
     }
 }

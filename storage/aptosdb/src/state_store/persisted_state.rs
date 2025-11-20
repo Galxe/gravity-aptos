@@ -9,6 +9,7 @@ use aptos_storage_interface::state_store::{
     state::State, state_summary::StateSummary, state_view::hot_state_view::HotStateView,
     state_with_summary::StateWithSummary,
 };
+use aptos_types::state_store::hot_state::HotStateConfig;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -18,24 +19,15 @@ pub struct PersistedState {
 }
 
 impl PersistedState {
-    const HOT_STATE_MAX_ITEMS: usize = 1_000_000;
-    const HOT_STATE_MAX_VALUE_BYTES: usize = 4096;
     const MAX_PENDING_DROPS: usize = 8;
 
     pub fn new_empty() -> Self {
-        Self::new_empty_with_config(Self::HOT_STATE_MAX_ITEMS, Self::HOT_STATE_MAX_VALUE_BYTES)
+        Self::new_empty_with_config(HotStateConfig::default())
     }
 
-    pub fn new_empty_with_config(
-        hot_state_capacity: usize,
-        hot_state_max_value_bytes: usize,
-    ) -> Self {
-        let state = State::new_empty();
-        let hot_state = Arc::new(HotState::new(
-            state,
-            hot_state_capacity,
-            hot_state_max_value_bytes,
-        ));
+    pub fn new_empty_with_config(config: HotStateConfig) -> Self {
+        let state = State::new_empty(config);
+        let hot_state = Arc::new(HotState::new(state, config));
         let summary = Arc::new(Mutex::new(StateSummary::new_empty()));
         Self { hot_state, summary }
     }
@@ -48,6 +40,11 @@ impl PersistedState {
         SUBTREE_DROPPER.wait_for_backlog_drop(Self::MAX_PENDING_DROPS);
 
         self.summary.lock().clone()
+    }
+
+    #[cfg(test)]
+    pub fn get_hot_state(&self) -> Arc<HotState> {
+        Arc::clone(&self.hot_state)
     }
 
     pub fn get_state(&self) -> (Arc<dyn HotStateView>, State) {

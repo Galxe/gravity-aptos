@@ -31,20 +31,28 @@ use bytes::Bytes;
 use move_binary_format::errors::{Location, PartialVMError, PartialVMResult, VMResult};
 use move_core_types::{
     effects::{AccountChanges, Changes, Op as MoveStorageOp},
-    language_storage::{ModuleId, StructTag},
+    identifier::IdentStr,
+    language_storage::{ModuleId, StructTag, TypeTag},
     value::MoveTypeLayout,
     vm_status::StatusCode,
 };
 use move_vm_runtime::{
-    config::VMConfig, move_vm::MoveVM, native_extensions::NativeContextExtensions,
-    session::Session, AsFunctionValueExtension, ModuleStorage, VerifiedModuleBundle,
+    config::VMConfig,
+    data_cache::TransactionDataCache,
+    dispatch_loader,
+    module_traversal::TraversalContext,
+    move_vm::{MoveVM, SerializedReturnValues},
+    native_extensions::NativeContextExtensions,
+    AsFunctionValueExtension, InstantiatedFunctionLoader, LegacyLoaderConfig, LoadedFunction,
+    Loader, ModuleStorage, VerifiedModuleBundle,
 };
-use move_vm_types::{value_serde::ValueSerDeContext, values::Value};
-use std::{
-    collections::BTreeMap,
-    ops::{Deref, DerefMut},
-    sync::Arc,
+use move_vm_types::{
+    gas::GasMeter,
+    value_serde::{FunctionValueExtension, ValueSerDeContext},
+    values::Value,
 };
+use std::{borrow::Borrow, collections::BTreeMap};
+use triomphe::Arc as TriompheArc;
 
 pub mod respawned_session;
 pub mod session_id;
@@ -59,18 +67,21 @@ pub(crate) enum ResourceGroupChangeSet {
 }
 type AccountChangeSet = AccountChanges<BytesWithResourceLayout>;
 type ChangeSet = Changes<BytesWithResourceLayout>;
-pub type BytesWithResourceLayout = (Bytes, Option<Arc<MoveTypeLayout>>);
+pub type BytesWithResourceLayout = (Bytes, Option<TriompheArc<MoveTypeLayout>>);
 
-pub struct SessionExt<'r, 'l> {
-    inner: Session<'r, 'l>,
-    resolver: &'r dyn AptosMoveResolver,
+pub struct SessionExt<'r, R> {
+    data_cache: TransactionDataCache,
+    extensions: NativeContextExtensions<'r>,
+    pub(crate) resolver: &'r R,
     is_storage_slot_metadata_enabled: bool,
 }
 
-impl<'r, 'l> SessionExt<'r, 'l> {
-    pub(crate) fn new<R: AptosMoveResolver>(
+impl<'r, R> SessionExt<'r, R>
+where
+    R: AptosMoveResolver,
+{
+    pub(crate) fn new(
         session_id: SessionId,
-        move_vm: &'l MoveVM,
         chain_id: ChainId,
         features: &Features,
         vm_config: &VMConfig,
@@ -78,6 +89,7 @@ impl<'r, 'l> SessionExt<'r, 'l> {
         resolver: &'r R,
     ) -> Self {
         let mut extensions = NativeContextExtensions::default();
+        let session_counter = session_id.session_counter();
         let txn_hash: [u8; 32] = session_id
             .as_uuid()
             .to_vec()
@@ -97,8 +109,9 @@ impl<'r, 'l> SessionExt<'r, 'l> {
         extensions.add(NativeTransactionContext::new(
             txn_hash.to_vec(),
             session_id.into_script_hash(),
-            chain_id.id() as u8,
+            chain_id.id().try_into().unwrap(),
             maybe_user_transaction_context,
+            session_counter,
         ));
         extensions.add(NativeCodeContext::new());
         extensions.add(NativeStateStorageContext::new(resolver));
@@ -107,10 +120,63 @@ impl<'r, 'l> SessionExt<'r, 'l> {
 
         let is_storage_slot_metadata_enabled = features.is_storage_slot_metadata_enabled();
         Self {
-            inner: move_vm.new_session_with_extensions(resolver, extensions),
+            data_cache: TransactionDataCache::empty(),
+            extensions,
             resolver,
             is_storage_slot_metadata_enabled,
         }
+    }
+
+    pub fn execute_function_bypass_visibility(
+        &mut self,
+        module_id: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: Vec<TypeTag>,
+        args: Vec<impl Borrow<[u8]>>,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+        module_storage: &impl ModuleStorage,
+    ) -> VMResult<SerializedReturnValues> {
+        dispatch_loader!(module_storage, loader, {
+            let func = loader.load_instantiated_function(
+                &LegacyLoaderConfig::unmetered(),
+                gas_meter,
+                traversal_context,
+                module_id,
+                function_name,
+                &ty_args,
+            )?;
+            MoveVM::execute_loaded_function(
+                func,
+                args,
+                &mut self.data_cache,
+                gas_meter,
+                traversal_context,
+                &mut self.extensions,
+                &loader,
+                self.resolver,
+            )
+        })
+    }
+
+    pub fn execute_loaded_function(
+        &mut self,
+        func: LoadedFunction,
+        args: Vec<impl Borrow<[u8]>>,
+        gas_meter: &mut impl GasMeter,
+        traversal_context: &mut TraversalContext,
+        loader: &impl Loader,
+    ) -> VMResult<SerializedReturnValues> {
+        MoveVM::execute_loaded_function(
+            func,
+            args,
+            &mut self.data_cache,
+            gas_meter,
+            traversal_context,
+            &mut self.extensions,
+            loader,
+            self.resolver,
+        )
     }
 
     pub fn finish(
@@ -124,20 +190,19 @@ impl<'r, 'l> SessionExt<'r, 'l> {
                                   layout: MoveTypeLayout,
                                   has_aggregator_lifting: bool|
          -> PartialVMResult<BytesWithResourceLayout> {
-            let max_value_nest_depth = function_extension.max_value_nest_depth();
             let serialization_result = if has_aggregator_lifting {
                 // We allow serialization of native values here because we want to
                 // temporarily store native values (via encoding to ensure deterministic
                 // gas charging) in block storage.
-                ValueSerDeContext::new(max_value_nest_depth)
+                ValueSerDeContext::new(function_extension.max_value_nest_depth())
                     .with_delayed_fields_serde()
                     .with_func_args_deserialization(&function_extension)
                     .serialize(&value, &layout)?
-                    .map(|bytes| (bytes.into(), Some(Arc::new(layout))))
+                    .map(|bytes| (bytes.into(), Some(TriompheArc::new(layout))))
             } else {
                 // Otherwise, there should be no native values so ensure
                 // serialization fails here if there are any.
-                ValueSerDeContext::new(max_value_nest_depth)
+                ValueSerDeContext::new(function_extension.max_value_nest_depth())
                     .with_func_args_deserialization(&function_extension)
                     .serialize(&value, &layout)?
                     .map(|bytes| (bytes.into(), None))
@@ -148,12 +213,19 @@ impl<'r, 'l> SessionExt<'r, 'l> {
             })
         };
 
-        let (change_set, mut extensions) = self
-            .inner
-            .finish_with_extensions_with_custom_effects(&resource_converter, module_storage)?;
+        let Self {
+            data_cache,
+            mut extensions,
+            resolver,
+            is_storage_slot_metadata_enabled,
+        } = self;
+
+        let change_set = data_cache
+            .into_custom_effects(&resource_converter)
+            .map_err(|e| e.finish(Location::Undefined))?;
 
         let (change_set, resource_group_change_set) =
-            Self::split_and_merge_resource_groups(self.resolver, module_storage, change_set)
+            Self::split_and_merge_resource_groups(resolver, module_storage, change_set)
                 .map_err(|e| e.finish(Location::Undefined))?;
 
         let table_context: NativeTableContext = extensions.remove();
@@ -169,7 +241,7 @@ impl<'r, 'l> SessionExt<'r, 'l> {
         let event_context: NativeEventContext = extensions.remove();
         let events = event_context.into_events();
 
-        let woc = WriteOpConverter::new(self.resolver, self.is_storage_slot_metadata_enabled);
+        let woc = WriteOpConverter::new(resolver, is_storage_slot_metadata_enabled);
 
         let change_set = Self::convert_change_set(
             &woc,
@@ -187,9 +259,14 @@ impl<'r, 'l> SessionExt<'r, 'l> {
 
     /// Returns the publish request if it exists. If the provided flag is set to true, disables any
     /// subsequent module publish requests.
-    pub fn extract_publish_request(&mut self) -> Option<PublishRequest> {
-        let ctx = self.get_native_extensions().get_mut::<NativeCodeContext>();
+    pub(crate) fn extract_publish_request(&mut self) -> Option<PublishRequest> {
+        let ctx = self.extensions.get_mut::<NativeCodeContext>();
         ctx.extract_publish_request()
+    }
+
+    pub(crate) fn mark_unbiasable(&mut self) {
+        let txn_context = self.extensions.get_mut::<RandomnessContext>();
+        txn_context.mark_unbiasable();
     }
 
     fn populate_v0_resource_group_change_set(
@@ -266,7 +343,7 @@ impl<'r, 'l> SessionExt<'r, 'l> {
     /// V1 Resource group change set behavior keeps ops for individual resources separate, not
     /// merging them into a single op corresponding to the whole resource group (V0).
     fn split_and_merge_resource_groups(
-        resolver: &dyn AptosMoveResolver,
+        resolver: &impl AptosMoveResolver,
         module_storage: &impl ModuleStorage,
         change_set: ChangeSet,
     ) -> PartialVMResult<(ChangeSet, ResourceGroupChangeSet)> {
@@ -298,9 +375,16 @@ impl<'r, 'l> SessionExt<'r, 'l> {
 
             for (struct_tag, blob_op) in resources {
                 let resource_group_tag = {
+                    // INVARIANT:
+                    //   We do not need to meter metadata access here. If this resource is in data
+                    //   cache, we must have already fetched metadata for its tag.
                     let metadata = module_storage
-                        .fetch_existing_module_metadata(&struct_tag.address, &struct_tag.module)
+                        .unmetered_get_existing_module_metadata(
+                            &struct_tag.address,
+                            &struct_tag.module,
+                        )
                         .map_err(|e| e.to_partial())?;
+
                     get_resource_group_member_from_metadata(&struct_tag, &metadata)
                 };
 
@@ -466,18 +550,4 @@ pub fn convert_modules_into_write_ops(
 ) -> PartialVMResult<BTreeMap<StateKey, ModuleWrite<WriteOp>>> {
     let woc = WriteOpConverter::new(resolver, features.is_storage_slot_metadata_enabled());
     woc.convert_modules_into_write_ops(module_storage, verified_module_bundle.into_iter())
-}
-
-impl<'r, 'l> Deref for SessionExt<'r, 'l> {
-    type Target = Session<'r, 'l>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl<'r, 'l> DerefMut for SessionExt<'r, 'l> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
 }

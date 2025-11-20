@@ -4,7 +4,7 @@
 #![forbid(unsafe_code)]
 
 use crate::{
-    db_options::gen_state_kv_shard_cfds,
+    db_options::{gen_hot_state_kv_shard_cfds, gen_state_kv_shard_cfds},
     metrics::OTHER_TIMERS_SECONDS,
     schema::{
         db_metadata::{DbMetadataKey, DbMetadataSchema, DbMetadataValue},
@@ -24,15 +24,14 @@ use aptos_metrics_core::TimerHelper;
 use aptos_rocksdb_options::gen_rocksdb_options;
 use aptos_schemadb::{
     batch::{SchemaBatch, WriteBatch},
-    ReadOptions, DB,
+    Cache, Env, ReadOptions, DB,
 };
-use aptos_storage_interface::{state_store::NUM_STATE_SHARDS, Result};
+use aptos_storage_interface::Result;
 use aptos_types::{
-    state_store::{state_key::StateKey, state_value::StateValue},
+    state_store::{state_key::StateKey, state_value::StateValue, NUM_STATE_SHARDS},
     transaction::Version,
 };
 use arr_macro::arr;
-use itertools::Itertools;
 use rayon::prelude::*;
 use std::{
     path::{Path, PathBuf},
@@ -45,6 +44,9 @@ pub const STATE_KV_METADATA_DB_NAME: &str = "state_kv_metadata_db";
 pub struct StateKvDb {
     state_kv_metadata_db: Arc<DB>,
     state_kv_db_shards: [Arc<DB>; NUM_STATE_SHARDS],
+    // TODO(HotState): no separate metadata db for hot state for now.
+    #[allow(dead_code)] // TODO(HotState): can remove later.
+    hot_state_kv_db_shards: Option<[Arc<DB>; NUM_STATE_SHARDS]>,
     enabled_sharding: bool,
 }
 
@@ -52,6 +54,7 @@ impl StateKvDb {
     pub(crate) fn new(
         db_paths: &StorageDirPaths,
         rocksdb_configs: RocksdbConfigs,
+        env: Option<&Env>,
         readonly: bool,
         ledger_db: Arc<DB>,
     ) -> Result<Self> {
@@ -61,16 +64,29 @@ impl StateKvDb {
             return Ok(Self {
                 state_kv_metadata_db: Arc::clone(&ledger_db),
                 state_kv_db_shards: arr![Arc::clone(&ledger_db); 16],
+                hot_state_kv_db_shards: None,
                 enabled_sharding: false,
             });
         }
 
-        Self::open_sharded(db_paths, rocksdb_configs.state_kv_db_config, readonly)
+        let block_cache = Cache::new_hyper_clock_cache(
+            rocksdb_configs.state_kv_db_config.block_cache_size as usize,
+            /* estimated_entry_charge = */ 0,
+        );
+        Self::open_sharded(
+            db_paths,
+            rocksdb_configs.state_kv_db_config,
+            env,
+            Some(&block_cache),
+            readonly,
+        )
     }
 
     pub(crate) fn open_sharded(
         db_paths: &StorageDirPaths,
         state_kv_db_config: RocksdbConfig,
+        env: Option<&Env>,
+        block_cache: Option<&Cache>,
         readonly: bool,
     ) -> Result<Self> {
         let state_kv_metadata_db_path =
@@ -80,7 +96,10 @@ impl StateKvDb {
             state_kv_metadata_db_path.clone(),
             STATE_KV_METADATA_DB_NAME,
             &state_kv_db_config,
+            env,
+            block_cache,
             readonly,
+            /* is_hot = */ false,
         )?);
 
         info!(
@@ -91,12 +110,15 @@ impl StateKvDb {
         let state_kv_db_shards = (0..NUM_STATE_SHARDS)
             .into_par_iter()
             .map(|shard_id| {
-                let shard_root_path = db_paths.state_kv_db_shard_root_path(shard_id as u8);
+                let shard_root_path = db_paths.state_kv_db_shard_root_path(shard_id);
                 let db = Self::open_shard(
                     shard_root_path,
-                    shard_id as u8,
+                    shard_id,
                     &state_kv_db_config,
+                    env,
+                    block_cache,
                     readonly,
+                    /* is_hot = */ false,
                 )
                 .unwrap_or_else(|e| panic!("Failed to open state kv db shard {shard_id}: {e:?}."));
                 Arc::new(db)
@@ -105,9 +127,40 @@ impl StateKvDb {
             .try_into()
             .unwrap();
 
+        let hot_state_kv_db_shards = if readonly {
+            // TODO(HotState): do not open it in readonly mode yet, until we have this DB
+            // everywhere.
+            None
+        } else {
+            Some(
+                (0..NUM_STATE_SHARDS)
+                    .into_par_iter()
+                    .map(|shard_id| {
+                        let shard_root_path = db_paths.hot_state_kv_db_shard_root_path(shard_id);
+                        let db = Self::open_shard(
+                            shard_root_path,
+                            shard_id,
+                            &state_kv_db_config,
+                            env,
+                            block_cache,
+                            readonly,
+                            /* is_hot = */ true,
+                        )
+                        .unwrap_or_else(|e| {
+                            panic!("Failed to open hot state kv db shard {shard_id}: {e:?}.")
+                        });
+                        Arc::new(db)
+                    })
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap(),
+            )
+        };
+
         let state_kv_db = Self {
             state_kv_metadata_db,
             state_kv_db_shards,
+            hot_state_kv_db_shards,
             enabled_sharding: true,
         };
 
@@ -120,12 +173,8 @@ impl StateKvDb {
         Ok(state_kv_db)
     }
 
-    pub(crate) fn new_sharded_native_batches(&self) -> ShardedStateKvSchemaBatch {
-        (0..NUM_STATE_SHARDS)
-            .map(|shard_id| self.db_shard(shard_id as u8).new_native_batch())
-            .collect_vec()
-            .try_into()
-            .expect("known to be 16 shards")
+    pub(crate) fn new_sharded_native_batches(&self) -> ShardedStateKvSchemaBatch<'_> {
+        std::array::from_fn(|shard_id| self.db_shard(shard_id).new_native_batch())
     }
 
     pub(crate) fn commit(
@@ -134,13 +183,9 @@ impl StateKvDb {
         state_kv_metadata_batch: Option<SchemaBatch>,
         sharded_state_kv_batches: ShardedStateKvSchemaBatch,
     ) -> Result<()> {
-        let _timer = OTHER_TIMERS_SECONDS
-            .with_label_values(&["state_kv_db__commit"])
-            .start_timer();
+        let _timer = OTHER_TIMERS_SECONDS.timer_with(&["state_kv_db__commit"]);
         {
-            let _timer = OTHER_TIMERS_SECONDS
-                .with_label_values(&["state_kv_db__commit_shards"])
-                .start_timer();
+            let _timer = OTHER_TIMERS_SECONDS.timer_with(&["state_kv_db__commit_shards"]);
             THREAD_MANAGER.get_io_pool().scope(|s| {
                 let mut batches = sharded_state_kv_batches.into_iter();
                 for shard_id in 0..NUM_STATE_SHARDS {
@@ -149,7 +194,7 @@ impl StateKvDb {
                         .expect("Not sufficient number of sharded state kv batches");
                     s.spawn(move |_| {
                         // TODO(grao): Consider propagating the error instead of panic, if necessary.
-                        self.commit_single_shard(version, shard_id as u8, state_kv_batch)
+                        self.commit_single_shard(version, shard_id, state_kv_batch)
                             .unwrap_or_else(|err| {
                                 panic!("Failed to commit shard {shard_id}: {err}.")
                             });
@@ -187,6 +232,8 @@ impl StateKvDb {
         let state_kv_db = Self::open_sharded(
             &StorageDirPaths::from_path(db_root_path),
             RocksdbConfig::default(),
+            None,
+            None,
             false,
         )?;
         let cp_state_kv_db_path = cp_root_path.as_ref().join(STATE_KV_DB_FOLDER_NAME);
@@ -200,10 +247,15 @@ impl StateKvDb {
             .metadata_db()
             .create_checkpoint(Self::metadata_db_path(cp_root_path.as_ref()))?;
 
+        // TODO(HotState): should handle hot state as well.
         for shard_id in 0..NUM_STATE_SHARDS {
             state_kv_db
-                .db_shard(shard_id as u8)
-                .create_checkpoint(Self::db_shard_path(cp_root_path.as_ref(), shard_id as u8))?;
+                .db_shard(shard_id)
+                .create_checkpoint(Self::db_shard_path(
+                    cp_root_path.as_ref(),
+                    shard_id,
+                    /* is_hot = */ false,
+                ))?;
         }
 
         Ok(())
@@ -217,20 +269,20 @@ impl StateKvDb {
         Arc::clone(&self.state_kv_metadata_db)
     }
 
-    pub(crate) fn db_shard(&self, shard_id: u8) -> &DB {
-        &self.state_kv_db_shards[shard_id as usize]
+    pub(crate) fn db_shard(&self, shard_id: usize) -> &DB {
+        &self.state_kv_db_shards[shard_id]
     }
 
-    pub(crate) fn db_shard_arc(&self, shard_id: u8) -> Arc<DB> {
-        Arc::clone(&self.state_kv_db_shards[shard_id as usize])
+    pub(crate) fn db_shard_arc(&self, shard_id: usize) -> Arc<DB> {
+        Arc::clone(&self.state_kv_db_shards[shard_id])
     }
 
     pub(crate) fn enabled_sharding(&self) -> bool {
         self.enabled_sharding
     }
 
-    pub(crate) fn num_shards(&self) -> u8 {
-        NUM_STATE_SHARDS as u8
+    pub(crate) fn num_shards(&self) -> usize {
+        NUM_STATE_SHARDS
     }
 
     pub(crate) fn hack_num_real_shards(&self) -> usize {
@@ -244,28 +296,38 @@ impl StateKvDb {
     pub(crate) fn commit_single_shard(
         &self,
         version: Version,
-        shard_id: u8,
+        shard_id: usize,
         mut batch: impl WriteBatch,
     ) -> Result<()> {
         batch.put::<DbMetadataSchema>(
-            &DbMetadataKey::StateKvShardCommitProgress(shard_id as usize),
+            &DbMetadataKey::StateKvShardCommitProgress(shard_id),
             &DbMetadataValue::Version(version),
         )?;
-        self.state_kv_db_shards[shard_id as usize].write_schemas(batch)
+        self.state_kv_db_shards[shard_id].write_schemas(batch)
     }
 
     fn open_shard<P: AsRef<Path>>(
         db_root_path: P,
-        shard_id: u8,
+        shard_id: usize,
         state_kv_db_config: &RocksdbConfig,
+        env: Option<&Env>,
+        block_cache: Option<&Cache>,
         readonly: bool,
+        is_hot: bool,
     ) -> Result<DB> {
-        let db_name = format!("state_kv_db_shard_{}", shard_id);
+        let db_name = if is_hot {
+            format!("hot_state_kv_db_shard_{}", shard_id)
+        } else {
+            format!("state_kv_db_shard_{}", shard_id)
+        };
         Self::open_db(
-            Self::db_shard_path(db_root_path, shard_id),
+            Self::db_shard_path(db_root_path, shard_id, is_hot),
             &db_name,
             state_kv_db_config,
+            env,
+            block_cache,
             readonly,
+            is_hot,
         )
     }
 
@@ -273,27 +335,32 @@ impl StateKvDb {
         path: PathBuf,
         name: &str,
         state_kv_db_config: &RocksdbConfig,
+        env: Option<&Env>,
+        block_cache: Option<&Cache>,
         readonly: bool,
+        is_hot: bool,
     ) -> Result<DB> {
-        Ok(if readonly {
-            DB::open_cf_readonly(
-                &gen_rocksdb_options(state_kv_db_config, true),
-                path,
-                name,
-                gen_state_kv_shard_cfds(state_kv_db_config),
-            )?
+        let open_func = if readonly {
+            DB::open_cf_readonly
         } else {
-            DB::open_cf(
-                &gen_rocksdb_options(state_kv_db_config, false),
-                path,
-                name,
-                gen_state_kv_shard_cfds(state_kv_db_config),
-            )?
-        })
+            DB::open_cf
+        };
+        let rocksdb_opts = gen_rocksdb_options(state_kv_db_config, env, readonly);
+        let cfds = if is_hot {
+            gen_hot_state_kv_shard_cfds
+        } else {
+            gen_state_kv_shard_cfds
+        }(state_kv_db_config, block_cache);
+
+        open_func(&rocksdb_opts, path, name, cfds)
     }
 
-    fn db_shard_path<P: AsRef<Path>>(db_root_path: P, shard_id: u8) -> PathBuf {
-        let shard_sub_path = format!("shard_{}", shard_id);
+    fn db_shard_path<P: AsRef<Path>>(db_root_path: P, shard_id: usize, is_hot: bool) -> PathBuf {
+        let shard_sub_path = format!(
+            "{}_{}",
+            if is_hot { "hot_shard" } else { "shard" },
+            shard_id
+        );
         db_root_path
             .as_ref()
             .join(STATE_KV_DB_FOLDER_NAME)

@@ -11,7 +11,7 @@ use crate::{
 use aptos_consensus_types::{block::Block, pipelined_block::PipelinedBlock};
 use aptos_crypto::HashValue;
 use aptos_executor_types::{state_compute_result::StateComputeResult, ExecutorError};
-use aptos_logger::prelude::{error, warn};
+use aptos_logger::prelude::warn;
 use aptos_metrics_core::{
     exponential_buckets, op_counters::DurationHistogram, register_avg_counter, register_counter,
     register_gauge, register_gauge_vec, register_histogram, register_histogram_vec,
@@ -32,6 +32,11 @@ pub const TXN_COMMIT_FAILED_LABEL: &str = "failed";
 pub const TXN_COMMIT_FAILED_DUPLICATE_LABEL: &str = "failed_duplicate";
 /// Transaction commit failed (will not be retried) because it expired
 pub const TXN_COMMIT_FAILED_EXPIRED_LABEL: &str = "failed_expired";
+/// Transaction commit failed (will not be retried) because the nonce is already used in a previous transaction
+pub const TXN_COMMIT_FAILED_NONCE_ALREADY_USED_LABEL: &str = "failed_nonce_already_used";
+/// Transaction commit failed (will not be retried) because the transaction expiration time is too far in the future
+pub const TXN_COMMIT_FAILED_TXN_EXPIRATION_TOO_FAR_IN_FUTURE_LABEL: &str =
+    "failed_txn_expiration_too_far_in_future";
 /// Transaction commit was unsuccessful, but will be retried
 pub const TXN_COMMIT_RETRY_LABEL: &str = "retry";
 
@@ -50,6 +55,16 @@ fn gas_buckets() -> Vec<f64> {
 pub static OP_COUNTERS: Lazy<aptos_metrics_core::op_counters::OpMetrics> =
     Lazy::new(|| aptos_metrics_core::op_counters::OpMetrics::new_and_registered("consensus"));
 
+/// Count of the total number of blocks of whether randomness is required
+pub static RAND_BLOCK: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "aptos_consensus_rand_block_count",
+        "Count of the total number of blocks of whether randomness is required",
+        &["type"]
+    )
+    .unwrap()
+});
+
 /// Counts the total number of errors
 pub static ERROR_COUNT: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!(
@@ -59,27 +74,20 @@ pub static ERROR_COUNT: Lazy<IntGauge> = Lazy::new(|| {
     .unwrap()
 });
 
-pub static APTOS_EXECUTION_TXNS: Lazy<Histogram> = Lazy::new(|| {
-    register_histogram!(
-        "aptos_execution_transactions",
-        "Number of transactions handled in one request/response between mempool and execution layer",
-    )
-    .unwrap()
-});
-
-pub static APTOS_COMMIT_BLOCKS: Lazy<IntCounter> = Lazy::new(|| {
-    register_int_counter!(
-        "aptos_commit_blocks",
-        "Number of transactions committed by consensus",
-    )
-    .unwrap()
-});
-
 /// This counter is set to the round of the highest committed block.
 pub static LAST_COMMITTED_ROUND: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!(
         "aptos_consensus_last_committed_round",
         "This counter is set to the round of the highest committed block."
+    )
+    .unwrap()
+});
+
+/// The counter corresponds to the round of the highest committed opt block.
+pub static LAST_COMMITTED_OPT_BLOCK_ROUND: Lazy<IntGauge> = Lazy::new(|| {
+    register_int_gauge!(
+        "aptos_consensus_last_committed_opt_block_round",
+        "The counter corresponds to the round of the highest committed opt block."
     )
     .unwrap()
 });
@@ -107,6 +115,15 @@ pub static COMMITTED_BLOCKS_COUNT: Lazy<IntCounter> = Lazy::new(|| {
     register_int_counter!(
         "aptos_consensus_committed_blocks_count",
         "Count of the committed blocks since last restart."
+    )
+    .unwrap()
+});
+
+/// Count of the committed opt blocks since last restart.
+pub static COMMITTED_OPT_BLOCKS_COUNT: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "aptos_consensus_committed_opt_blocks_count",
+        "Count of the committed opt blocks since last restart."
     )
     .unwrap()
 });
@@ -180,55 +197,6 @@ pub static TOTAL_VOTING_POWER: Lazy<Gauge> = Lazy::new(|| {
 /// Number of distinct senders in a block
 pub static NUM_SENDERS_IN_BLOCK: Lazy<Gauge> = Lazy::new(|| {
     register_gauge!("num_senders_in_block", "Total number of senders in a block").unwrap()
-});
-
-/// Number of executed block in buffer manager
-pub static EXECUTED_BLOCK_COUNTER: Lazy<Gauge> = Lazy::new(|| {
-    register_gauge!(
-        "aptos_consensus_buffer_manager_executed_block_counter",
-        "Number of blocks processed by buffer manager"
-    )
-    .unwrap()
-});
-
-pub static SEND_TO_EXECUTION_BLOCK_COUNTER: Lazy<IntCounter> = Lazy::new(|| {
-    register_int_counter!(
-        "aptos_consensus_buffer_manager_send_to_execution_block_counter",
-        "Number of blocks sent to execution layer"
-    )
-    .unwrap()
-});
-
-pub static SEND_TO_RECOVER_BLOCK_COUNTER: Lazy<IntCounter> = Lazy::new(|| {
-    register_int_counter!(
-        "aptos_consensus_buffer_manager_send_to_recover_block_counter",
-        "Number of blocks sent to do recover in execution layer"
-    )
-    .unwrap()
-});
-
-pub static SEND_TO_PERSISTING_BLOCK_COUNTER: Lazy<IntCounter> = Lazy::new(|| {
-    register_int_counter!(
-        "aptos_consensus_buffer_manager_send_to_persisting_block_counter",
-        "Number of blocks sent to do persisting in execution layer"
-    )
-    .unwrap()
-});
-
-pub static CREATED_EXECUTED_BLOCK_COUNTER: Lazy<Gauge> = Lazy::new(|| {
-    register_gauge!(
-        "aptos_consensus_buffer_manager_created_executed_block_counter",
-        "Number of blocks created by buffer manager"
-    )
-    .unwrap()
-});
-
-pub static FINALIZED_EXECUTED_BLOCK_COUNTER: Lazy<Gauge> = Lazy::new(|| {
-    register_gauge!(
-        "aptos_consensus_buffer_manager_finalized_executed_block_counter",
-        "Number of blocks finalized by buffer manager"
-    )
-    .unwrap()
 });
 
 /// Transaction shuffling call latency
@@ -923,6 +891,7 @@ const TRACING_BUCKETS: &[f64] = &[
     1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0,
     4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 10.0,
 ];
+
 /// Traces block movement throughout the node
 pub static BLOCK_TRACING: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
@@ -1215,7 +1184,6 @@ pub fn log_executor_error_occurred(
     e: ExecutorError,
     counter: &Lazy<IntCounterVec>,
     block_id: HashValue,
-    new_pipeline_enabled: bool,
 ) {
     match e {
         ExecutorError::CouldNotGetData => {
@@ -1234,17 +1202,10 @@ pub fn log_executor_error_occurred(
         },
         e => {
             counter.with_label_values(&["UnexpectedError"]).inc();
-            if new_pipeline_enabled {
-                warn!(
-                    block_id = block_id,
-                    "Execution error {:?} for {}", e, block_id
-                );
-            } else {
-                error!(
-                    block_id = block_id,
-                    "Execution error {:?} for {}", e, block_id
-                );
-            }
+            warn!(
+                block_id = block_id,
+                "Execution error {:?} for {}", e, block_id
+            );
         },
     }
 }
@@ -1308,6 +1269,15 @@ pub static UNEXPECTED_PROPOSAL_EXT_COUNT: Lazy<IntCounter> = Lazy::new(|| {
     .unwrap()
 });
 
+/// Count of the number of rejected proposals due to denied inline transactions
+pub static REJECTED_PROPOSAL_DENY_TXN_COUNT: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "aptos_consensus_rejected_proposal_deny_txn_count",
+        "Count of the number of rejected proposals due to denied inline transactions"
+    )
+    .unwrap()
+});
+
 /// Histogram for the number of txns to be executed in a block.
 pub static MAX_TXNS_FROM_BLOCK_TO_EXECUTE: Lazy<Histogram> = Lazy::new(|| {
     register_histogram!(
@@ -1344,6 +1314,11 @@ pub fn update_counters_for_block(block: &Block) {
     NUM_BYTES_PER_BLOCK.observe(block.payload().map_or(0, |payload| payload.size()) as f64);
     COMMITTED_BLOCKS_COUNT.inc();
     LAST_COMMITTED_ROUND.set(block.round() as i64);
+    if block.is_opt_block() {
+        observe_block(block.timestamp_usecs(), BlockStage::COMMITTED_OPT_BLOCK);
+        COMMITTED_OPT_BLOCKS_COUNT.inc();
+        LAST_COMMITTED_OPT_BLOCK_ROUND.set(block.round() as i64);
+    }
     let failed_rounds = block
         .block_data()
         .failed_authors()
@@ -1352,7 +1327,7 @@ pub fn update_counters_for_block(block: &Block) {
     if failed_rounds > 0 {
         COMMITTED_FAILED_ROUNDS_COUNT.inc_by(failed_rounds as u64);
     }
-    quorum_store::counters::NUM_BATCH_PER_BLOCK.observe(block.payload_size() as f64);
+    quorum_store::counters::update_batch_stats(block);
 }
 
 pub fn update_counters_for_compute_result(compute_result: &StateComputeResult) {
@@ -1369,6 +1344,10 @@ pub fn update_counters_for_compute_result(compute_result: &StateComputeResult) {
                     TXN_COMMIT_FAILED_DUPLICATE_LABEL
                 } else if *reason == DiscardedVMStatus::TRANSACTION_EXPIRED {
                     TXN_COMMIT_FAILED_EXPIRED_LABEL
+                } else if *reason == DiscardedVMStatus::NONCE_ALREADY_USED {
+                    TXN_COMMIT_FAILED_NONCE_ALREADY_USED_LABEL
+                } else if *reason == DiscardedVMStatus::TRANSACTION_EXPIRATION_TOO_FAR_IN_FUTURE {
+                    TXN_COMMIT_FAILED_TXN_EXPIRATION_TOO_FAR_IN_FUTURE_LABEL
                 } else {
                     TXN_COMMIT_FAILED_LABEL
                 }
@@ -1385,7 +1364,7 @@ pub fn update_counters_for_compute_result(compute_result: &StateComputeResult) {
 pub fn update_counters_for_committed_blocks(blocks_to_commit: &[Arc<PipelinedBlock>]) {
     for block in blocks_to_commit {
         update_counters_for_block(block.block());
-        update_counters_for_compute_result(block.compute_result());
+        update_counters_for_compute_result(&block.compute_result());
     }
 }
 

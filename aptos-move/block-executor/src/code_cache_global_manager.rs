@@ -8,7 +8,7 @@ use crate::{
         STRUCT_NAME_INDEX_MAP_NUM_ENTRIES,
     },
 };
-use aptos_gas_schedule::gas_feature_versions::RELEASE_V1_30;
+use aptos_gas_schedule::gas_feature_versions::RELEASE_V1_34;
 use aptos_types::{
     block_executor::{
         config::BlockExecutorModuleCacheLocalConfig,
@@ -106,7 +106,7 @@ where
         // different, we reset it to the new one, and flush the module cache.
         let environment_requires_update = self.environment.as_ref() != Some(&storage_environment);
         if environment_requires_update {
-            if storage_environment.gas_feature_version() >= RELEASE_V1_30 {
+            if storage_environment.gas_feature_version() >= RELEASE_V1_34 {
                 let flush_verifier_cache = self.environment.as_ref().map_or(true, |e| {
                     e.verifier_config_bytes() != storage_environment.verifier_config_bytes()
                 });

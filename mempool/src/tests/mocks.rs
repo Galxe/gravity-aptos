@@ -5,7 +5,7 @@
 use crate::{
     core_mempool::{CoreMempool, TimelineState},
     network::BroadcastPeerPriority,
-    shared_mempool::{start_shared_mempool, types::{CoreMempoolTrait, GravityCoreMempool}},
+    shared_mempool::start_shared_mempool,
     MempoolClientSender, QuorumStoreRequest,
 };
 use anyhow::{format_err, Result};
@@ -50,7 +50,7 @@ pub struct MockSharedMempool {
     _runtime: Option<Handle>,
     _handle: Option<Handle>,
     pub ac_client: MempoolClientSender,
-    pub mempool: Arc<Mutex<Box<dyn CoreMempoolTrait>>>,
+    pub mempool: Arc<Mutex<CoreMempool>>,
     pub consensus_to_mempool_sender: mpsc::Sender<QuorumStoreRequest>,
     pub mempool_notifier: MempoolNotifier,
 }
@@ -111,14 +111,14 @@ impl MockSharedMempool {
         validator: V,
     ) -> (
         MempoolClientSender,
-        Arc<Mutex<Box<dyn CoreMempoolTrait>>>,
+        Arc<Mutex<CoreMempool>>,
         mpsc::Sender<QuorumStoreRequest>,
         MempoolNotifier,
     ) {
         let mut config = NodeConfig::generate_random_config();
         config.validator_network = Some(NetworkConfig::network_with_id(NetworkId::Validator));
 
-        let mempool = Arc::new(Mutex::new(Box::new(GravityCoreMempool::from(CoreMempool::new(&config))) as Box<dyn CoreMempoolTrait>));
+        let mempool = Arc::new(Mutex::new(CoreMempool::new(&config)));
         let (network_reqs_tx, _network_reqs_rx) = aptos_channel::new(QueueStyle::FIFO, 8, None);
         let (connection_reqs_tx, _) = aptos_channel::new(QueueStyle::FIFO, 8, None);
         let (_network_notifs_tx, network_notifs_rx) = aptos_channel::new(QueueStyle::FIFO, 8, None);
@@ -174,7 +174,7 @@ impl MockSharedMempool {
         (ac_client, mempool, quorum_store_sender, mempool_notifier)
     }
 
-    pub async fn add_txns(&self, txns: Vec<SignedTransaction>) -> Result<()> {
+    pub fn add_txns(&self, txns: Vec<SignedTransaction>) -> Result<()> {
         {
             let mut pool = self.mempool.lock();
             for txn in txns {

@@ -25,7 +25,8 @@ use move_core_types::{
     value::MoveTypeLayout,
     vm_status::StatusCode,
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
+use triomphe::Arc as TriompheArc;
 
 pub(crate) struct WriteOpConverter<'r> {
     remote: &'r dyn AptosMoveResolver,
@@ -85,16 +86,18 @@ impl<'r> WriteOpConverter<'r> {
             let addr = module_id.address();
             let name = module_id.name();
 
-            let module_exists = module_storage
-                .check_module_exists(addr, name)
-                .map_err(|e| e.to_partial())?;
-            let op = if module_exists {
+            // INVARIANT:
+            //   No need to charge for module metadata access because the write of a module must
+            //   have been already charged for when processing module bundle. Here, it is used for
+            //   conversion into a write op - if the metadata exists, it is a modification.
+            let state_value_metadata =
+                module_storage.unmetered_get_module_state_value_metadata(addr, name)?;
+            let op = if state_value_metadata.is_some() {
                 Op::Modify(bytes)
             } else {
                 Op::New(bytes)
             };
 
-            let state_value_metadata = module_storage.fetch_state_value_metadata(addr, name)?;
             let write_op = self.convert(
                 state_value_metadata,
                 op,
@@ -129,7 +132,7 @@ impl<'r> WriteOpConverter<'r> {
         state_key: &StateKey,
         move_storage_op: MoveStorageOp<BytesWithResourceLayout>,
         legacy_creation_as_modification: bool,
-    ) -> PartialVMResult<(WriteOp, Option<Arc<MoveTypeLayout>>)> {
+    ) -> PartialVMResult<(WriteOp, Option<TriompheArc<MoveTypeLayout>>)> {
         let state_value_metadata = self
             .remote
             .as_executor_view()

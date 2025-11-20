@@ -21,7 +21,8 @@ use aptos_types::{
     proptest_types::{AccountInfoUniverse, BlockGen},
     state_store::{state_key::StateKey, state_value::StateValue},
     transaction::{
-        Transaction, TransactionAuxiliaryData, TransactionInfo, TransactionToCommit, Version,
+        AuxiliaryInfo, PersistedAuxiliaryInfo, ReplayProtector, Transaction,
+        TransactionAuxiliaryData, TransactionInfo, TransactionToCommit, Version,
     },
     write_set::TransactionWrite,
 };
@@ -159,7 +160,7 @@ prop_compose! {
             let state_checkpoint_root_hash = smt.root_hash();
 
             // make real txn_info's
-            for txn in txns_to_commit.iter_mut() {
+            for (idx, txn) in txns_to_commit.iter_mut().enumerate() {
                 let placeholder_txn_info = txn.transaction_info();
 
                 // calculate event root hash
@@ -173,6 +174,8 @@ prop_compose! {
                     None
                 };
 
+                let auxiliary_info = AuxiliaryInfo::new(PersistedAuxiliaryInfo::V1 { transaction_index: idx as u32 }, None);
+
                 let txn_info = TransactionInfo::new(
                     txn.transaction().hash(),
                     txn.write_set().hash(),
@@ -180,6 +183,7 @@ prop_compose! {
                     state_checkpoint_hash,
                     placeholder_txn_info.gas_used(),
                     placeholder_txn_info.status().clone(),
+                    auxiliary_info.persisted_info_hash(),
                 );
                 txn_accumulator = txn_accumulator.append(&[txn_info.hash()]);
                 txn.set_transaction_info(txn_info);
@@ -424,7 +428,7 @@ fn verify_snapshots(
         updates.extend(
             txns_to_commit[start..=end]
                 .iter()
-                .flat_map(|x| x.write_set().iter())
+                .flat_map(|x| x.write_set().write_op_iter())
                 .map(|(k, op)| (k.clone(), op.as_state_value())),
         );
         for (state_key, state_value) in &updates {
@@ -459,7 +463,7 @@ fn get_events_by_event_key(
         first_seq_num
     } else if is_latest {
         // Test the ability to get the latest.
-        u64::max_value()
+        u64::MAX
     } else {
         last_seq_num
     };
@@ -470,7 +474,7 @@ fn get_events_by_event_key(
             db.get_events_by_event_key(event_key, cursor, order, LIMIT, ledger_info.version())?;
 
         let num_events = events.len() as u64;
-        if cursor == u64::max_value() {
+        if cursor == u64::MAX {
             cursor = last_seq_num;
         }
         let expected_seq_nums: Vec<_> = if order == Order::Ascending {
@@ -608,12 +612,54 @@ fn group_events_by_event_key(
     event_key_to_events.into_iter().collect()
 }
 
-fn verify_account_txns(
+fn verify_account_txn_summaries(
     db: &AptosDB,
-    expected_txns_by_account: HashMap<AccountAddress, Vec<(Transaction, Vec<ContractEvent>)>>,
+    expected_txns_by_account: HashMap<AccountAddress, Vec<Transaction>>,
+    ledger_info: &LedgerInfo,
+    first_version: Version,
+) {
+    let ledger_version = ledger_info.version();
+    for (address, expected_txns) in &expected_txns_by_account {
+        let actual_txn_summaries = db.get_account_transaction_summaries(
+            *address,
+            Some(first_version),
+            None,
+            expected_txns.len() as u64,
+            ledger_version,
+        );
+        for (expected_txn, actual_txn_summary) in
+            expected_txns.iter().zip(actual_txn_summaries.unwrap())
+        {
+            assert_eq!(actual_txn_summary.transaction_hash(), expected_txn.hash());
+            assert_eq!(
+                actual_txn_summary.replay_protector(),
+                expected_txn
+                    .try_as_signed_user_txn()
+                    .unwrap()
+                    .replay_protector()
+            );
+            assert_eq!(
+                actual_txn_summary.sender(),
+                expected_txn.try_as_signed_user_txn().unwrap().sender()
+            );
+            let fetched_txn = db
+                .get_transaction_by_version(actual_txn_summary.version(), ledger_version, false)
+                .unwrap();
+            assert_eq!(fetched_txn.transaction, *expected_txn);
+            assert_eq!(fetched_txn.version, actual_txn_summary.version());
+        }
+    }
+}
+
+fn verify_account_ordered_txns(
+    db: &AptosDB,
+    expected_ordered_txns_by_account: HashMap<
+        AccountAddress,
+        Vec<(Transaction, Vec<ContractEvent>)>,
+    >,
     ledger_info: &LedgerInfo,
 ) {
-    let actual_txns_by_account = expected_txns_by_account
+    let actual_ordered_txns_by_account = expected_ordered_txns_by_account
         .iter()
         .map(|(account, txns_and_events)| {
             let account = *account;
@@ -628,7 +674,7 @@ fn verify_account_txns(
             let limit = last_seq_num + 1;
 
             let acct_txns_with_proof = db
-                .get_account_transactions(
+                .get_account_ordered_transactions(
                     account,
                     first_seq_num,
                     limit,
@@ -657,12 +703,15 @@ fn verify_account_txns(
         })
         .collect::<HashMap<_, _>>();
 
-    assert_eq!(actual_txns_by_account, expected_txns_by_account);
+    assert_eq!(
+        actual_ordered_txns_by_account,
+        expected_ordered_txns_by_account
+    );
 }
 
 fn group_txns_by_account(
     txns_to_commit: &[TransactionToCommit],
-) -> HashMap<AccountAddress, Vec<(Transaction, Vec<ContractEvent>)>> {
+) -> HashMap<AccountAddress, Vec<Transaction>> {
     let mut account_to_txns = HashMap::new();
     for txn in txns_to_commit {
         if let Some(signed_txn) = txn.transaction().try_as_signed_user_txn() {
@@ -670,7 +719,25 @@ fn group_txns_by_account(
             account_to_txns
                 .entry(account)
                 .or_insert_with(Vec::new)
-                .push((txn.transaction().clone(), txn.events().to_vec()));
+                .push(txn.transaction().clone());
+        }
+    }
+    account_to_txns
+}
+
+fn group_ordered_txns_by_account(
+    txns_to_commit: &[TransactionToCommit],
+) -> HashMap<AccountAddress, Vec<(Transaction, Vec<ContractEvent>)>> {
+    let mut account_to_txns = HashMap::new();
+    for txn in txns_to_commit {
+        if let Some(signed_txn) = txn.transaction().try_as_signed_user_txn() {
+            if let ReplayProtector::SequenceNumber(_) = signed_txn.replay_protector() {
+                let account = signed_txn.sender();
+                account_to_txns
+                    .entry(account)
+                    .or_insert_with(Vec::new)
+                    .push((txn.transaction().clone(), txn.events().to_vec()));
+            }
         }
     }
     account_to_txns
@@ -786,51 +853,52 @@ pub fn verify_committed_transactions(
                 txn_to_commit.transaction().hash()
             );
             txn_with_proof
-                .verify_user_txn(ledger_info, cur_ver, txn.sender(), txn.sequence_number())
+                .verify_user_txn(ledger_info, cur_ver, txn.sender(), txn.replay_protector())
                 .unwrap();
             let txn_with_proof = db
                 .get_transaction_with_proof(cur_ver, ledger_version, true)
                 .unwrap();
             txn_with_proof
-                .verify_user_txn(ledger_info, cur_ver, txn.sender(), txn.sequence_number())
+                .verify_user_txn(ledger_info, cur_ver, txn.sender(), txn.replay_protector())
                 .unwrap();
 
-            let txn_with_proof = db
-                .get_account_transaction(txn.sender(), txn.sequence_number(), true, ledger_version)
-                .unwrap()
-                .expect("Should exist.");
-            txn_with_proof
-                .verify_user_txn(ledger_info, cur_ver, txn.sender(), txn.sequence_number())
-                .unwrap();
+            if let ReplayProtector::SequenceNumber(seq_num) = txn.replay_protector() {
+                let txn_with_proof = db
+                    .get_account_ordered_transaction(txn.sender(), seq_num, true, ledger_version)
+                    .unwrap()
+                    .expect("Should exist.");
+                txn_with_proof
+                    .verify_user_txn(ledger_info, cur_ver, txn.sender(), txn.replay_protector())
+                    .unwrap();
 
-            let acct_txns_with_proof = db
-                .get_account_transactions(
-                    txn.sender(),
-                    txn.sequence_number(),
-                    1,
-                    true,
-                    ledger_version,
-                )
-                .unwrap();
-            acct_txns_with_proof
-                .verify(
-                    ledger_info,
-                    txn.sender(),
-                    txn.sequence_number(),
-                    1,
-                    true,
-                    ledger_version,
-                )
-                .unwrap();
-            assert_eq!(acct_txns_with_proof.len(), 1);
-
+                let acct_txns_with_proof = db
+                    .get_account_ordered_transactions(
+                        txn.sender(),
+                        seq_num,
+                        1,
+                        true,
+                        ledger_version,
+                    )
+                    .unwrap();
+                acct_txns_with_proof
+                    .verify(
+                        ledger_info,
+                        txn.sender(),
+                        txn.sequence_number(),
+                        1,
+                        true,
+                        ledger_version,
+                    )
+                    .unwrap();
+                assert_eq!(acct_txns_with_proof.len(), 1);
+            }
             let txn_list_with_proof = db
                 .get_transactions(cur_ver, 1, ledger_version, true /* fetch_events */)
                 .unwrap();
             txn_list_with_proof
                 .verify(ledger_info, Some(cur_ver))
                 .unwrap();
-            assert_eq!(txn_list_with_proof.transactions.len(), 1);
+            assert_eq!(txn_list_with_proof.get_num_transactions(), 1);
 
             let txn_output_list_with_proof = db
                 .get_transaction_outputs(cur_ver, 1, ledger_version)
@@ -838,7 +906,7 @@ pub fn verify_committed_transactions(
             txn_output_list_with_proof
                 .verify(ledger_info, Some(cur_ver))
                 .unwrap();
-            assert_eq!(txn_output_list_with_proof.transactions_and_outputs.len(), 1);
+            assert_eq!(txn_output_list_with_proof.get_num_outputs(), 1);
         }
         cur_ver += 1;
     }
@@ -852,7 +920,28 @@ pub fn verify_committed_transactions(
     );
 
     // Fetch and verify batch transactions by account
-    verify_account_txns(db, group_txns_by_account(txns_to_commit), ledger_info);
+    verify_account_txn_summaries(
+        db,
+        group_txns_by_account(txns_to_commit),
+        ledger_info,
+        first_version,
+    );
+    verify_account_ordered_txns(
+        db,
+        group_ordered_txns_by_account(txns_to_commit),
+        ledger_info,
+    );
+}
+
+pub fn put_persisted_auxiliary_info(
+    db: &AptosDB,
+    version: Version,
+    persisted_info: &[PersistedAuxiliaryInfo],
+) {
+    db.ledger_db
+        .persisted_auxiliary_info_db()
+        .commit_auxiliary_info(version, persisted_info)
+        .unwrap()
 }
 
 pub fn put_transaction_infos(

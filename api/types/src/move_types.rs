@@ -16,7 +16,9 @@ use move_core_types::{
     ability::{Ability, AbilitySet},
     account_address::AccountAddress,
     identifier::Identifier,
-    language_storage::{FunctionTag, ModuleId, StructTag, TypeTag},
+    language_storage::{
+        FunctionParamOrReturnTag, FunctionTag, ModuleId, StructTag, TypeTag, LEGACY_OPTION_VEC,
+    },
     parser::{parse_struct_tag, parse_type_tag},
     transaction_argument::TransactionArgument,
 };
@@ -226,6 +228,35 @@ impl TryFrom<AnnotatedMoveStruct> for MoveStructValue {
 
     fn try_from(s: AnnotatedMoveStruct) -> anyhow::Result<Self> {
         let mut map = BTreeMap::new();
+        // This guarantees generated json is backwards compatible.
+        if s.ty_tag.is_option() {
+            if let Some((_, name)) = &s.variant_info {
+                if name.to_string() == "None" {
+                    if !s.value.is_empty() {
+                        return Err(anyhow::anyhow!("None must not have any value"));
+                    }
+                    map.insert(
+                        IdentifierWrapper::from_str(LEGACY_OPTION_VEC)?,
+                        MoveValue::Vector(vec![]).json()?,
+                    );
+                } else if name.to_string() == "Some" {
+                    if s.value.len() != 1 {
+                        return Err(anyhow::anyhow!("Some must have exactly one value"));
+                    }
+                    let v = s.value.into_iter().next().unwrap().1;
+                    map.insert(
+                        IdentifierWrapper::from_str(LEGACY_OPTION_VEC)?,
+                        MoveValue::Vector(vec![MoveValue::try_from(v)?]).json()?,
+                    );
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "Invalid option variant: {}",
+                        name.to_string()
+                    ));
+                }
+                return Ok(Self(map));
+            }
+        }
         if let Some((_, name)) = s.variant_info {
             map.insert(
                 IdentifierWrapper::from_str("__variant__")?,
@@ -252,7 +283,7 @@ impl TryFrom<RawMoveStruct> for MoveStructValue {
         }
         for (pos, val) in s.field_values.into_iter().enumerate() {
             map.insert(
-                IdentifierWrapper::from_str(&pos.to_string())?,
+                IdentifierWrapper::from_str(format!("_{}", pos).as_str())?,
                 MoveValue::try_from(val)?.json()?,
             );
         }
@@ -807,7 +838,21 @@ fn from_function_tag(f: &FunctionTag) -> MoveType {
         results,
         abilities,
     } = f;
-    let from_vec = |tys: &[TypeTag]| tys.iter().map(MoveType::from).collect::<Vec<_>>();
+    let from_vec = |ts: &[FunctionParamOrReturnTag]| {
+        ts.iter()
+            .map(|t| match t {
+                FunctionParamOrReturnTag::Reference(t) => MoveType::Reference {
+                    mutable: false,
+                    to: Box::new(MoveType::from(t)),
+                },
+                FunctionParamOrReturnTag::MutableReference(t) => MoveType::Reference {
+                    mutable: true,
+                    to: Box::new(MoveType::from(t)),
+                },
+                FunctionParamOrReturnTag::Value(t) => MoveType::from(t),
+            })
+            .collect::<Vec<_>>()
+    };
     MoveType::Function {
         args: from_vec(args),
         results: from_vec(results),
@@ -838,7 +883,19 @@ impl TryFrom<&MoveType> for TypeTag {
             } => {
                 let try_vec = |tys: &[MoveType]| {
                     tys.iter()
-                        .map(Self::try_from)
+                        .map(|t| {
+                            Ok(match t {
+                                MoveType::Reference { mutable, to } => {
+                                    let tag = to.as_ref().try_into()?;
+                                    if *mutable {
+                                        FunctionParamOrReturnTag::MutableReference(tag)
+                                    } else {
+                                        FunctionParamOrReturnTag::Reference(tag)
+                                    }
+                                },
+                                t => FunctionParamOrReturnTag::Value(t.try_into()?),
+                            })
+                        })
                         .collect::<anyhow::Result<_>>()
                 };
                 TypeTag::Function(Box::new(FunctionTag {
@@ -848,7 +905,7 @@ impl TryFrom<&MoveType> for TypeTag {
                 }))
             },
             MoveType::GenericTypeParam { index: _ } => TypeTag::Address, // Dummy type, allows for Object<T>
-            _ => {
+            MoveType::Reference { .. } | MoveType::Unparsable(_) => {
                 return Err(anyhow::anyhow!(
                     "Invalid move type for converting into `TypeTag`: {:?}",
                     &tag

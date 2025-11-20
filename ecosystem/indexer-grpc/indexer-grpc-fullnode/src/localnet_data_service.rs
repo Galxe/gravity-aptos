@@ -39,7 +39,15 @@ impl RawData for LocalnetDataService {
         // Some node metadata
         let context = self.service_context.context.clone();
         let r = req.into_inner();
-        let starting_version = r.starting_version.expect("Starting version must be set");
+        let starting_version = match r.starting_version {
+            Some(version) => version,
+            None => return Err(Status::invalid_argument("Starting version must be set")),
+        };
+        let ending_version = if let Some(count) = r.transactions_count {
+            starting_version.saturating_add(count)
+        } else {
+            u64::MAX
+        };
         let processor_batch_size = self.service_context.processor_batch_size;
         let output_batch_size = self.service_context.output_batch_size;
         let ledger_chain_id = context.chain_id().id();
@@ -53,6 +61,7 @@ impl RawData for LocalnetDataService {
             let mut coordinator = IndexerStreamCoordinator::new(
                 context,
                 starting_version,
+                ending_version,
                 // Performance is not important for raw data, and to make sure data is in order,
                 // single thread is used.
                 1,
@@ -60,7 +69,7 @@ impl RawData for LocalnetDataService {
                 output_batch_size,
                 tx.clone(),
             );
-            loop {
+            while coordinator.current_version < coordinator.end_version {
                 // Processes and sends batch of transactions to client
                 let results = coordinator.process_next_batch().await;
                 if results.is_empty() {

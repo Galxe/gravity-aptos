@@ -2,7 +2,10 @@
 // Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use aptos_metrics_core::{register_int_counter, register_int_gauge, IntCounter, IntGauge};
+use aptos_metrics_core::{
+    make_thread_local_int_counter, make_thread_local_int_counter_vec, register_int_counter,
+    register_int_gauge, IntCounter, IntGauge,
+};
 use once_cell::sync::Lazy;
 
 pub static APTOS_JELLYFISH_LEAF_ENCODED_BYTES: Lazy<IntCounter> = Lazy::new(|| {
@@ -29,10 +32,20 @@ pub static APTOS_JELLYFISH_LEAF_COUNT: Lazy<IntGauge> = Lazy::new(|| {
     .unwrap()
 });
 
-pub static APTOS_JELLYFISH_LEAF_DELETION_COUNT: Lazy<IntCounter> = Lazy::new(|| {
-    register_int_counter!(
-        "aptos_jellyfish_leaf_deletion_count",
-        "The number of deletions happened in JMT."
-    )
-    .unwrap()
-});
+make_thread_local_int_counter!(
+    pub,
+    APTOS_JELLYFISH_LEAF_DELETION_COUNT,
+    "aptos_jellyfish_leaf_deletion_count",
+    "The number of deletions happened in JMT."
+);
+
+make_thread_local_int_counter_vec!(
+    pub,
+    COUNTER,
+    // metric name
+    "aptos_jellyfish_counter",
+    // metric description
+    "Various counters for the JellyfishMerkleTree",
+    // metric labels (dimensions)
+    &["name"],
+);

@@ -68,18 +68,17 @@ impl IntoResponse for Bcs {
 
 impl ApiResponse for Bcs {
     fn meta() -> MetaResponses {
-        todo!()
-        // MetaResponses {
-        //     responses: vec![MetaResponse {
-        //         description: "BCS: Binary Canonical Serialization",
-        //         status: Some(200),
-        //         content: vec![MetaMediaType {
-        //             content_type: Self::CONTENT_TYPE,
-        //             schema: Self::schema_ref(),
-        //         }],
-        //         headers: vec![],
-        //     }],
-        // }
+        MetaResponses {
+            responses: vec![MetaResponse {
+                description: "BCS: Binary Canonical Serialization",
+                status: Some(200),
+                content: vec![MetaMediaType {
+                    content_type: Self::CONTENT_TYPE,
+                    schema: Self::schema_ref(),
+                }],
+                headers: vec![],
+            }],
+        }
     }
 
     fn register(registry: &mut Registry) {

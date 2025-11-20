@@ -5,12 +5,12 @@
 use crate::{
     core_mempool::{CoreMempool, TimelineState},
     network::{BroadcastPeerPriority, MempoolSyncMsg},
-    shared_mempool::{start_shared_mempool, types::{CoreMempoolTrait, GravityCoreMempool, SharedMempoolNotification}},
+    shared_mempool::{start_shared_mempool, types::SharedMempoolNotification},
     tests::common::TestTransaction,
 };
 use aptos_channels::{aptos_channel, message_queues::QueueStyle};
 use aptos_config::{
-    config::{Identity, NodeConfig, PeerRole, RoleType},
+    config::{Identity, NodeConfig, PeerRole},
     network_id::{NetworkId, PeerNetworkId},
 };
 use aptos_crypto::{x25519::PrivateKey, Uniform};
@@ -35,6 +35,7 @@ use aptos_network::{
 use aptos_storage_interface::mock::MockDbReaderWriter;
 use aptos_types::{
     on_chain_config::{InMemoryOnChainConfig, OnChainConfigPayload},
+    transaction::ReplayProtector,
     PeerId,
 };
 use aptos_vm_validator::mocks::mock_vm_validator::MockVMValidator;
@@ -124,9 +125,6 @@ pub trait NodeInfoTrait {
         PeerNetworkId::new(network_id, self.peer_id(network_id))
     }
 
-    /// `RoleType` of the `Node`
-    fn role(&self) -> RoleType;
-
     /// `PeerRole` for use in the upstream / downstream peers
     fn peer_role(&self) -> PeerRole;
 }
@@ -157,10 +155,6 @@ impl NodeInfoTrait for ValidatorNodeInfo {
             NetworkId::Vfn => self.vfn_peer_id,
             NetworkId::Public => panic!("Invalid network id for validator"),
         }
-    }
-
-    fn role(&self) -> RoleType {
-        RoleType::Validator
     }
 
     fn peer_role(&self) -> PeerRole {
@@ -196,10 +190,6 @@ impl NodeInfoTrait for ValidatorFullNodeInfo {
         }
     }
 
-    fn role(&self) -> RoleType {
-        RoleType::FullNode
-    }
-
     fn peer_role(&self) -> PeerRole {
         PeerRole::ValidatorFullNode
     }
@@ -228,10 +218,6 @@ impl NodeInfoTrait for FullNodeInfo {
         } else {
             panic!("Invalid network id for public full node")
         }
-    }
-
-    fn role(&self) -> RoleType {
-        RoleType::FullNode
     }
 
     fn peer_role(&self) -> PeerRole {
@@ -314,7 +300,7 @@ pub struct Node {
     /// The identifying Node
     node_info: NodeInfo,
     /// `CoreMempool` for this node
-    mempool: Arc<Mutex<Box<dyn CoreMempoolTrait>>>,
+    mempool: Arc<Mutex<CoreMempool>>,
     /// Network interfaces for a node
     network_interfaces: HashMap<NetworkId, NodeNetworkInterface>,
     /// Tokio runtime
@@ -333,10 +319,6 @@ impl NodeInfoTrait for Node {
 
     fn peer_id(&self, network_id: NetworkId) -> PeerId {
         self.node_info.peer_id(network_id)
-    }
-
-    fn role(&self) -> RoleType {
-        self.node_info.role()
     }
 
     fn peer_role(&self) -> PeerRole {
@@ -367,7 +349,7 @@ impl Node {
     }
 
     /// Retrieves a `CoreMempool`
-    pub fn mempool(&self) -> MutexGuard<Box<dyn CoreMempoolTrait>> {
+    pub fn mempool(&self) -> MutexGuard<'_, CoreMempool> {
         self.mempool.lock()
     }
 
@@ -376,10 +358,14 @@ impl Node {
         let mut mempool = self.mempool();
         for txn in txns {
             let transaction = txn.make_signed_transaction_with_max_gas_amount(5);
+            let account_sequence_number = match transaction.replay_protector() {
+                ReplayProtector::SequenceNumber(_) => Some(0),
+                ReplayProtector::Nonce(_) => None,
+            };
             mempool.add_txn(
                 transaction.clone(),
                 transaction.gas_unit_price(),
-                0,
+                account_sequence_number,
                 TimelineState::NotReady,
                 false,
                 None,
@@ -563,11 +549,11 @@ fn start_node_mempool(
     network_service_events: NetworkServiceEvents<MempoolSyncMsg>,
     peers_and_metadata: Arc<PeersAndMetadata>,
 ) -> (
-    Arc<Mutex<Box<dyn CoreMempoolTrait>>>,
+    Arc<Mutex<CoreMempool>>,
     Runtime,
     UnboundedReceiver<SharedMempoolNotification>,
 ) {
-    let mempool = Arc::new(Mutex::new(Box::new(GravityCoreMempool::from(CoreMempool::new(&config))) as Box<dyn CoreMempoolTrait>));
+    let mempool = Arc::new(Mutex::new(CoreMempool::new(&config)));
     let (sender, subscriber) = unbounded();
     let (_ac_endpoint_sender, ac_endpoint_receiver) = mpsc::channel(1_024);
     let (_quorum_store_sender, quorum_store_receiver) = mpsc::channel(1_024);

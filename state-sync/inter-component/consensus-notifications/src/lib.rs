@@ -41,7 +41,6 @@ pub trait ConsensusNotificationSender: Send + Sync {
         &self,
         transactions: Vec<Transaction>,
         subscribable_events: Vec<ContractEvent>,
-        block_number: u64,
     ) -> Result<(), Error>;
 
     /// Notifies state sync to synchronize storage for at least the specified duration,
@@ -92,23 +91,19 @@ impl ConsensusNotifier {
 
 #[async_trait]
 impl ConsensusNotificationSender for ConsensusNotifier {
-    // pass the params to handle_consensus_commit_notification in gravity-sdk
     async fn notify_new_commit(
         &self,
         transactions: Vec<Transaction>,
         subscribable_events: Vec<ContractEvent>,
-        block_number: u64,
     ) -> Result<(), Error> {
-        // Since now in Gravity we don't have a metadata txn
-        // we should check if the events and transactions are empty
         // Only send a notification if transactions have been committed
-        if transactions.is_empty() && subscribable_events.is_empty() {
+        if transactions.is_empty() {
             return Ok(());
         }
 
         // Create a consensus commit notification
         let (notification, callback_receiver) =
-            ConsensusCommitNotification::new(transactions, subscribable_events, block_number);
+            ConsensusCommitNotification::new(transactions, subscribable_events);
         let commit_notification = ConsensusNotification::NotifyCommit(notification);
 
         // Send the notification to state sync
@@ -301,21 +296,18 @@ pub struct ConsensusCommitNotification {
     transactions: Vec<Transaction>,
     subscribable_events: Vec<ContractEvent>,
     callback: oneshot::Sender<ConsensusNotificationResponse>,
-    block_number: u64,
 }
 
 impl ConsensusCommitNotification {
     pub fn new(
         transactions: Vec<Transaction>,
         subscribable_events: Vec<ContractEvent>,
-        block_number: u64,
     ) -> (Self, oneshot::Receiver<ConsensusNotificationResponse>) {
         let (callback, callback_receiver) = oneshot::channel();
         let commit_notification = ConsensusCommitNotification {
             transactions,
             subscribable_events,
             callback,
-            block_number,
         };
 
         (commit_notification, callback_receiver)
@@ -329,11 +321,6 @@ impl ConsensusCommitNotification {
     /// Returns a reference to the subscribable events
     pub fn get_subscribable_events(&self) -> &Vec<ContractEvent> {
         &self.subscribable_events
-    }
-
-    /// Returns the block number of the notification
-    pub fn get_block_number(&self) -> u64 {
-        self.block_number
     }
 }
 
@@ -447,13 +434,13 @@ mod tests {
 
         // Send a commit notification and expect a timeout (no listener)
         let notify_result =
-            block_on(consensus_notifier.notify_new_commit(vec![create_user_transaction()], vec![], 0));
+            block_on(consensus_notifier.notify_new_commit(vec![create_user_transaction()], vec![]));
         assert_matches!(notify_result, Err(Error::TimeoutWaitingForStateSync));
 
         // Drop the receiver and try again
         consensus_listener.notification_receiver.close();
         let notify_result =
-            block_on(consensus_notifier.notify_new_commit(vec![create_user_transaction()], vec![], 0));
+            block_on(consensus_notifier.notify_new_commit(vec![create_user_transaction()], vec![]));
         assert_matches!(notify_result, Err(Error::NotificationError(_)));
     }
 
@@ -466,7 +453,7 @@ mod tests {
             crate::new_consensus_notifier_listener_pair(CONSENSUS_NOTIFICATION_TIMEOUT);
 
         // Send an empty commit notification
-        let notify_result = block_on(consensus_notifier.notify_new_commit(vec![], vec![], 0));
+        let notify_result = block_on(consensus_notifier.notify_new_commit(vec![], vec![]));
         assert_ok!(notify_result);
     }
 
@@ -482,7 +469,7 @@ mod tests {
         let transactions = vec![create_user_transaction()];
         let subscribable_events = vec![create_contract_event()];
         let _ = block_on(
-            consensus_notifier.notify_new_commit(transactions.clone(), subscribable_events.clone(), 0),
+            consensus_notifier.notify_new_commit(transactions.clone(), subscribable_events.clone()),
         );
 
         // Verify the notification arrives at the receiver
@@ -587,7 +574,7 @@ mod tests {
 
         // Send a commit notification and verify a successful response
         let notify_result =
-            block_on(consensus_notifier.notify_new_commit(vec![create_user_transaction()], vec![], 0));
+            block_on(consensus_notifier.notify_new_commit(vec![create_user_transaction()], vec![]));
         assert_ok!(notify_result);
 
         // Send a sync target notification and verify an error response
@@ -629,6 +616,7 @@ mod tests {
             TypeTag::Bool,
             b"some event bytes".to_vec(),
         )
+        .unwrap()
     }
 
     fn create_ledger_info() -> LedgerInfoWithSignatures {

@@ -4,11 +4,13 @@
 
 //! Objects used by/related to shared mempool
 use crate::{
-    core_mempool::{CoreMempool, TimelineState}, logging::TxnsLog, network::{BroadcastPeerPriority, MempoolNetworkInterface, MempoolSyncMsg}, shared_mempool::use_case_history::UseCaseHistory
+    core_mempool::{CoreMempool, TimelineId},
+    network::{MempoolNetworkInterface, MempoolSyncMsg},
+    shared_mempool::use_case_history::UseCaseHistory,
 };
 use anyhow::Result;
 use aptos_config::{
-    config::{MempoolConfig, NodeConfig, NodeType},
+    config::{MempoolConfig, NodeType, TransactionFilterConfig},
     network_id::PeerNetworkId,
 };
 use aptos_consensus_types::common::{
@@ -19,7 +21,7 @@ use aptos_infallible::{Mutex, RwLock};
 use aptos_network::application::interface::NetworkClientInterface;
 use aptos_storage_interface::DbReader;
 use aptos_types::{
-    account_address::AccountAddress, mempool_status::MempoolStatus, transaction::{use_case::UseCaseKey, SignedTransaction},
+    account_address::AccountAddress, mempool_status::MempoolStatus, transaction::SignedTransaction,
     vm_status::DiscardedVMStatus,
 };
 use aptos_vm_validator::vm_validator::TransactionValidation;
@@ -36,150 +38,17 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::Waker,
-    time::{Duration, Instant, SystemTime},
+    time::{Instant, SystemTime},
 };
 use tokio::runtime::Handle;
 
 pub type MempoolSenderBucket = u8;
 pub type TimelineIndexIdentifier = u8;
 
-
-pub trait CoreMempoolTrait: 'static + Send + Sync {
-    fn timeline_range(
-        &self,
-        sender_bucket: MempoolSenderBucket,
-        start_end_pairs: HashMap<TimelineIndexIdentifier, (u64, u64)>,
-    ) -> Vec<(SignedTransaction, u64)>;
-
-    fn timeline_range_of_message(
-        &self,
-        sender_start_end_pairs: HashMap<
-            MempoolSenderBucket,
-            HashMap<TimelineIndexIdentifier, (u64, u64)>,
-        >,
-    ) -> Vec<(SignedTransaction, u64)>;
-
-    fn get_parking_lot_addresses(&self) -> Vec<(AccountAddress, u64)>;
-
-    fn read_timeline(
-        &self,
-        sender_bucket: MempoolSenderBucket,
-        timeline_id: &MultiBucketTimelineIndexIds,
-        count: usize,
-        before: Option<Instant>,
-        priority_of_receiver: BroadcastPeerPriority,
-    ) -> (Vec<(SignedTransaction, u64)>, MultiBucketTimelineIndexIds);
-
-    fn gc(&mut self);
-
-    fn gen_snapshot(&self) -> TxnsLog;
-
-    fn get_by_hash(&self, hash: HashValue) -> Option<SignedTransaction>;
-
-    fn add_txn(&mut self, txn: SignedTransaction, ranking_score: u64, sequence_info: u64, timeline_state: TimelineState, client_submitted: bool, ready_time_at_sender: Option<u64>, priority: Option<BroadcastPeerPriority>) -> MempoolStatus;
-
-    fn gc_by_expiration_time(&mut self, block_time: Duration);
-
-    fn get_batch(&self, max_txns: u64, max_bytes: u64, return_non_full: bool, exclude_transactions: BTreeMap<TransactionSummary, TransactionInProgress>) -> Vec<SignedTransaction>;
-
-    fn reject_transaction(&mut self, sender: &AccountAddress, sequence_number: u64, hash: &HashValue, reason: &DiscardedVMStatus);
-
-    fn commit_transaction(&mut self, sender: &AccountAddress, sequence_number: u64);
-
-    fn log_commit_transaction(&self, sender: &AccountAddress, sequence_number: u64, tracked_use_case: Option<(UseCaseKey, &String)>, block_timestamp: Duration);
-}
-
-pub struct GravityCoreMempool(CoreMempool);
-
-impl From<CoreMempool> for GravityCoreMempool {
-    fn from(core_mempool: CoreMempool) -> Self {
-        GravityCoreMempool(core_mempool)
-    }
-
-}
-
-impl GravityCoreMempool {
-    pub fn from_config(config: &NodeConfig) -> Self {
-        GravityCoreMempool::from(CoreMempool::new(config))
-    }
-}
-
-
-impl CoreMempoolTrait for GravityCoreMempool {
-    fn timeline_range(
-        &self,
-        sender_bucket: MempoolSenderBucket,
-        start_end_pairs: HashMap<TimelineIndexIdentifier, (u64, u64)>,
-    ) -> Vec<(SignedTransaction, u64)> {
-        self.0.timeline_range(sender_bucket, start_end_pairs)
-    }
-
-    fn timeline_range_of_message(
-        &self,
-        sender_start_end_pairs: HashMap<
-            MempoolSenderBucket,
-            HashMap<TimelineIndexIdentifier, (u64, u64)>,
-        >,
-    ) -> Vec<(SignedTransaction, u64)> {
-        self.0.timeline_range_of_message(sender_start_end_pairs)
-    }
-
-    fn get_parking_lot_addresses(&self) -> Vec<(AccountAddress, u64)> {
-        self.0.get_parking_lot_addresses()
-    }
-
-    fn read_timeline(
-        &self,
-        sender_bucket: MempoolSenderBucket,
-        timeline_id: &MultiBucketTimelineIndexIds,
-        count: usize,
-        before: Option<Instant>,
-        priority_of_receiver: BroadcastPeerPriority,
-    ) -> (Vec<(SignedTransaction, u64)>, MultiBucketTimelineIndexIds) {
-        self.0.read_timeline(sender_bucket, timeline_id, count, before, priority_of_receiver)
-    }
-
-    fn gc(&mut self) {
-        self.0.gc()
-    }
-
-    fn gen_snapshot(&self) -> TxnsLog {
-        self.0.gen_snapshot()
-    }
-
-    fn get_batch(&self, max_txns: u64, max_bytes: u64, return_non_full: bool, exclude_transactions: BTreeMap<TransactionSummary, TransactionInProgress>) -> Vec<SignedTransaction> {
-        self.0.get_batch(max_txns, max_bytes, return_non_full, exclude_transactions)
-    }
-
-    fn get_by_hash(&self, hash: HashValue) -> Option<SignedTransaction> {
-        self.0.get_by_hash(hash)
-    }
-
-    fn add_txn(&mut self, txn: SignedTransaction, ranking_score: u64, sequence_info: u64, timeline_state: TimelineState, client_submitted: bool, ready_time_at_sender: Option<u64>, priority: Option<BroadcastPeerPriority>) -> MempoolStatus {
-        self.0.add_txn(txn, ranking_score, sequence_info, timeline_state, client_submitted, ready_time_at_sender, priority)
-    }
-
-    fn gc_by_expiration_time(&mut self, block_time: Duration) {
-        self.0.gc_by_expiration_time(block_time)
-    }
-
-    fn reject_transaction(&mut self, sender: &AccountAddress, sequence_number: u64, hash: &HashValue, reason: &DiscardedVMStatus) {
-        self.0.reject_transaction(sender, sequence_number, hash, reason)
-    }
-
-    fn commit_transaction(&mut self, sender: &AccountAddress, sequence_number: u64) {
-        self.0.commit_transaction(sender, sequence_number)
-    }
-
-    fn log_commit_transaction(&self, sender: &AccountAddress, sequence_number: u64, tracked_use_case: Option<(UseCaseKey, &String)>, block_timestamp: Duration) {
-        self.0.log_commit_transaction(sender, sequence_number, tracked_use_case, block_timestamp)
-    }
-}
-
 /// Struct that owns all dependencies required by shared mempool routines.
 #[derive(Clone)]
 pub(crate) struct SharedMempool<NetworkClient, TransactionValidator> {
-    pub mempool: Arc<Mutex<Box<dyn CoreMempoolTrait>>>,
+    pub mempool: Arc<Mutex<CoreMempool>>,
     pub config: MempoolConfig,
     pub network_interface: MempoolNetworkInterface<NetworkClient>,
     pub db: Arc<dyn DbReader>,
@@ -187,6 +56,7 @@ pub(crate) struct SharedMempool<NetworkClient, TransactionValidator> {
     pub subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
     pub broadcast_within_validator_network: Arc<RwLock<bool>>,
     pub use_case_history: Arc<Mutex<UseCaseHistory>>,
+    pub transaction_filter_config: TransactionFilterConfig,
 }
 
 impl<
@@ -195,8 +65,9 @@ impl<
     > SharedMempool<NetworkClient, TransactionValidator>
 {
     pub fn new(
-        mempool: Arc<Mutex<Box<dyn CoreMempoolTrait>>>,
+        mempool: Arc<Mutex<CoreMempool>>,
         config: MempoolConfig,
+        transaction_filter_config: TransactionFilterConfig,
         network_client: NetworkClient,
         db: Arc<dyn DbReader>,
         validator: Arc<RwLock<TransactionValidator>>,
@@ -218,6 +89,7 @@ impl<
             subscribers,
             broadcast_within_validator_network: Arc::new(RwLock::new(true)),
             use_case_history: Arc::new(Mutex::new(use_case_history)),
+            transaction_filter_config,
         }
     }
 
@@ -434,7 +306,7 @@ impl Ord for BatchId {
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct MultiBucketTimelineIndexIds {
-    pub id_per_bucket: Vec<u64>,
+    pub id_per_bucket: Vec<TimelineId>,
 }
 
 impl MultiBucketTimelineIndexIds {
@@ -444,7 +316,10 @@ impl MultiBucketTimelineIndexIds {
         }
     }
 
-    pub(crate) fn update(&mut self, start_end_pairs: HashMap<TimelineIndexIdentifier, (u64, u64)>) {
+    pub(crate) fn update(
+        &mut self,
+        start_end_pairs: HashMap<TimelineIndexIdentifier, (TimelineId, TimelineId)>,
+    ) {
         if self.id_per_bucket.len() != start_end_pairs.len() {
             return;
         }
@@ -463,7 +338,7 @@ impl MultiBucketTimelineIndexIds {
 }
 
 impl From<Vec<u64>> for MultiBucketTimelineIndexIds {
-    fn from(timeline_ids: Vec<u64>) -> Self {
+    fn from(timeline_ids: Vec<TimelineId>) -> Self {
         Self {
             id_per_bucket: timeline_ids,
         }
@@ -504,8 +379,8 @@ impl MempoolMessageId {
                             assert!(timeline_index_identifier < 128);
                             assert!(sender_bucket < 128);
                             (
-                                sender_bucket << 56 | timeline_index_identifier << 48 | old,
-                                sender_bucket << 56 | timeline_index_identifier << 48 | new,
+                                (sender_bucket << 56) | (timeline_index_identifier << 48) | old,
+                                (sender_bucket << 56) | (timeline_index_identifier << 48) | new,
                             )
                         })
                 })
@@ -519,7 +394,7 @@ impl MempoolMessageId {
         let mut result = HashMap::new();
         for (start, end) in self.0.iter() {
             let sender_bucket = (start >> 56) as MempoolSenderBucket;
-            let timeline_index_identifier = (start >> 48 & 0xFF) as TimelineIndexIdentifier;
+            let timeline_index_identifier = ((start >> 48) & 0xFF) as TimelineIndexIdentifier;
             // Remove the leading two bytes that indicates the sender bucket.
             let start = start & 0x0000FFFFFFFFFFFF;
             let end = end & 0x0000FFFFFFFFFFFF;

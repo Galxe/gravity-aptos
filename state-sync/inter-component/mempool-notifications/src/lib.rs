@@ -8,7 +8,7 @@ use aptos_types::{
     account_address::AccountAddress,
     transaction::{
         use_case::{UseCaseAwareTransaction, UseCaseKey},
-        Transaction,
+        ReplayProtector, Transaction,
     },
 };
 use async_trait::async_trait;
@@ -66,7 +66,7 @@ pub struct MempoolNotifier {
 }
 
 impl MempoolNotifier {
-    pub fn new(notification_sender: mpsc::Sender<MempoolCommitNotification>) -> Self {
+    fn new(notification_sender: mpsc::Sender<MempoolCommitNotification>) -> Self {
         Self {
             notification_sender,
         }
@@ -86,7 +86,7 @@ impl MempoolNotificationSender for MempoolNotifier {
             .filter_map(|transaction| match transaction {
                 Transaction::UserTransaction(signed_txn) => Some(CommittedTransaction {
                     sender: signed_txn.sender(),
-                    sequence_number: signed_txn.sequence_number(),
+                    replay_protector: signed_txn.replay_protector(),
                     use_case: signed_txn.parse_use_case(),
                 }),
                 _ => None,
@@ -124,7 +124,7 @@ pub struct MempoolNotificationListener {
 }
 
 impl MempoolNotificationListener {
-    pub fn new(notification_receiver: mpsc::Receiver<MempoolCommitNotification>) -> Self {
+    fn new(notification_receiver: mpsc::Receiver<MempoolCommitNotification>) -> Self {
         MempoolNotificationListener {
             notification_receiver,
         }
@@ -166,7 +166,7 @@ impl fmt::Display for MempoolCommitNotification {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommittedTransaction {
     pub sender: AccountAddress,
-    pub sequence_number: u64,
+    pub replay_protector: ReplayProtector,
     pub use_case: UseCaseKey,
 }
 
@@ -175,7 +175,7 @@ impl fmt::Display for CommittedTransaction {
         write!(
             f,
             "{}:{}:{:?}",
-            self.sender, self.sequence_number, self.use_case
+            self.sender, self.replay_protector, self.use_case
         )
     }
 }
@@ -291,7 +291,7 @@ mod tests {
                     assert_eq!(mempool_commit_notification.transactions, vec![
                         CommittedTransaction {
                             sender: signed_transaction.sender(),
-                            sequence_number: signed_transaction.sequence_number(),
+                            replay_protector: signed_transaction.replay_protector(),
                             use_case: signed_transaction.parse_use_case(),
                         }
                     ]);

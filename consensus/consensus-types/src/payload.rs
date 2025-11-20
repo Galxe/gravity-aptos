@@ -44,6 +44,10 @@ where
         self.batch_summary.extend(other.batch_summary);
     }
 
+    pub fn num_proofs(&self) -> usize {
+        self.batch_summary.len()
+    }
+
     pub fn num_txns(&self) -> usize {
         self.batch_summary
             .iter()
@@ -210,14 +214,18 @@ impl InlineBatch {
 pub struct InlineBatches(Vec<InlineBatch>);
 
 impl InlineBatches {
-    fn num_txns(&self) -> usize {
+    pub fn num_batches(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn num_txns(&self) -> usize {
         self.0
             .iter()
             .map(|batch| batch.batch_info.num_txns() as usize)
             .sum()
     }
 
-    fn num_bytes(&self) -> usize {
+    pub fn num_bytes(&self) -> usize {
         self.0
             .iter()
             .map(|batch| batch.batch_info.num_bytes() as usize)
@@ -300,6 +308,10 @@ impl OptQuorumStorePayloadV1 {
 
     pub fn max_txns_to_execute(&self) -> Option<u64> {
         self.execution_limits.max_txns_to_execute()
+    }
+
+    pub fn block_gas_limit(&self) -> Option<u64> {
+        self.execution_limits.block_gas_limit()
     }
 
     pub fn check_epoch(&self, epoch: u64) -> anyhow::Result<()> {

@@ -22,10 +22,10 @@ use aptos_types::{
     on_chain_config::{ConfigurationResource, ValidatorSet},
     state_store::{state_key::StateKey, StateView},
     transaction::{
-        signature_verified_transaction::SignatureVerifiedTransaction, BlockOutput, ChangeSet,
-        ExecutionStatus, RawTransaction, Script, SignedTransaction, Transaction,
-        TransactionArgument, TransactionAuxiliaryData, TransactionOutput, TransactionPayload,
-        TransactionStatus, WriteSetPayload,
+        signature_verified_transaction::SignatureVerifiedTransaction, AuxiliaryInfo, BlockEndInfo,
+        BlockOutput, ChangeSet, ExecutionStatus, RawTransaction, Script, SignedTransaction,
+        Transaction, TransactionArgument, TransactionAuxiliaryData, TransactionExecutableRef,
+        TransactionOutput, TransactionStatus, WriteSetPayload,
     },
     vm_status::{StatusCode, VMStatus},
     write_set::{WriteOp, WriteSet, WriteSetMut},
@@ -68,11 +68,11 @@ impl VMBlockExecutor for MockVM {
 
     fn execute_block(
         &self,
-        txn_provider: &DefaultTxnProvider<SignatureVerifiedTransaction>,
+        txn_provider: &DefaultTxnProvider<SignatureVerifiedTransaction, AuxiliaryInfo>,
         state_view: &impl StateView,
         _onchain_config: BlockExecutorConfigFromOnchain,
-        _transaction_slice_metadata: TransactionSliceMetadata,
-    ) -> Result<BlockOutput<TransactionOutput>, VMStatus> {
+        transaction_slice_metadata: TransactionSliceMetadata,
+    ) -> Result<BlockOutput<SignatureVerifiedTransaction, TransactionOutput>, VMStatus> {
         // output_cache is used to store the output of transactions so they are visible to later
         // transactions.
         let mut output_cache = HashMap::new();
@@ -92,7 +92,10 @@ impl VMBlockExecutor for MockVM {
             }
 
             let txn = txn_provider.get_txn(idx as u32).expect_valid();
-            if matches!(txn, Transaction::StateCheckpoint(_)) {
+            if matches!(
+                txn,
+                Transaction::StateCheckpoint(_) | Transaction::BlockEpilogue(_)
+            ) {
                 outputs.push(TransactionOutput::new(
                     WriteSet::default(),
                     vec![],
@@ -119,7 +122,8 @@ impl VMBlockExecutor for MockVM {
                     vec![ContractEvent::new_v2(
                         NEW_EPOCH_EVENT_V2_MOVE_TYPE_TAG.clone(),
                         bcs::to_bytes(&0).unwrap(),
-                    )],
+                    )
+                    .unwrap()],
                     0,
                     KEEP_STATUS.clone(),
                     TransactionAuxiliaryData::default(),
@@ -194,7 +198,21 @@ impl VMBlockExecutor for MockVM {
             }
         }
 
-        Ok(BlockOutput::new(outputs, None))
+        let mut block_epilogue_txn = None;
+        if !skip_rest {
+            if let Some(block_id) = transaction_slice_metadata.append_state_checkpoint_to_block() {
+                block_epilogue_txn = Some(Transaction::block_epilogue_v0(
+                    block_id,
+                    BlockEndInfo::new_empty(),
+                ));
+                outputs.push(TransactionOutput::new_empty_success());
+            }
+        }
+
+        Ok(BlockOutput::new(
+            outputs,
+            block_epilogue_txn.map(Into::into),
+        ))
     }
 
     fn execute_block_sharded<S: StateView + Sync + Send + 'static, E: ExecutorClient<S>>(
@@ -337,7 +355,8 @@ fn gen_events(sender: AccountAddress) -> Vec<ContractEvent> {
         0,
         TypeTag::Vector(Box::new(TypeTag::U8)),
         b"event_data".to_vec(),
-    )]
+    )
+    .unwrap()]
 }
 
 pub fn encode_mint_program(amount: u64) -> Script {
@@ -384,45 +403,37 @@ pub fn encode_reconfiguration_transaction() -> Transaction {
 
 fn decode_transaction(txn: &SignedTransaction) -> MockVMTransaction {
     let sender = txn.sender();
-    match txn.payload() {
-        TransactionPayload::Script(script) => {
-            assert!(script.code().is_empty(), "Code should be empty.");
-            match script.args().len() {
-                1 => match script.args()[0] {
-                    TransactionArgument::U64(amount) => MockVMTransaction::Mint { sender, amount },
-                    _ => unimplemented!(
-                        "Only one integer argument is allowed for mint transactions."
-                    ),
+    let script_to_mock_vm_txn = |script: &Script| {
+        assert!(script.code().is_empty(), "Code should be empty.");
+        match script.args().len() {
+            1 => match script.args()[0] {
+                TransactionArgument::U64(amount) => MockVMTransaction::Mint { sender, amount },
+                _ => unimplemented!("Only one integer argument is allowed for mint transactions."),
+            },
+            2 => match (&script.args()[0], &script.args()[1]) {
+                (TransactionArgument::Address(recipient), TransactionArgument::U64(amount)) => {
+                    MockVMTransaction::Payment {
+                        sender,
+                        recipient: *recipient,
+                        amount: *amount,
+                    }
                 },
-                2 => match (&script.args()[0], &script.args()[1]) {
-                    (TransactionArgument::Address(recipient), TransactionArgument::U64(amount)) => {
-                        MockVMTransaction::Payment {
-                            sender,
-                            recipient: *recipient,
-                            amount: *amount,
-                        }
-                    },
-                    _ => unimplemented!(
-                        "The first argument for payment transaction must be recipient address \
-                         and the second argument must be amount."
-                    ),
-                },
-                _ => unimplemented!("Transaction must have one or two arguments."),
-            }
-        },
-        TransactionPayload::EntryFunction(_) => {
-            // TODO: we need to migrate Script to EntryFunction later
-            unimplemented!("MockVM does not support entry function transaction payload.")
-        },
-        TransactionPayload::Multisig(_) => {
+                _ => unimplemented!(
+                    "The first argument for payment transaction must be recipient address \
+                        and the second argument must be amount."
+                ),
+            },
+            _ => unimplemented!("Transaction must have one or two arguments."),
+        }
+    };
+    match txn.payload().executable_ref() {
+        Ok(TransactionExecutableRef::Script(script)) => script_to_mock_vm_txn(script),
+        Ok(TransactionExecutableRef::EntryFunction(_)) => {
             unimplemented!("MockVM does not support multisig transaction payload.")
         },
-        // Deprecated.
-        TransactionPayload::ModuleBundle(_) => {
-            unreachable!("Module bundle payload has been removed")
+        Ok(TransactionExecutableRef::Empty) => {
+            unimplemented!("MockVM does not support empty transaction payload.")
         },
-        TransactionPayload::GTxnBytes(_) => {
-            todo!()
-        },
+        Err(_) => unimplemented!("MockVM does not support given transaction payload."),
     }
 }

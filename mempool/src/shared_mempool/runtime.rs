@@ -7,7 +7,7 @@ use crate::{
     network::MempoolSyncMsg,
     shared_mempool::{
         coordinator::{coordinator, gc_coordinator, snapshot_job},
-        types::{CoreMempoolTrait, GravityCoreMempool, MempoolEventsReceiver, SharedMempool, SharedMempoolNotification},
+        types::{MempoolEventsReceiver, SharedMempool, SharedMempoolNotification},
     },
     QuorumStoreRequest,
 };
@@ -32,10 +32,10 @@ use tokio::runtime::{Handle, Runtime};
 ///   - outbound_sync_task (task that periodically broadcasts transactions to peers).
 ///   - inbound_network_task (task that handles inbound mempool messages and network events).
 ///   - gc_task (task that performs GC of all expired transactions by SystemTTL).
-pub fn start_shared_mempool<TransactionValidator, ConfigProvider>(
+pub(crate) fn start_shared_mempool<TransactionValidator, ConfigProvider>(
     executor: &Handle,
     config: &NodeConfig,
-    mempool: Arc<Mutex<Box<dyn CoreMempoolTrait>>>,
+    mempool: Arc<Mutex<CoreMempool>>,
     network_client: NetworkClient<MempoolSyncMsg>,
     network_service_events: NetworkServiceEvents<MempoolSyncMsg>,
     client_events: MempoolEventsReceiver,
@@ -83,7 +83,7 @@ pub fn start_shared_mempool<TransactionValidator, ConfigProvider>(
 
     if aptos_logger::enabled!(Level::Trace) {
         executor.spawn(snapshot_job(
-            mempool.clone(),
+            mempool,
             config.mempool.mempool_snapshot_interval_secs,
         ));
     }
@@ -99,10 +99,9 @@ pub fn bootstrap(
     mempool_listener: MempoolNotificationListener,
     mempool_reconfig_events: ReconfigNotificationListener<DbBackedOnChainConfig>,
     peers_and_metadata: Arc<PeersAndMetadata>,
-    mempool: Box<dyn CoreMempoolTrait>,
 ) -> Runtime {
     let runtime = aptos_runtimes::spawn_named_runtime("shared-mem".into(), None);
-    let mempool = Arc::new(Mutex::new(mempool));
+    let mempool = Arc::new(Mutex::new(CoreMempool::new(config)));
     let vm_validator = Arc::new(RwLock::new(PooledVMValidator::new(
         Arc::clone(&db),
         num_cpus::get(),

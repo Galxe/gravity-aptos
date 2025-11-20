@@ -4,11 +4,9 @@
 
 #![forbid(unsafe_code)]
 use anyhow::{anyhow, Result};
-use api_types::config_storage::{ConfigStorage, GLOBAL_CONFIG_STORAGE};
 use aptos_channels::{aptos_channel, message_queues::QueueStyle};
 use aptos_id_generator::{IdGenerator, U64IdGenerator};
 use aptos_infallible::RwLock;
-use aptos_logger::info;
 use aptos_storage_interface::{
     state_store::state_view::db_state_view::DbStateViewAtVersion, DbReader, DbReaderWriter,
 };
@@ -21,7 +19,6 @@ use aptos_types::{
     state_store::state_key::StateKey,
     transaction::Version,
 };
-use bytes::Bytes;
 use futures::{channel::mpsc::SendError, stream::FusedStream, Stream};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -29,7 +26,6 @@ use std::{
     fmt,
     iter::FromIterator,
     pin::Pin,
-    str::FromStr,
     sync::Arc,
     task::{Context, Poll},
 };
@@ -222,7 +218,7 @@ impl EventSubscriptionService {
             let maybe_subscription_ids = match event {
                 ContractEvent::V1(evt) => self.event_key_subscriptions.get(evt.key()),
                 ContractEvent::V2(evt) => {
-                    let tag = evt.type_tag().to_string();
+                    let tag = evt.type_tag().to_canonical_string();
                     self.event_v2_tag_subscriptions.get(&tag)
                 },
             };
@@ -287,41 +283,28 @@ impl EventSubscriptionService {
         &self,
         version: Version,
     ) -> Result<OnChainConfigPayload<DbBackedOnChainConfig>, Error> {
-        // 使用执行层提供的config storage的实例. 把version传递进去
-        // let config_storage = ConfigStorageImpl::new(version);
-        // let db_state_view = &self
-        //     .storage
-        //     .read()
-        //     .reader
-        //     .state_view_at_version(Some(version))
-        //     .map_err(|error| {
-        //         Error::UnexpectedErrorEncountered(format!(
-        //             "Failed to create account state view {:?}",
-        //             error
-        //         ))
-        //     })?;
-        // let epoch = ConfigurationResource::fetch_config(&db_state_view)
-        //     .ok_or_else(|| {
-        //         Error::UnexpectedErrorEncountered("Configuration resource does not exist!".into())
-        //     })?
-        //     .epoch();
-
-        info!("fetching epoch from on-chain for version: {}", version);
-        let gravity_config_storage = GLOBAL_CONFIG_STORAGE.get()
-            .ok_or_else(|| Error::UnexpectedErrorEncountered("gravity config storage is not available".to_string()))?;
-        let epoch_bytes = gravity_config_storage
-            .fetch_config_bytes(api_types::config_storage::OnChainConfig::Epoch, version)
-            .ok_or_else(|| Error::UnexpectedErrorEncountered("no config epoch found in aptos root account state".to_string()))?;
-
-        let epoch = TryInto::<u64>::try_into(epoch_bytes).unwrap();
-        info!("OnChainConfigPayload for epoch: {}", epoch);
-
-        let mut config = DbBackedOnChainConfig::new(self.storage.read().reader.clone(), version);
-
-        let payload = OnChainConfigPayload::new(epoch, config);
+        let db_state_view = &self
+            .storage
+            .read()
+            .reader
+            .state_view_at_version(Some(version))
+            .map_err(|error| {
+                Error::UnexpectedErrorEncountered(format!(
+                    "Failed to create account state view {:?}",
+                    error
+                ))
+            })?;
+        let epoch = ConfigurationResource::fetch_config(&db_state_view)
+            .ok_or_else(|| {
+                Error::UnexpectedErrorEncountered("Configuration resource does not exist!".into())
+            })?
+            .epoch();
 
         // Return the new on-chain config payload (containing all found configs at this version).
-        Ok(payload)
+        Ok(OnChainConfigPayload::new(
+            epoch,
+            DbBackedOnChainConfig::new(self.storage.read().reader.clone(), version),
+        ))
     }
 }
 
@@ -333,7 +316,6 @@ impl EventNotificationSender for EventSubscriptionService {
 
         // Notify event subscribers and check if a reconfiguration event was processed
         let reconfig_event_processed = self.notify_event_subscribers(version, events)?;
-        info!("reconfig_event_processed: {}, version: {}", reconfig_event_processed, version);
 
         // If a reconfiguration event was found, also notify the reconfig subscribers
         // of the new configuration values.
@@ -409,44 +391,23 @@ pub struct DbBackedOnChainConfig {
 
 impl DbBackedOnChainConfig {
     pub fn new(reader: Arc<dyn DbReader>, version: Version) -> Self {
-        Self {
-            reader,
-            version,
-        }
+        Self { reader, version }
     }
 }
 
-// TODO(gravity_alex): Pass config_storage_gravity here to replace the current impl
 impl OnChainConfigProvider for DbBackedOnChainConfig {
     fn get<T: OnChainConfig>(&self) -> Result<T> {
-        let gravity_config_storage = GLOBAL_CONFIG_STORAGE.get();
-        let bytes = gravity_config_storage
-            .ok_or_else(|| Error::UnexpectedErrorEncountered("gravity config storage is not available".to_string()))?
-            .fetch_config_bytes(
-                api_types::config_storage::OnChainConfig::from_str(T::TYPE_IDENTIFIER).unwrap(),
-                self.version,
-            )
+        let bytes = self
+            .reader
+            .get_state_value_by_version(&StateKey::on_chain_config::<T>()?, self.version)?
             .ok_or_else(|| {
                 anyhow!(
                     "no config {} found in aptos root account state",
-                    T::TYPE_IDENTIFIER
+                    T::CONFIG_ID
                 )
-            })?;
-        let bytes = TryInto::<Bytes>::try_into(bytes).expect(&format!(
-            "Failed to convert type {} to Bytes",
-            T::TYPE_IDENTIFIER
-        ));
-        // let bytes = self
-        //     .reader
-        //     .get_state_value_by_version(&StateKey::on_chain_config::<T>()?, self.version)?
-        //     .ok_or_else(|| {
-        //         anyhow!(
-        //             "no config {} found in aptos root account state",
-        //             T::CONFIG_ID
-        //         )
-        //     })?
-        //     .bytes()
-        //     .clone();
+            })?
+            .bytes()
+            .clone();
 
         T::deserialize_into_config(&bytes)
     }
