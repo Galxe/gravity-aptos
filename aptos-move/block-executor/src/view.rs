@@ -68,6 +68,7 @@ use move_binary_format::{
 use move_core_types::{language_storage::ModuleId, value::MoveTypeLayout, vm_status::StatusCode};
 use move_vm_runtime::{AsFunctionValueExtension, Module, RuntimeEnvironment};
 use move_vm_types::{
+    code::ModuleCache,
     delayed_values::delayed_field_id::{DelayedFieldID, ExtractUniqueIndex},
     value_serde::{FunctionValueExtension, ValueSerDeContext},
 };
