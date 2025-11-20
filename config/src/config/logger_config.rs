@@ -36,6 +36,10 @@ pub struct LoggerConfig {
     pub telemetry_level: Level,
     /// Tokio console port for local debugging
     pub tokio_console_port: Option<u16>,
+    /// Maximum size of a log file in megabytes before it gets rotated.
+    pub max_log_file_size_mbs: u64,
+    /// Maximum number of rotated log files to keep.
+    pub max_log_files: usize,
 }
 
 impl Default for LoggerConfig {

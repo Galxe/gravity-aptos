@@ -327,6 +327,11 @@ impl ConsensusCommitNotification {
     pub fn get_subscribable_events(&self) -> &Vec<ContractEvent> {
         &self.subscribable_events
     }
+
+    /// Returns the block number of the notification
+    pub fn get_block_number(&self) -> u64 {
+        self.block_number
+    }
 }
 
 /// The response returned by state sync for a consensus or consensus observer notification
