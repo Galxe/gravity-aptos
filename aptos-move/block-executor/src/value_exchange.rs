@@ -19,7 +19,7 @@ use move_core_types::value::{IdentifierMappingKind, MoveTypeLayout};
 use move_vm_runtime::AsFunctionValueExtension;
 use move_vm_types::{
     delayed_values::delayed_field_id::{DelayedFieldID, ExtractWidth, TryFromMoveValue},
-    value_serde::{ValueSerDeContext, ValueToIdentifierMapping},
+    value_serde::{FunctionValueExtension, ValueSerDeContext, ValueToIdentifierMapping},
     value_traversal::find_identifiers_in_value,
     values::Value,
 };

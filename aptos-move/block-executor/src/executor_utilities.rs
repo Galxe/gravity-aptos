@@ -66,7 +66,7 @@ macro_rules! resource_writes_to_materialize {
 		    if let Some(layout) = maybe_layout {
 			// No need to exchange anything if a resource with delayed field is deleted.
 			if !value.is_deletion() {
-			    return Some(Ok((key, value, layout)))
+			    return Some(Ok((key, TriompheArc::new((*value).clone()), layout)))
 			}
 		    }
 		    None
@@ -215,9 +215,11 @@ pub(crate) fn map_id_to_values_in_group_writes<
             let value = match value_with_layout {
                 ValueWithLayout::RawFromStorage(value) => value,
                 ValueWithLayout::Exchanged(value, None) => value,
-                ValueWithLayout::Exchanged(value, Some(layout)) => Arc::new(
-                    replace_ids_with_values(&value, layout.as_ref(), latest_view)?,
-                ),
+                ValueWithLayout::Exchanged(value, Some(layout)) => {
+                    let std_arc = Arc::new((*value).clone());
+                    let result = replace_ids_with_values(&std_arc, layout.as_ref(), latest_view)?;
+                    TriompheArc::new(result)
+                },
             };
             patched_resource_vec.push((tag, value));
         }

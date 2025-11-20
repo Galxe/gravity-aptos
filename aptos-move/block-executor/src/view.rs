@@ -514,12 +514,14 @@ impl<'a, T: Transaction> ParallelState<'a, T> {
         shared_scheduler: &'a Scheduler,
         start_shared_counter: u32,
         shared_counter: &'a AtomicU32,
+        incarnation: Incarnation,
     ) -> Self {
         Self {
             versioned_map: shared_map,
             scheduler: shared_scheduler,
             start_counter: start_shared_counter,
             counter: shared_counter,
+            incarnation,
             captured_reads: RefCell::new(CapturedReads::new()),
         }
     }
