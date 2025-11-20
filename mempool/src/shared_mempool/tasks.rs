@@ -519,7 +519,7 @@ async fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
                             client_submitted,
                             ready_time_at_sender,
                             priority.clone(),
-                        ).await;
+                        );
                         statuses.push((transaction, (mempool_status, None)));
                     },
                     Some(validation_status) => {
