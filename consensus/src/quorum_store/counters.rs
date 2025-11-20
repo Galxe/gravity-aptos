@@ -160,14 +160,6 @@ pub static PROCESS_TXN_IN_BATCH_GENERATOR: Lazy<IntCounter> = Lazy::new(|| {
     .unwrap()
 });
 
-pub static PROOF_CREAT_COUNT: Lazy<IntCounter> = Lazy::new(|| {
-    register_int_counter!(
-        "quorum_store_proof_create_count",
-        "Counter for the number of proofs created"
-    )
-    .unwrap()
-});
-
 pub static NUM_PROOF_OF_STORE_IN_PROPOSAL: Lazy<Histogram> = Lazy::new(|| {
     register_histogram!(
         "num_proof_of_store_in_proposal",
