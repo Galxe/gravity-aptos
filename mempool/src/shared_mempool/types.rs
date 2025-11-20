@@ -76,13 +76,13 @@ pub trait CoreMempoolTrait: 'static + Send + Sync {
 
     fn get_by_hash(&self, hash: HashValue) -> Option<SignedTransaction>;
 
-    async fn add_txn(&mut self, txn: SignedTransaction, ranking_score: u64, sequence_info: Option<u64>, timeline_state: TimelineState, client_submitted: bool, ready_time_at_sender: Option<u64>, priority: Option<BroadcastPeerPriority>) -> MempoolStatus;
+    fn add_txn(&mut self, txn: SignedTransaction, ranking_score: u64, sequence_info: Option<u64>, timeline_state: TimelineState, client_submitted: bool, ready_time_at_sender: Option<u64>, priority: Option<BroadcastPeerPriority>) -> MempoolStatus;
 
     fn gc_by_expiration_time(&mut self, block_time: Duration);
 
     fn get_batch(&self, max_txns: u64, max_bytes: u64, return_non_full: bool, exclude_transactions: BTreeMap<TransactionSummary, TransactionInProgress>) -> Vec<SignedTransaction>;
 
-    async fn reject_transaction(&mut self, sender: &AccountAddress, replay_protector: ReplayProtector, hash: &HashValue, reason: &DiscardedVMStatus);
+    fn reject_transaction(&mut self, sender: &AccountAddress, replay_protector: ReplayProtector, hash: &HashValue, reason: &DiscardedVMStatus);
 
     fn commit_transaction(&mut self, sender: &AccountAddress, replay_protector: ReplayProtector);
 
@@ -155,7 +155,7 @@ impl CoreMempoolTrait for GravityCoreMempool {
         self.0.get_by_hash(hash)
     }
 
-    async fn add_txn(&mut self, txn: SignedTransaction, ranking_score: u64, sequence_info: Option<u64>, timeline_state: TimelineState, client_submitted: bool, ready_time_at_sender: Option<u64>, priority: Option<BroadcastPeerPriority>) -> MempoolStatus {
+    fn add_txn(&mut self, txn: SignedTransaction, ranking_score: u64, sequence_info: Option<u64>, timeline_state: TimelineState, client_submitted: bool, ready_time_at_sender: Option<u64>, priority: Option<BroadcastPeerPriority>) -> MempoolStatus {
         self.0.add_txn(txn, ranking_score, sequence_info, timeline_state, client_submitted, ready_time_at_sender, priority)
     }
 
@@ -163,7 +163,7 @@ impl CoreMempoolTrait for GravityCoreMempool {
         self.0.gc_by_expiration_time(block_time)
     }
 
-    async fn reject_transaction(&mut self, sender: &AccountAddress, replay_protector: ReplayProtector, hash: &HashValue, reason: &DiscardedVMStatus) {
+    fn reject_transaction(&mut self, sender: &AccountAddress, replay_protector: ReplayProtector, hash: &HashValue, reason: &DiscardedVMStatus) {
         self.0.reject_transaction(sender, replay_protector, hash, reason)
     }
 
