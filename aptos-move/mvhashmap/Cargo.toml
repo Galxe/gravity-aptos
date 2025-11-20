@@ -33,8 +33,10 @@ triomphe = { workspace = true }
 
 [dev-dependencies]
 aptos-aggregator = { workspace = true, features = ["testing"] }
+concurrent-queue = { workspace = true }
 fail = { workspace = true, features = ["failpoints"] }
 move-vm-runtime = { workspace = true }
+num_cpus = { workspace = true }
 proptest = { workspace = true }
 proptest-derive = { workspace = true }
 rayon = { workspace = true }

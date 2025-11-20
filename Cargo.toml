@@ -299,6 +299,7 @@ members = [
     "third_party/move/move-command-line-common",
     "third_party/move/move-compiler",
     "third_party/move/move-compiler-v2",
+    "third_party/move/move-compiler-v2/legacy-move-compiler",
     "third_party/move/move-compiler-v2/transactional-tests",
     "third_party/move/move-core/types",
     "third_party/move/move-examples",
@@ -324,11 +325,12 @@ members = [
     "third_party/move/move-vm/integration-tests",
     "third_party/move/move-vm/metrics",
     "third_party/move/move-vm/paranoid-tests",
-    "third_party/move/move-vm/runtime",
+    "third_party/move/move-vm-runtime",
     "third_party/move/move-vm/test-utils",
     "third_party/move/move-vm/transactional-tests",
-    "third_party/move/move-vm/types",
+    "third_party/move/move-vm-types",
     "third_party/move/testing-infra/transactional-test-runner",
+    "third_party/move/tools/move-asm",
     "third_party/move/tools/move-bytecode-utils",
     "third_party/move/tools/move-bytecode-viewer",
     "third_party/move/tools/move-cli",
@@ -932,11 +934,13 @@ move-bytecode-source-map = { path = "third_party/move/move-ir-compiler/move-byte
 move-bytecode-spec = { path = "third_party/move/move-bytecode-spec" }
 move-bytecode-verifier = { path = "third_party/move/move-bytecode-verifier" }
 move-bytecode-verifier-invalid-mutations = { path = "third_party/move/move-bytecode-verifier/invalid-mutations" }
+move-asm = { path = "third_party/move/tools/move-asm" }
 move-bytecode-viewer = { path = "third_party/move/tools/move-bytecode-viewer" }
 move-bytecode-utils = { path = "third_party/move/tools/move-bytecode-utils" }
 move-cli = { path = "third_party/move/tools/move-cli" }
 move-command-line-common = { path = "third_party/move/move-command-line-common" }
 move-coverage = { path = "third_party/move/tools/move-coverage" }
+legacy-move-compiler = { path = "third_party/move/move-compiler-v2/legacy-move-compiler" }
 move-compiler = { path = "third_party/move/move-compiler" }
 move-compiler-v2 = { path = "third_party/move/move-compiler-v2" }
 move-core-types = { path = "third_party/move/move-core/types" }
@@ -965,9 +969,9 @@ move-table-extension = { path = "third_party/move/extensions/move-table-extensio
 move-transactional-test-runner = { path = "third_party/move/testing-infra/transactional-test-runner" }
 move-unit-test = { path = "third_party/move/tools/move-unit-test", features = ["table-extension"] }
 move-vm-metrics = { path = "third_party/move/move-vm/metrics" }
-move-vm-runtime = { path = "third_party/move/move-vm/runtime" }
+move-vm-runtime = { path = "third_party/move/move-vm-runtime" }
 move-vm-test-utils = { path = "third_party/move/move-vm/test-utils", features = ["table-extension"] }
-move-vm-types = { path = "third_party/move/move-vm/types" }
+move-vm-types = { path = "third_party/move/move-vm-types" }
 
 [profile.release]
 debug = true

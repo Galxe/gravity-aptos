@@ -131,7 +131,7 @@ impl TranslatedSpec {
     pub fn pre_conditions<'a, T: ExpGenerator<'a>>(
         &self,
         _builder: &T,
-    ) -> impl Iterator<Item = (Loc, Exp)> + '_ {
+    ) -> impl Iterator<Item = (Loc, Exp)> + '_ + use<'_, T> {
         self.pre.iter().cloned()
     }
 
@@ -585,7 +585,7 @@ impl<'a, 'b, T: ExpGenerator<'a>> SpecTranslator<'a, 'b, T> {
     }
 }
 
-impl<'a, 'b, T: ExpGenerator<'a>> ExpRewriterFunctions for SpecTranslator<'a, 'b, T> {
+impl<'a, T: ExpGenerator<'a>> ExpRewriterFunctions for SpecTranslator<'a, '_, T> {
     fn rewrite_exp(&mut self, exp: Exp) -> Exp {
         // Do some pre-processing of the expression before actual rewrite, reporting
         // errors.

@@ -1,4 +1,4 @@
-// -- Model dump before bytecode pipeline
+// -- Model dump before first bytecode pipeline
 module 0x2::Y {
     friend fun f_friend() {
         Tuple()
@@ -50,7 +50,7 @@ module 0x2::M {
     }
 } // end 0x2::M
 
-// -- Sourcified model before bytecode pipeline
+// -- Sourcified model before first bytecode pipeline
 module 0x2::Y {
     friend 0x2::M;
     friend fun f_friend() {
@@ -63,8 +63,8 @@ module 0x2::X {
     }
 }
 module 0x2::M {
-    use 0x2::Y;
     use 0x2::X;
+    use 0x2::Y;
     friend fun f_friend() {
     }
     public fun f_public() {

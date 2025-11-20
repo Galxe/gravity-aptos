@@ -10,11 +10,6 @@ use move_docgen::OutputFormat;
 use move_model::model::GlobalEnv;
 use std::{path::PathBuf, sync::Mutex};
 
-pub fn get_docgen_output_dir() -> String {
-    const MVC_DOCGEN_OUTPUT_DIR: &str = "MVC_DOCGEN_OUTPUT_DIR";
-    std::env::var(MVC_DOCGEN_OUTPUT_DIR).unwrap_or_else(|_| "doc".to_owned())
-}
-
 #[derive(Debug, Clone, clap::Parser, serde::Serialize, serde::Deserialize, Default)]
 pub struct DocgenOptions {
     /// Whether to include private declarations and implementations into the generated
@@ -75,7 +70,7 @@ impl DocgenOptions {
         let _lock = MUTEX.lock();
         let current_dir = std::env::current_dir()?.canonicalize()?;
         std::env::set_current_dir(&package_path)?;
-        let output_directory = PathBuf::from(get_docgen_output_dir());
+        let output_directory = PathBuf::from("doc");
         let doc_path = doc_path
             .into_iter()
             .filter_map(|s| {
@@ -107,7 +102,7 @@ impl DocgenOptions {
             output_format: self.output_format,
             ensure_unix_paths: true,
         };
-        let output = move_docgen::Docgen::new(model, &options).gen();
+        let output = move_docgen::Docgen::new(model, &options).r#gen();
         if model.diag_count(Severity::Warning) > 0 {
             let mut error_writer = StandardStream::stderr(ColorChoice::Auto);
             model.report_diag(&mut error_writer, Severity::Warning);

@@ -38,5 +38,5 @@ Error: Script execution failed with VMError: {
     sub_status: Some(0),
     location: script,
     indices: [],
-    offsets: [(FunctionDefinitionIndex(0), 3)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
 }

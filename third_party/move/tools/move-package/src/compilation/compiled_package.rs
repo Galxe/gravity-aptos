@@ -14,19 +14,19 @@ use crate::{
 use anyhow::{bail, ensure, Context, Result};
 use colored::Colorize;
 use itertools::{Either, Itertools};
+use legacy_move_compiler::{
+    compiled_unit::{self, CompiledUnit, NamedCompiledModule, NamedCompiledScript},
+    shared::{
+        known_attributes::{AttributeKind, KnownAttribute},
+        Flags, NamedAddressMap, NumericalAddress, PackagePaths,
+    },
+};
 use move_abigen::{Abigen, AbigenOptions};
 use move_binary_format::file_format::{CompiledModule, CompiledScript};
 use move_bytecode_source_map::utils::source_map_from_file;
 use move_bytecode_utils::Modules;
 use move_command_line_common::files::{
     extension_equals, find_filenames, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
-};
-use move_compiler::{
-    compiled_unit::{self, CompiledUnit, NamedCompiledModule, NamedCompiledScript},
-    shared::{
-        known_attributes::{AttributeKind, KnownAttribute},
-        Flags, NamedAddressMap, NumericalAddress, PackagePaths,
-    },
 };
 use move_compiler_v2::{external_checks::ExternalChecks, Experiment};
 use move_docgen::{Docgen, DocgenOptions};
@@ -259,7 +259,7 @@ impl OnDiskCompiledPackage {
                     let id = module.self_id();
                     let parsed_addr = NumericalAddress::new(
                         id.address().into_bytes(),
-                        move_compiler::shared::NumberFormat::Hex,
+                        legacy_move_compiler::shared::NumberFormat::Hex,
                     );
                     let module_name = FileName::from(id.name().as_str());
                     (parsed_addr, module_name)
@@ -389,7 +389,7 @@ impl CompiledPackage {
     }
 
     /// Returns compiled modules for this package and its transitive dependencies
-    pub fn all_modules_map(&self) -> Modules {
+    pub fn all_modules_map(&self) -> Modules<'_> {
         Modules::new(
             self.all_compiled_units()
                 .filter_map(|unit| match unit {
@@ -400,7 +400,7 @@ impl CompiledPackage {
         )
     }
 
-    pub fn root_modules_map(&self) -> Modules {
+    pub fn root_modules_map(&self) -> Modules<'_> {
         Modules::new(
             self.root_compiled_units
                 .iter()
@@ -752,6 +752,8 @@ impl CompiledPackage {
             }
         };
 
+        Self::check_duplicate_script_function_names(&root_compiled_units)?;
+
         let compiled_package = CompiledPackage {
             root_compiled_units,
             deps_compiled_units,
@@ -913,6 +915,41 @@ impl CompiledPackage {
         Ok(on_disk_package)
     }
 
+    fn check_duplicate_script_function_names(units: &[CompiledUnitWithSource]) -> Result<()> {
+        let mut seen_names: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut seen_error = false;
+        for unit in units {
+            if let CompiledUnit::Script(named) = &unit.unit {
+                let name = named.name.as_str().to_owned();
+                let script_path = unit.source_path.to_string_lossy().to_string();
+                let entry = seen_names.entry(name).or_default();
+                entry.push(script_path);
+                if entry.len() > 1 {
+                    seen_error = true;
+                }
+            }
+        }
+        if !seen_error {
+            return Ok(());
+        }
+        let mut error_strs = vec![];
+        for (script_name, paths) in seen_names.into_iter() {
+            if paths.len() > 1 {
+                error_strs.push(format!(
+                    "Script function name `{}` duplicated in the following files:\n{}",
+                    script_name,
+                    paths
+                        .iter()
+                        .map(|path| format!("\t`{}`", path))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ));
+            }
+        }
+        error_strs.push("Please rename script functions to remove duplication".to_string());
+        bail!(error_strs.join("\n"));
+    }
+
     fn build_abis(
         bytecode_version: u32,
         model: &GlobalEnv,
@@ -937,7 +974,7 @@ impl CompiledPackage {
             ..AbigenOptions::default()
         };
         let mut abigen = Abigen::new(model, &abi_options);
-        abigen.gen();
+        abigen.r#gen();
         abigen.into_result()
     }
 
@@ -991,7 +1028,7 @@ impl CompiledPackage {
             ..DocgenOptions::default()
         };
         let docgen = Docgen::new(model, &doc_options);
-        docgen.gen()
+        docgen.r#gen()
     }
 }
 
@@ -1001,8 +1038,10 @@ pub(crate) fn named_address_mapping_for_compiler(
     resolution_table
         .iter()
         .map(|(ident, addr)| {
-            let parsed_addr =
-                NumericalAddress::new(addr.into_bytes(), move_compiler::shared::NumberFormat::Hex);
+            let parsed_addr = NumericalAddress::new(
+                addr.into_bytes(),
+                legacy_move_compiler::shared::NumberFormat::Hex,
+            );
             (*ident, parsed_addr)
         })
         .collect::<BTreeMap<_, _>>()

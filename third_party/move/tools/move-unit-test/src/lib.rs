@@ -8,12 +8,12 @@ pub mod test_runner;
 
 use crate::test_runner::TestRunner;
 use clap::*;
-use move_command_line_common::files::verify_and_create_named_address_mapping;
-use move_compiler::{
+use legacy_move_compiler::{
     self,
     shared::{self, NumericalAddress},
     unit_test::TestPlan,
 };
+use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler_v2::plan_builder as plan_builder_v2;
 use move_core_types::{effects::ChangeSet, language_storage::ModuleId};
 use move_model::metadata::{CompilerVersion, LanguageVersion};
@@ -94,11 +94,6 @@ pub struct UnitTestingConfig {
     )]
     pub source_files: Vec<String>,
 
-    /// Use the stackless bytecode interpreter to run the tests and cross check its results with
-    /// the execution result from Move VM.
-    #[clap(long = "stackless")]
-    pub check_stackless_vm: bool,
-
     /// Verbose mode
     #[clap(short = 'v', long = "verbose")]
     pub verbose: bool,
@@ -119,11 +114,10 @@ impl Default for UnitTestingConfig {
             num_threads: 8,
             report_statistics: false,
             report_storage_on_error: false,
-            report_stacktrace_on_abort: false,
+            report_stacktrace_on_abort: true,
             ignore_compile_warnings: false,
             source_files: vec![],
             dep_files: vec![],
-            check_stackless_vm: false,
             verbose: false,
             list: false,
             named_address_values: vec![],
@@ -192,6 +186,7 @@ impl UnitTestingConfig {
         genesis_state: Option<ChangeSet>,
         writer: W,
         factory: F,
+        enable_enum_option: bool,
     ) -> Result<(W, bool)> {
         let shared_writer = Mutex::new(writer);
         let shared_options = Mutex::new(factory);
@@ -219,6 +214,7 @@ impl UnitTestingConfig {
             native_function_table,
             genesis_state,
             self.verbose,
+            enable_enum_option,
         )
         .unwrap();
 

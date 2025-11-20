@@ -1679,7 +1679,7 @@ fn access_specifier(context: &mut Context, specifier: P::AccessSpecifier) -> E::
     let (negated, kind, chain, type_args, address) = match specifier.value {
         AccessSpecifier_::Acquires(negated, chain, type_args, address) => (
             negated,
-            file_format::AccessKind::Acquires,
+            file_format::AccessKind::Writes,
             chain,
             type_args,
             address,

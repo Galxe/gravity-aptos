@@ -59,12 +59,6 @@ impl AccountAddress {
         Self(addr)
     }
 
-    const fn get_hex_address_seven() -> Self {
-        let mut addr = [0u8; AccountAddress::LENGTH];
-        addr[AccountAddress::LENGTH - 1] = 7u8;
-        Self(addr)
-    }
-
     const fn get_hex_address_three() -> Self {
         let mut addr = [0u8; AccountAddress::LENGTH];
         addr[AccountAddress::LENGTH - 1] = 3u8;
@@ -77,9 +71,15 @@ impl AccountAddress {
         Self(addr)
     }
 
+    const fn get_hex_address_seven() -> Self {
+        let mut addr = [0u8; AccountAddress::LENGTH];
+        addr[AccountAddress::LENGTH - 1] = 7u8;
+        Self(addr)
+    }
+
     pub fn random() -> Self {
         let mut rng = OsRng;
-        let buf: [u8; Self::LENGTH] = rng.gen();
+        let buf: [u8; Self::LENGTH] = rng.r#gen();
         Self(buf)
     }
 

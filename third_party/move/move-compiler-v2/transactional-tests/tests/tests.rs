@@ -4,12 +4,17 @@
 
 pub const TEST_DIR: &str = "tests";
 
-use datatest_stable::Requirements;
 use itertools::Itertools;
+use libtest_mimic::{Arguments, Trial};
 use move_compiler_v2::{logging, Experiment};
 use move_model::metadata::LanguageVersion;
-use move_transactional_test_runner::{vm_test_harness, vm_test_harness::TestRunConfig};
-use std::{path::Path, string::ToString};
+use move_transactional_test_runner::{
+    tasks::SyntaxChoice, vm_test_harness, vm_test_harness::TestRunConfig,
+};
+use std::{
+    path::{Path, PathBuf},
+    string::ToString,
+};
 use walkdir::WalkDir;
 
 #[derive(Clone)]
@@ -24,7 +29,17 @@ struct TestConfig {
     /// Path substrings for tests to exclude (applied after the include filter).
     /// If empty, no additional tests are excluded.
     exclude: &'static [&'static str],
+    /// Cross compile or not
+    cross_compile: bool,
 }
+
+/// Set of exclusions that apply when using `include: &[]` in TestConfig.
+const COMMON_EXCLUSIONS: &[&str] = &[
+    "/operator_eval/",
+    "/no-recursive-check/",
+    "/no-access-check/",
+    "/no-recursive-type-check/",
+];
 
 /// Note that any config which has different output for a test directory
 /// *must* be added to the `SEPARATE_BASELINE` array below, so that a
@@ -36,14 +51,10 @@ const TEST_CONFIGS: &[TestConfig] = &[
         name: "baseline",
         runner: |p| run(p, get_config_by_name("baseline")),
         experiments: &[],
-        language_version: LanguageVersion::latest_stable(),
-        include: &[],
-        exclude: &[
-            "/operator_eval/",
-            "/access_control/",
-            "/closures/",
-            "/no-recursive-check/",
-        ],
+        language_version: LanguageVersion::latest(),
+        include: &[], // all tests except those excluded below
+        exclude: COMMON_EXCLUSIONS,
+        cross_compile: true,
     },
     // Test optimize/no-optimize/etc., except for `/access_control/`
     TestConfig {
@@ -53,44 +64,34 @@ const TEST_CONFIGS: &[TestConfig] = &[
             (Experiment::OPTIMIZE, true),
             (Experiment::OPTIMIZE_WAITING_FOR_COMPARE_TESTS, true),
         ],
-        language_version: LanguageVersion::latest_stable(),
+        language_version: LanguageVersion::latest(),
         include: &[], // all tests except those excluded below
-        exclude: &[
-            "/operator_eval/",
-            "/access_control/",
-            "/closures/",
-            "/no-recursive-check/",
-        ],
+        exclude: COMMON_EXCLUSIONS,
+        cross_compile: false,
     },
     TestConfig {
         name: "no-optimize",
         runner: |p| run(p, get_config_by_name("no-optimize")),
         experiments: &[(Experiment::OPTIMIZE, false)],
-        language_version: LanguageVersion::latest_stable(),
+        language_version: LanguageVersion::latest(),
         include: &[], // all tests except those excluded below
-        exclude: &[
-            "/operator_eval/",
-            "/access_control/",
-            "/closures/",
-            "/no-recursive-check/",
-        ],
+        exclude: COMMON_EXCLUSIONS,
+        cross_compile: false,
     },
+    // Test enabling inlining optimization, across package inlining, and extra optimizations.
     TestConfig {
-        name: "optimize-no-simplify",
-        runner: |p| run(p, get_config_by_name("optimize-no-simplify")),
+        name: "opt-extra",
+        runner: |p| run(p, get_config_by_name("opt-extra")),
         experiments: &[
+            (Experiment::INLINING_OPTIMIZATION, true),
+            (Experiment::ACROSS_PACKAGE_INLINING, true),
             (Experiment::OPTIMIZE, true),
-            (Experiment::OPTIMIZE_WAITING_FOR_COMPARE_TESTS, true),
-            (Experiment::AST_SIMPLIFY, false),
+            (Experiment::OPTIMIZE_EXTRA, true),
         ],
-        language_version: LanguageVersion::latest_stable(),
+        language_version: LanguageVersion::latest(),
         include: &[], // all tests except those excluded below
-        exclude: &[
-            "/operator_eval/",
-            "/access_control/",
-            "/closures/",
-            "/no-recursive-check/",
-        ],
+        exclude: COMMON_EXCLUSIONS,
+        cross_compile: false,
     },
     // Test `/operator_eval/` with language version 1 and 2
     TestConfig {
@@ -100,69 +101,16 @@ const TEST_CONFIGS: &[TestConfig] = &[
         language_version: LanguageVersion::V1,
         include: &["/operator_eval/"],
         exclude: &[],
+        cross_compile: false,
     },
     TestConfig {
         name: "operator-eval-lang-2",
         runner: |p| run(p, get_config_by_name("operator-eval-lang-2")),
         experiments: &[(Experiment::OPTIMIZE, true)],
-        language_version: LanguageVersion::latest_stable(),
+        language_version: LanguageVersion::latest(),
         include: &["/operator_eval/"],
         exclude: &[],
-    },
-    // Test `/closures/` with function values enabled
-    TestConfig {
-        name: "closures",
-        runner: |p| run(p, get_config_by_name("closures")),
-        experiments: &[
-            (Experiment::OPTIMIZE, true),
-            (Experiment::OPTIMIZE_WAITING_FOR_COMPARE_TESTS, true),
-        ],
-        language_version: LanguageVersion::V2_2,
-        include: &["/closures/"],
-        exclude: &[],
-    },
-    // Test optimize/no-optimize/etc., just for `/access_control/`, which
-    // needs to disable `ACQUIRES_CHECK`.
-    TestConfig {
-        name: "optimize-no-acquires-check",
-        runner: |p| run(p, get_config_by_name("optimize-no-acquires-check")),
-        experiments: &[
-            (Experiment::OPTIMIZE, true),
-            (Experiment::OPTIMIZE_WAITING_FOR_COMPARE_TESTS, true),
-            (Experiment::ACQUIRES_CHECK, false),
-        ],
-        language_version: LanguageVersion::latest_stable(),
-        include: &["/access_control/"],
-        exclude: &[],
-    },
-    TestConfig {
-        name: "no-optimize-no-acquires-check",
-        runner: |p| run(p, get_config_by_name("no-optimize-no-acquires-check")),
-        experiments: &[
-            (Experiment::OPTIMIZE, false),
-            (Experiment::ACQUIRES_CHECK, false),
-        ],
-        language_version: LanguageVersion::latest_stable(),
-        include: &["/access_control/"],
-        exclude: &[],
-    },
-    TestConfig {
-        name: "optimize-no-simplify-no-acquires-check",
-        runner: |p| {
-            run(
-                p,
-                get_config_by_name("optimize-no-simplify-no-acquires-check"),
-            )
-        },
-        experiments: &[
-            (Experiment::OPTIMIZE, true),
-            (Experiment::OPTIMIZE_WAITING_FOR_COMPARE_TESTS, true),
-            (Experiment::AST_SIMPLIFY, false),
-            (Experiment::ACQUIRES_CHECK, false),
-        ],
-        language_version: LanguageVersion::latest_stable(),
-        include: &["/access_control/"],
-        exclude: &[],
+        cross_compile: true,
     },
     TestConfig {
         name: "no-recursive-check",
@@ -171,6 +119,25 @@ const TEST_CONFIGS: &[TestConfig] = &[
         language_version: LanguageVersion::latest(),
         include: &["/no-recursive-check/"],
         exclude: &[],
+        cross_compile: false,
+    },
+    TestConfig {
+        name: "no-access-check",
+        runner: |p| run(p, get_config_by_name("no-access-check")),
+        experiments: &[(Experiment::ACCESS_CHECK, false)],
+        language_version: LanguageVersion::latest(),
+        include: &["/no-access-check/"],
+        exclude: &[],
+        cross_compile: false,
+    },
+    TestConfig {
+        name: "no-recursive-type-check",
+        runner: |p| run(p, get_config_by_name("no-recursive-type-check")),
+        experiments: &[(Experiment::RECURSIVE_TYPE_CHECK, false)],
+        language_version: LanguageVersion::latest(),
+        include: &["/no-recursive-type-check/"],
+        exclude: &[],
+        cross_compile: false,
     },
 ];
 
@@ -193,6 +160,8 @@ const SEPARATE_BASELINE: &[&str] = &[
     "no-v1-comparison/enum/enum_field_select.move",
     "no-v1-comparison/enum/enum_field_select_different_offsets.move",
     "no-v1-comparison/assert_one.move",
+    "no-v1-comparison/closures/reentrancy",
+    "no-v1-comparison/closures/reentrancy",
     "control_flow/for_loop_non_terminating.move",
     "control_flow/for_loop_nested_break.move",
     "evaluation_order/lazy_assert.move",
@@ -203,8 +172,10 @@ const SEPARATE_BASELINE: &[&str] = &[
     "optimization/bug_14223_unused_non_droppable.move",
     // Flaky redundant unused assignment error
     "no-v1-comparison/enum/enum_scoping.move",
-    // Needs ACQUIRES_CHECK disabled to function; baseline checks expected errors
-    "/access_control/",
+    // Different error messages depending on optimizations or not
+    "no-v1-comparison/fv_as_keys.move",
+    // needed until bug #17615 is fixed
+    "misc/bug_14817_extended.move",
 ];
 
 fn get_config_by_name(name: &str) -> TestConfig {
@@ -216,27 +187,32 @@ fn get_config_by_name(name: &str) -> TestConfig {
 }
 
 fn run(path: &Path, config: TestConfig) -> datatest_stable::Result<()> {
-    logging::setup_logging_for_testing();
+    logging::setup_logging_for_testing(None);
     let p = path.to_str().unwrap_or_default();
     let exp_suffix = if SEPARATE_BASELINE.iter().any(|s| p.contains(s)) {
         Some(format!("{}.exp", config.name))
     } else {
         None
     };
-    let mut experiments = config
+    let experiments = config
         .experiments
         .iter()
         .map(|(s, v)| (s.to_string(), *v))
         .collect_vec();
-    if path.to_string_lossy().contains("/access_control/") {
-        // Enable access control file format generation for those tests
-        experiments.push((Experiment::GEN_ACCESS_SPECIFIERS.to_string(), true))
-    }
     let language_version = config.language_version;
-    let vm_test_config = TestRunConfig::CompilerV2 {
-        language_version,
-        experiments,
-    };
+    let mut vm_test_config =
+        TestRunConfig::new(language_version, experiments).with_runtime_ref_checks();
+    // For cross compilation, we need to always append the config name as a part of the
+    // outcome file suffix, as optimizations affect the generated code.
+    if config.cross_compile {
+        vm_test_config = vm_test_config.cross_compile_into(
+            SyntaxChoice::Source,
+            true,
+            exp_suffix
+                .clone()
+                .or_else(|| Some(format!("{}.exp", config.name))),
+        );
+    }
 
     vm_test_harness::run_test_with_config_and_exp_suffix(vm_test_config, path, &exp_suffix)
 }
@@ -256,25 +232,27 @@ fn main() {
             }
         })
         .collect_vec();
-    let reqs = TEST_CONFIGS
+    let mut tests = TEST_CONFIGS
         .iter()
-        .map(|config| {
-            let pattern = files
+        .flat_map(|config| {
+            files
                 .iter()
                 .filter(|file| {
                     (config.include.is_empty()
                         || config.include.iter().any(|include| file.contains(include)))
                         && (!config.exclude.iter().any(|exclude| file.contains(exclude)))
                 })
-                .map(|s| s.to_owned() + "$")
-                .join("|");
-            Requirements::new(
-                config.runner,
-                format!("compiler-v2-txn[config={}]", config.name),
-                "tests".to_string(),
-                pattern,
-            )
+                .map(|file| {
+                    let prompt = format!("compiler-v2-txn[config={}]::{}", config.name, file);
+                    let path = PathBuf::from(file);
+                    let runner = config.runner;
+                    Trial::test(prompt, move || {
+                        runner(&path).map_err(|err| format!("{:?}", err).into())
+                    })
+                })
         })
         .collect_vec();
-    datatest_stable::runner(&reqs)
+    tests.sort_unstable_by(|a, b| a.name().cmp(b.name()));
+    let args = Arguments::from_args();
+    libtest_mimic::run(&args, tests).exit()
 }

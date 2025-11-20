@@ -35,7 +35,7 @@ pub struct SymbolDisplay<'a> {
     pool: &'a SymbolPool,
 }
 
-impl<'a> fmt::Display for SymbolDisplay<'a> {
+impl fmt::Display for SymbolDisplay<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.write_str(&self.pool.string(*self.sym))
     }
@@ -64,6 +64,12 @@ impl SymbolPool {
                 lookup: HashMap::new(),
             }),
         }
+    }
+
+    /// Check if a name has been taken by a symbol in this pool.
+    pub fn name_already_taken(&self, s: &str) -> bool {
+        let pool = self.inner.borrow();
+        pool.lookup.contains_key(&Rc::new(s.to_string()))
     }
 
     /// Looks up a symbol by its string representation. If a symbol with this representation

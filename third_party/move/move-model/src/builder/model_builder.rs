@@ -21,8 +21,8 @@ use crate::{
 };
 use codespan_reporting::diagnostic::Severity;
 use itertools::Itertools;
+use legacy_move_compiler::{expansion::ast as EA, parser::ast as PA, shared::NumericalAddress};
 use move_binary_format::file_format::Visibility;
-use move_compiler::{expansion::ast as EA, parser::ast as PA, shared::NumericalAddress};
 use move_core_types::{ability::AbilitySet, account_address::AccountAddress};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -271,6 +271,7 @@ impl<'env> ModelBuilder<'env> {
             display_type_vars: false,
             used_modules: BTreeSet::new(),
             use_module_qualification: false,
+            display_module_addr: false,
             recursive_vars: None,
         }
     }

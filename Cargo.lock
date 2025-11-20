@@ -469,6 +469,7 @@ dependencies = [
  "move-vm-types",
  "once_cell",
  "test-case",
+ "triomphe",
 ]
 
 [[package]]
@@ -1945,14 +1946,13 @@ dependencies = [
  "flate2",
  "hex",
  "itertools 0.13.0",
+ "legacy-move-compiler",
  "libsecp256k1",
  "log",
- "lru 0.16.2",
  "merlin",
  "move-binary-format",
  "move-cli",
  "move-command-line-common",
- "move-compiler",
  "move-compiler-v2",
  "move-core-types",
  "move-docgen",
@@ -1979,9 +1979,9 @@ dependencies = [
  "siphasher",
  "smallvec",
  "tempfile",
- "thiserror 1.0.69",
  "tiny-keccak",
  "toml 0.7.8",
+ "triomphe",
 ]
 
 [[package]]
@@ -3025,6 +3025,7 @@ dependencies = [
  "aptos-vm-types",
  "bytes",
  "claims",
+ "concurrent-queue",
  "crossbeam",
  "dashmap 7.0.0-rc2",
  "equivalent",
@@ -3033,6 +3034,7 @@ dependencies = [
  "move-core-types",
  "move-vm-runtime",
  "move-vm-types",
+ "num_cpus",
  "proptest",
  "proptest-derive",
  "rayon",
@@ -3048,8 +3050,6 @@ dependencies = [
  "aptos-gas-algebra",
  "aptos-gas-schedule",
  "aptos-types",
- "bcs 0.1.4",
- "bytes",
  "move-binary-format",
  "move-core-types",
  "move-vm-runtime",
@@ -4124,6 +4124,7 @@ version = "0.1.0"
 dependencies = [
  "aptos-gas-schedule",
  "aptos-native-interface",
+ "aptos-types",
  "better_any",
  "bytes",
  "move-binary-format",
@@ -4133,6 +4134,7 @@ dependencies = [
  "move-vm-types",
  "sha3 0.9.1",
  "smallvec",
+ "triomphe",
 ]
 
 [[package]]
@@ -6206,7 +6208,10 @@ name = "bytecode-verifier-transactional-tests"
 version = "0.1.0"
 dependencies = [
  "datatest-stable",
+ "libtest-mimic",
  "move-transactional-test-runner",
+ "once_cell",
+ "walkdir",
 ]
 
 [[package]]
@@ -10761,6 +10766,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "legacy-move-compiler"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "bcs 0.1.4",
+ "clap 4.5.21",
+ "codespan-reporting",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-source-map",
+ "move-bytecode-verifier",
+ "move-command-line-common",
+ "move-core-types",
+ "move-ir-types",
+ "move-symbol-pool",
+ "once_cell",
+ "petgraph 0.6.5",
+ "regex",
+ "tempfile",
+]
+
+[[package]]
 name = "levenshtein"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11296,6 +11323,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-asm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 4.5.21",
+ "codespan",
+ "codespan-reporting",
+ "either",
+ "itertools 0.13.0",
+ "libtest-mimic",
+ "move-binary-format",
+ "move-core-types",
+ "move-transactional-test-runner",
+ "walkdir",
+]
+
+[[package]]
 name = "move-ast-generator-tests"
 version = "0.1.0"
 dependencies = [
@@ -11319,6 +11363,7 @@ dependencies = [
  "indexmap 2.7.0",
  "move-bytecode-spec",
  "move-core-types",
+ "once_cell",
  "proptest",
  "proptest-derive",
  "ref-cast",
@@ -11413,10 +11458,10 @@ dependencies = [
  "colored",
  "datatest-stable",
  "httpmock",
+ "legacy-move-compiler",
  "move-binary-format",
  "move-bytecode-viewer",
  "move-command-line-common",
- "move-compiler",
  "move-compiler-v2",
  "move-core-types",
  "move-coverage",
@@ -11482,11 +11527,12 @@ dependencies = [
  "clap 4.5.21",
  "codespan",
  "codespan-reporting",
- "datatest-stable",
+ "colored",
  "ethnum",
  "flexi_logger",
  "im",
  "itertools 0.13.0",
+ "legacy-move-compiler",
  "libtest-mimic",
  "log",
  "move-binary-format",
@@ -11494,7 +11540,6 @@ dependencies = [
  "move-bytecode-source-map",
  "move-bytecode-verifier",
  "move-command-line-common",
- "move-compiler",
  "move-core-types",
  "move-disassembler",
  "move-ir-types",
@@ -11516,6 +11561,7 @@ version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "itertools 0.13.0",
+ "libtest-mimic",
  "move-compiler-v2",
  "move-model",
  "move-transactional-test-runner",
@@ -11594,10 +11640,10 @@ dependencies = [
  "anyhow",
  "clap 4.5.21",
  "colored",
+ "legacy-move-compiler",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
- "move-compiler",
  "move-core-types",
  "move-coverage",
  "move-ir-types",
@@ -11737,13 +11783,13 @@ dependencies = [
  "either",
  "internment",
  "itertools 0.13.0",
+ "legacy-move-compiler",
  "log",
+ "move-asm",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
- "move-compiler",
  "move-core-types",
- "move-disassembler",
  "move-ir-types",
  "move-prover-test-utils",
  "move-symbol-pool",
@@ -11763,12 +11809,12 @@ dependencies = [
  "colored",
  "datatest-stable",
  "itertools 0.13.0",
+ "legacy-move-compiler",
  "move-abigen",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-utils",
  "move-command-line-common",
- "move-compiler",
  "move-compiler-v2",
  "move-core-types",
  "move-docgen",
@@ -11936,8 +11982,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "codespan-reporting",
+ "legacy-move-compiler",
  "move-command-line-common",
- "move-compiler",
  "move-compiler-v2",
  "move-model",
  "move-prover-test-utils",
@@ -11953,11 +11999,11 @@ dependencies = [
  "dir-diff",
  "file_diff",
  "hex",
+ "legacy-move-compiler",
  "log",
  "move-binary-format",
  "move-cli",
  "move-command-line-common",
- "move-compiler",
  "move-core-types",
  "move-docgen",
  "move-errmapgen",
@@ -12044,11 +12090,11 @@ dependencies = [
  "datatest-stable",
  "difference",
  "itertools 0.13.0",
+ "legacy-move-compiler",
  "move-binary-format",
  "move-bytecode-utils",
  "move-cli",
  "move-command-line-common",
- "move-compiler",
  "move-compiler-v2",
  "move-core-types",
  "move-ir-types",
@@ -12115,15 +12161,17 @@ dependencies = [
  "anyhow",
  "better_any",
  "bytes",
+ "cfg-if",
  "claims",
  "fail",
+ "fxhash",
  "hashbrown 0.14.3",
  "hex",
+ "itertools 0.13.0",
  "lazy_static",
  "lru 0.16.2",
  "move-binary-format",
  "move-bytecode-verifier",
- "move-compiler",
  "move-core-types",
  "move-ir-compiler",
  "move-vm-metrics",
@@ -12134,6 +12182,7 @@ dependencies = [
  "proptest",
  "serde",
  "smallbitvec",
+ "test-case",
  "triomphe",
  "typed-arena",
 ]

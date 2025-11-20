@@ -49,7 +49,7 @@ use move_core_types::{
 use proptest::{collection::vec, prelude::*, strategy::BoxedStrategy};
 use ref_cast::RefCast;
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::{fmt, fmt::Formatter};
 use variant_count::VariantCount;
 
 /// Generic index into one of the tables in the binary format.
@@ -380,6 +380,15 @@ impl FunctionAttribute {
             with.contains(&FunctionAttribute::Persistent)
         } else {
             true
+        }
+    }
+}
+
+impl fmt::Display for FunctionAttribute {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            FunctionAttribute::Persistent => write!(f, "persistent"),
+            FunctionAttribute::ModuleLock => write!(f, "module_lock"),
         }
     }
 }
@@ -820,7 +829,7 @@ pub type TypeParameterIndex = u16;
     derive(proptest_derive::Arbitrary, dearbitrary::Dearbitrary)
 )]
 pub struct AccessSpecifier {
-    /// The kind of access: read, write, or both.
+    /// The kind of access.
     pub kind: AccessKind,
     /// Whether the specifier is negated.
     pub negated: bool,
@@ -828,17 +837,6 @@ pub struct AccessSpecifier {
     pub resource: ResourceSpecifier,
     /// The address where the resource is stored.
     pub address: AddressSpecifier,
-}
-
-impl AccessSpecifier {
-    // Old style of acquires is by default for bytecode version 6 or below.
-    // New style of acquires was introduced in AIP-56: Resource Access Control
-    pub fn is_old_style_acquires(&self) -> bool {
-        self.kind == AccessKind::Acquires
-            && !self.negated
-            && self.address == AddressSpecifier::Any
-            && matches!(self.resource, ResourceSpecifier::Resource(_))
-    }
 }
 
 /// The kind of specified access.
@@ -849,31 +847,12 @@ impl AccessSpecifier {
     derive(proptest_derive::Arbitrary, dearbitrary::Dearbitrary)
 )]
 pub enum AccessKind {
+    /// The resource is read. If used in negation context, this
+    /// means the resource is neither read nor written.
     Reads,
+    /// The resource is read or written. If used in negation context,
+    /// this means the resource is not written to.
     Writes,
-    Acquires, // reads or writes
-}
-
-impl AccessKind {
-    /// Returns true if this access kind subsumes the other.
-    pub fn subsumes(&self, other: &Self) -> bool {
-        use AccessKind::*;
-        match (self, other) {
-            (Acquires, _) => true,
-            (_, Acquires) => false,
-            _ => self == other,
-        }
-    }
-
-    /// Tries to join two kinds, returns None if no intersection.
-    pub fn try_join(self, other: Self) -> Option<Self> {
-        use AccessKind::*;
-        match (self, other) {
-            (Acquires, k) | (k, Acquires) => Some(k),
-            (k1, k2) if k1 == k2 => Some(k1),
-            _ => None,
-        }
-    }
 }
 
 impl fmt::Display for AccessKind {
@@ -882,7 +861,6 @@ impl fmt::Display for AccessKind {
         match self {
             Reads => f.write_str("reads"),
             Writes => f.write_str("writes"),
-            Acquires => f.write_str("acquires"),
         }
     }
 }
@@ -1183,7 +1161,8 @@ impl SignatureToken {
     /// Returns true if this type can have assigned a value of the source type.
     /// For function types, this is true if the argument and result types
     /// are equal, and if this function type's ability set is a subset of the other
-    /// one. For all other types, they must be equal
+    /// one. For immutable references, this is true if the inner types are assignable.
+    /// For all other types, this is true if the two types are equal.
     pub fn is_assignable_from(&self, source: &SignatureToken) -> bool {
         match (self, source) {
             (
@@ -1191,9 +1170,6 @@ impl SignatureToken {
                 SignatureToken::Function(args2, results2, abs2),
             ) => args1 == args2 && results1 == results2 && abs1.is_subset(*abs2),
             (SignatureToken::Reference(ty1), SignatureToken::Reference(ty2)) => {
-                ty1.is_assignable_from(ty2)
-            },
-            (SignatureToken::MutableReference(ty1), SignatureToken::MutableReference(ty2)) => {
                 ty1.is_assignable_from(ty2)
             },
             _ => self == source,
@@ -1205,10 +1181,11 @@ impl SignatureToken {
     /// Panics if this token doesn't contain a struct handle.
     pub fn debug_set_sh_idx(&mut self, sh_idx: StructHandleIndex) {
         match self {
-            SignatureToken::Struct(ref mut wrapped) => *wrapped = sh_idx,
-            SignatureToken::StructInstantiation(ref mut wrapped, _) => *wrapped = sh_idx,
-            SignatureToken::Reference(ref mut token)
-            | SignatureToken::MutableReference(ref mut token) => token.debug_set_sh_idx(sh_idx),
+            SignatureToken::Struct(wrapped) => *wrapped = sh_idx,
+            SignatureToken::StructInstantiation(wrapped, _) => *wrapped = sh_idx,
+            SignatureToken::Reference(token) | SignatureToken::MutableReference(token) => {
+                token.debug_set_sh_idx(sh_idx)
+            },
             other => panic!(
                 "debug_set_sh_idx (to {}) called for non-struct token {:?}",
                 sh_idx, other
@@ -1712,7 +1689,7 @@ pub enum Bytecode {
     "#]
     #[runtime_check_epilogue = r#"
         ty_stack >> ty
-        assert ty == &struct_ty
+        assert ty == &struct_ty or ty == &mut struct_ty
         ty_stack << bool
     "#]
     TestVariant(StructVariantHandleIndex),
@@ -1845,7 +1822,7 @@ pub enum Bytecode {
     "#]
     #[runtime_check_epilogue = r#"
         ty_stack >> ty
-        assert ty == &struct_ty
+        assert ty == &mut struct_ty
         ty_stack << &mut field_ty
     "#]
     #[gas_type_creation_tier_0 = "struct_ty"]
@@ -1887,7 +1864,7 @@ pub enum Bytecode {
     "#]
     #[runtime_check_epilogue = r#"
         ty_stack >> ty
-        assert ty == &struct_ty
+        assert ty == &struct_ty or ty == &mut struct_ty
         ty_stack << &field_ty
     "#]
     ImmBorrowField(FieldHandleIndex),
@@ -1910,8 +1887,8 @@ pub enum Bytecode {
     "#]
     #[runtime_check_epilogue = r#"
         ty_stack >> ty
-        assert ty == &mut struct_ty
-        ty_stack << &mut field_ty
+        assert ty == &struct_ty or ty == &mut struct_ty
+        ty_stack << &field_ty
     "#]
     ImmBorrowVariantField(VariantFieldHandleIndex),
 
@@ -1928,7 +1905,7 @@ pub enum Bytecode {
     "#]
     #[runtime_check_epilogue = r#"
         ty_stack >> ty
-        assert ty == &struct_ty
+        assert ty == &struct_ty or ty == &mut struct_ty
         ty_stack << &field_ty
     "#]
     #[gas_type_creation_tier_0 = "struct_ty"]
@@ -1953,8 +1930,8 @@ pub enum Bytecode {
     "#]
     #[runtime_check_epilogue = r#"
         ty_stack >> ty
-        assert ty == &mut struct_ty
-        ty_stack << &mut field_ty
+        assert ty == &struct_ty or ty == &mut struct_ty
+        ty_stack << &field_ty
     "#]
     ImmBorrowVariantFieldGeneric(VariantFieldInstantiationIndex),
 
@@ -2459,7 +2436,7 @@ pub enum Bytecode {
     #[runtime_check_epilogue = r#"
         ty_stack >> ty1
         ty_stack >> ty2
-        assert ty2 == signer
+        assert ty2 == &signer
         assert ty1 == struct_ty
         assert struct_ty has key
     "#]
@@ -2556,7 +2533,7 @@ pub enum Bytecode {
     #[runtime_check_epilogue = r#"
         elem_ty = instantiate elem_ty
         ty_stack >> ty
-        assert ty == &elem_ty
+        assert ty == &vector<elem_ty> or ty == &mut vector<elem_ty>
         ty_stack << u64
     "#]
     #[gas_type_creation_tier_0 = "elem_ty"]
@@ -2577,7 +2554,7 @@ pub enum Bytecode {
         ty_stack >> idx_ty
         assert idx_ty == u64
         ty_stack >> ref_ty
-        assert ref_ty == &vector<elem_ty>
+        assert ref_ty == &vector<elem_ty> or ref_ty == &mut vector<elem_ty>
         ty_stack << &elem_ty
     "#]
     #[gas_type_creation_tier_0 = "elem_ty"]
@@ -2675,7 +2652,7 @@ pub enum Bytecode {
         ty_stack >> ty3
         assert ty1 == u64
         assert ty2 == u64
-        assert ty3 == &vector<elem_ty>
+        assert ty3 == &mut vector<elem_ty>
     "#]
     VecSwap(SignatureIndex),
 
@@ -2731,7 +2708,7 @@ pub enum Bytecode {
 
     #[group = "closure"]
     #[description = r#"
-        `CallClosure(|t1..tn|r has a)` evalutes a closure of the given function type,
+        `CallClosure(|t1..tn|r has a)` evaluates a closure of the given function type,
         taking the captured arguments and mixing in the provided ones on the stack.
 
         On top of the stack is the closure being evaluated, underneath the arguments:
@@ -3134,6 +3111,8 @@ pub struct CompiledScript {
     pub type_parameters: Vec<AbilitySet>,
 
     pub parameters: SignatureIndex,
+
+    pub access_specifiers: Option<Vec<AccessSpecifier>>,
 }
 
 impl CompiledScript {
@@ -3254,6 +3233,8 @@ impl Arbitrary for CompiledScript {
                         metadata: vec![],
                         type_parameters,
                         parameters,
+                        // TODO(#16278): access specifiers
+                        access_specifiers: None,
                         code,
                     }
                 },
@@ -3494,14 +3475,29 @@ pub fn empty_module_with_dependencies_and_friends<'a>(
     dependencies: impl IntoIterator<Item = &'a str>,
     friends: impl IntoIterator<Item = &'a str>,
 ) -> CompiledModule {
-    // Rename this empty module.
+    empty_module_with_dependencies_and_friends_at_addr(
+        AccountAddress::ZERO,
+        module_name,
+        dependencies,
+        friends,
+    )
+}
+
+/// Creates an empty compiled module with specified dependencies and friends. All
+/// modules (including itself) are stored at the specified address.
+pub fn empty_module_with_dependencies_and_friends_at_addr<'a>(
+    address: AccountAddress,
+    module_name: &'a str,
+    dependencies: impl IntoIterator<Item = &'a str>,
+    friends: impl IntoIterator<Item = &'a str>,
+) -> CompiledModule {
     let mut module = empty_module();
+    module.address_identifiers[0] = address;
     module.identifiers[0] = Identifier::new(module_name).unwrap();
 
     for name in dependencies {
         module.identifiers.push(Identifier::new(name).unwrap());
         module.module_handles.push(ModuleHandle {
-            // Empty module sets up this index to 0x0.
             address: AddressIdentifierIndex(0),
             name: IdentifierIndex((module.identifiers.len() - 1) as TableIndex),
         });
@@ -3509,7 +3505,6 @@ pub fn empty_module_with_dependencies_and_friends<'a>(
     for name in friends {
         module.identifiers.push(Identifier::new(name).unwrap());
         module.friend_decls.push(ModuleHandle {
-            // Empty module sets up this index to 0x0.
             address: AddressIdentifierIndex(0),
             name: IdentifierIndex((module.identifiers.len() - 1) as TableIndex),
         });
@@ -3536,6 +3531,7 @@ pub fn empty_script() -> CompiledScript {
 
         type_parameters: vec![],
         parameters: SignatureIndex(0),
+        access_specifiers: None,
         code: CodeUnit {
             locals: SignatureIndex(0),
             code: vec![Bytecode::Ret],

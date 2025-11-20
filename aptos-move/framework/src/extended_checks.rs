@@ -4,7 +4,7 @@
 use aptos_types::vm::module_metadata::{
     KnownAttribute, RandomnessAnnotation, ResourceGroupScope, RuntimeModuleMetadataV1,
 };
-use move_compiler::shared::known_attributes;
+use legacy_move_compiler::shared::known_attributes;
 use move_binary_format::file_format::Visibility;
 use move_core_types::{
     ability::{Ability, AbilitySet},
@@ -90,17 +90,6 @@ pub fn run_extended_checks(env: &GlobalEnv) -> BTreeMap<ModuleId, RuntimeModuleM
     checker.output
 }
 
-/// Configures the move-cli unit test validation hook to run the extended checker.
-#[cfg(feature = "testing")]
-pub fn configure_extended_checks_for_unit_test() {
-    fn validate(env: &GlobalEnv) {
-        run_extended_checks(env);
-    }
-    // Note: test_validation module may not be available in all builds
-    // This function is only used in testing scenarios
-    let _ = validate;
-}
-
 #[derive(Debug)]
 struct ExtendedChecker<'a> {
     env: &'a GlobalEnv,
@@ -145,7 +134,7 @@ impl<'a> ExtendedChecker<'a> {
 // ----------------------------------------------------------------------------------
 // Module Initialization
 
-impl<'a> ExtendedChecker<'a> {
+impl ExtendedChecker<'_> {
     fn check_init_module(&self, module: &ModuleEnv) {
         // TODO: also enable init_module by attribute, perhaps deprecate by name
         let init_module_sym = self.env.symbol_pool().make(INIT_MODULE_FUN);
@@ -156,24 +145,42 @@ impl<'a> ExtendedChecker<'a> {
                     &format!("`{}` function must be private", INIT_MODULE_FUN),
                 )
             }
-            for Parameter(_, ty, _) in fun.get_parameters() {
+
+            let record_param_mismatch_error = || {
+                let msg = format!(
+                    "`{}` function can only take a single parameter of type `signer` or `&signer`",
+                    INIT_MODULE_FUN
+                );
+                self.env.error(&fun.get_id_loc(), &msg);
+            };
+
+            if fun.get_parameter_count() != 1 {
+                record_param_mismatch_error();
+            } else {
+                let Parameter(_, ty, _) = &fun.get_parameters()[0];
                 let ok = match ty {
                     Type::Primitive(PrimitiveType::Signer) => true,
-                    Type::Reference(_, ty) => matches!(*ty, Type::Primitive(PrimitiveType::Signer)),
+                    Type::Reference(_, ty) => {
+                        matches!(ty.as_ref(), Type::Primitive(PrimitiveType::Signer))
+                    },
                     _ => false,
                 };
                 if !ok {
-                    self.env.error(
-                        &fun.get_id_loc(),
-                        &format!("`{}` function can only take values of type `signer` or `&signer` as parameters",
-                                 INIT_MODULE_FUN),
-                    );
+                    record_param_mismatch_error();
                 }
             }
+
             if fun.get_return_count() > 0 {
                 self.env.error(
                     &fun.get_id_loc(),
                     &format!("`{}` function cannot return values", INIT_MODULE_FUN),
+                )
+            }
+
+            if fun.get_type_parameter_count() > 0 {
+                self.env.error(
+                    &fun.get_id_loc(),
+                    &format!("`{}` function cannot have type parameters", INIT_MODULE_FUN),
                 )
             }
         }
@@ -183,7 +190,7 @@ impl<'a> ExtendedChecker<'a> {
 // ----------------------------------------------------------------------------------
 // Entry Functions
 
-impl<'a> ExtendedChecker<'a> {
+impl ExtendedChecker<'_> {
     fn check_entry_functions(&self, module: &ModuleEnv) {
         for ref fun in module.get_functions() {
             if !fun.is_entry() {
@@ -280,7 +287,7 @@ impl<'a> ExtendedChecker<'a> {
 // ----------------------------------------------------------------------------------
 // Resource Group Functions
 
-impl<'a> ExtendedChecker<'a> {
+impl ExtendedChecker<'_> {
     // A entry in a resource group should contain the resource group attribute and a parameter that
     // points to a resource group container.
     fn check_and_record_resource_group_members(&mut self, module: &ModuleEnv) {
@@ -500,7 +507,7 @@ impl<'a> ExtendedChecker<'a> {
 // ----------------------------------------------------------------------------------
 // Unbiasable entry functions
 
-impl<'a> ExtendedChecker<'a> {
+impl ExtendedChecker<'_> {
     fn check_and_record_unbiasabale_entry_functions(&mut self, module: &ModuleEnv) {
         for ref fun in module.get_functions() {
             let maybe_randomness_annotation = match self.get_randomness_max_gas_declaration(fun) {
@@ -595,7 +602,7 @@ impl<'a> ExtendedChecker<'a> {
 // ----------------------------------------------------------------------------------
 // Checks for unsafe usage of randomness
 
-impl<'a> ExtendedChecker<'a> {
+impl ExtendedChecker<'_> {
     /// Checks unsafe usage of the randomness feature for the given module.
     ///
     /// 1. Checks that no public function in the module calls randomness features. An
@@ -678,7 +685,7 @@ impl<'a> ExtendedChecker<'a> {
 // ----------------------------------------------------------------------------------
 // View Functions
 
-impl<'a> ExtendedChecker<'a> {
+impl ExtendedChecker<'_> {
     fn check_and_record_view_functions(&mut self, module: &ModuleEnv) {
         for ref fun in module.get_functions() {
             if !self.has_attribute(fun, VIEW_FUN_ATTRIBUTE) {
@@ -737,7 +744,7 @@ impl<'a> ExtendedChecker<'a> {
 // ----------------------------------------------------------------------------------
 // Events
 
-impl<'a> ExtendedChecker<'a> {
+impl ExtendedChecker<'_> {
     fn check_and_record_events(&mut self, module: &ModuleEnv) {
         for ref struct_ in module.get_structs() {
             if self.has_attribute_iter(struct_.get_attributes().iter(), EVENT_STRUCT_ATTRIBUTE) {
@@ -818,7 +825,7 @@ impl<'a> ExtendedChecker<'a> {
 // ----------------------------------------------------------------------------------
 // Error Map
 
-impl<'a> ExtendedChecker<'a> {
+impl ExtendedChecker<'_> {
     fn build_error_map(&mut self, module: &ModuleEnv<'_>) {
         // Compute the error map, we are using the `ErrorMapping` type from Move which
         // is more general as we need as it works for multiple modules.
@@ -912,7 +919,3 @@ impl<'a> ExtendedChecker<'a> {
             == AccountAddress::ONE
     }
 }
-
-// ----------------------------------------------------------------------------------
-// Resource Group Container Scope
-// Note: ResourceGroupScope is now imported from aptos_types::vm::module_metadata

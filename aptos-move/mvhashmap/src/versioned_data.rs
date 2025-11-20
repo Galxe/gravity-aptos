@@ -13,10 +13,8 @@ use aptos_aggregator::delta_change_set::DeltaOp;
 use aptos_infallible::Mutex;
 use aptos_types::{
     error::{code_invariant_error, PanicError},
-    state_store::state_value::StateValue,
     write_set::TransactionWrite,
 };
-use bytes::Bytes;
 use claims::{assert_ok, assert_some};
 use crossbeam::utils::CachePadded;
 use dashmap::DashMap;
@@ -26,7 +24,7 @@ use std::{
     collections::btree_map::{self, BTreeMap},
     fmt::Debug,
     hash::Hash,
-    sync::{atomic::{AtomicBool, AtomicU64, Ordering}, Arc as StdArc},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
 };
 use triomphe::Arc;
 
@@ -549,38 +547,6 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
             .unwrap_or(Err(MVDataError::Uninitialized))
     }
 
-    // Fetches data in Exchanged format for delayed field exchange.
-    pub fn fetch_exchanged_data<Q>(
-        &self,
-        key: &Q,
-        txn_idx: TxnIndex,
-    ) -> Result<(StdArc<V>, StdArc<MoveTypeLayout>), PanicError>
-    where
-        Q: Equivalent<K> + Hash + Debug,
-    {
-        use MVDataOutput::*;
-        let data_output = match self.fetch_data_no_record(key, txn_idx) {
-            Ok(output) => output,
-            Err(e) => {
-                return Err(code_invariant_error(format!("Failed to fetch data for exchange: {:?}", e)));
-            },
-        };
-        match data_output {
-            Versioned(_, ValueWithLayout::Exchanged(value, Some(layout))) => {
-                // value and layout are TriompheArc, convert to std::sync::Arc
-                // Use bytes() to get the underlying data and create new Arc
-                let v_bytes = value.bytes().cloned().unwrap_or_else(Bytes::new);
-                let new_value = StdArc::new(TransactionWrite::from_state_value(Some(StateValue::new_legacy(v_bytes))));
-                let new_layout = StdArc::new((*layout).clone());
-                Ok((new_value, new_layout))
-            },
-            _ => Err(code_invariant_error(format!(
-                "Read value needing exchange {:?} does not exist or not in Exchanged format",
-                key
-            ))),
-        }
-    }
-
     // The caller needs to repeat the read after set_base_value (concurrent caller might have
     // exchanged and stored a different delayed field ID).
     pub fn set_base_value(&self, key: K, base_value_with_layout: ValueWithLayout<V>) {
@@ -699,8 +665,8 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
         Self::write_impl(
             &mut v,
             txn_idx,
-                incarnation,
-                ValueWithLayout::Exchanged(data, maybe_layout),
+            incarnation,
+            ValueWithLayout::Exchanged(data, maybe_layout),
             BTreeMap::new(),
         );
     }
@@ -731,7 +697,7 @@ impl<K: Hash + Clone + Debug + Eq, V: TransactionWrite + PartialEq> VersionedDat
         // (invalidated read dependencies) to the caller.
         let (deps_to_retain, deps_to_return) = if validation_passed {
             (affected_dependencies, BTreeMap::new())
-            } else {
+        } else {
             (BTreeMap::new(), affected_dependencies)
         };
 

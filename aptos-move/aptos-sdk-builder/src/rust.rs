@@ -2,6 +2,7 @@
 // Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// TODO[Orderless]: Update the sdk builder to generate transactions with new payload format
 use crate::common;
 use aptos_types::transaction::{
     ArgumentABI, EntryABI, EntryFunctionABI, TransactionScriptABI, TypeArgumentABI,
@@ -251,7 +252,7 @@ impl EntryFunctionCall {
             ])
             .with_custom_derive_block(custom_derive_block)
             .output(&mut self.out, &script_registry)
-            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{}", err)))?;
+            .map_err(|err| std::io::Error::other(format!("{}", err)))?;
         Ok(())
     }
 
