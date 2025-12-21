@@ -158,6 +158,7 @@ mod tests {
                 bcs::to_bytes(&vec![NetworkAddress::mock()]).unwrap(),
                 42,
             ),
+            vec![],
         );
 
         // Test serialization to JSON IDL
@@ -180,6 +181,7 @@ mod tests {
                 bcs::to_bytes(&vec![NetworkAddress::mock()]).unwrap(),
                 42,
             ),
+            vec![],
         );
 
         let json_idl = validator_info.to_json_idl().unwrap();

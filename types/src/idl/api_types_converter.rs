@@ -207,6 +207,7 @@ mod tests {
                 bcs::to_bytes(&vec![NetworkAddress::mock()]).unwrap(),
                 42,
             ),
+            vec![],
         );
 
         // Convert to api-types
