@@ -95,6 +95,7 @@ pub fn convert_validator_info(
         account_address,
         api_validator_info.consensus_voting_power,
         config,
+        vec![],
     ))
 }
 

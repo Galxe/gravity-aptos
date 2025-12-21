@@ -90,6 +90,7 @@ impl TryFrom<ValidatorInfoIdl> for ValidatorInfo {
             account_address,
             idl.consensus_voting_power,
             config,
+            vec![],
         ))
     }
 }
