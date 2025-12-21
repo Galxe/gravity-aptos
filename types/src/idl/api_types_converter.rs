@@ -15,7 +15,7 @@ use crate::{
     validator_config::ValidatorConfig,
     validator_info::ValidatorInfo,
 };
-use anyhow::{anyhow, format_err};
+use anyhow::format_err;
 use aptos_crypto::bls12381;
 use bytes::Bytes;
 use std::{convert::TryFrom, str::FromStr};
@@ -95,7 +95,7 @@ pub fn convert_validator_info(
         account_address,
         api_validator_info.consensus_voting_power,
         config,
-        vec![],
+        api_validator_info.reth_account_address.clone(),
     ))
 }
 
@@ -165,6 +165,7 @@ pub fn convert_to_api_validator_info(
         account_address: convert_to_api_account_address(validator_info.account_address()),
         consensus_voting_power: validator_info.consensus_voting_power(),
         config: convert_to_api_validator_config(validator_info.config()),
+        reth_account_address: validator_info.reth_account_address.clone(),
     }
 }
 
