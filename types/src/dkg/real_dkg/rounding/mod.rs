@@ -10,6 +10,7 @@ use std::{
     fmt,
     fmt::{Debug, Formatter},
 };
+use aptos_logger::info;
 
 pub fn total_weight_lower_bound(validator_stakes: &[u64]) -> usize {
     // Each validator has at least 1 weight.
@@ -192,6 +193,7 @@ impl DKGRoundingProfile {
         reconstruct_threshold_in_stake_ratio: U64F64,
         fast_secrecy_threshold_in_stake_ratio: Option<U64F64>,
     ) -> anyhow::Result<Self> {
+        info!("validator_stakes: {:?}, total_weight_min: {}, total_weight_max: {}, secrecy_threshold_in_stake_ratio: {}, reconstruct_threshold_in_stake_ratio: {}, fast_secrecy_threshold_in_stake_ratio: {:?}", validator_stakes, total_weight_min, total_weight_max, secrecy_threshold_in_stake_ratio, reconstruct_threshold_in_stake_ratio, fast_secrecy_threshold_in_stake_ratio);
         ensure!(total_weight_min >= validator_stakes.len());
         ensure!(total_weight_max >= total_weight_min);
         ensure!(secrecy_threshold_in_stake_ratio * U64F64::from_num(3) > U64F64::from_num(1));
