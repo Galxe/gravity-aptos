@@ -305,9 +305,9 @@ impl<DKG: DKGTrait> DKGManager<DKG> {
             epoch = self.epoch_state.epoch,
             my_addr = self.my_addr,
             secs_since_dkg_start = secs_since_dkg_start,
+            dkg_session_metadata = dkg_session_metadata,
             "[DKG] Deal transcript started.",
         );
-        info!("dkg_session_metadata: {:?}", dkg_session_metadata);
         let public_params = DKG::new_public_params(dkg_session_metadata);
         if let Some(summary) = public_params.rounding_summary() {
             info!(
