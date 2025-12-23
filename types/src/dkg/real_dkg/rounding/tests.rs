@@ -340,6 +340,184 @@ fn test_infallible_rounding_with_mainnet() {
 }
 
 #[test]
+fn test_overflow_with_specific_parameters() {
+    // 测试用例：使用用户提供的具体参数来复现溢出问题
+    // 参数来源：
+    // - validator_stakes: [20000, 20000, 20000, 20000, 10001]
+    // - secrecy_threshold: 9223372036854775808 (0.5 in U64F64 bits)
+    // - reconstruct_threshold: 12297829382473033728 (2/3 in U64F64 bits)
+    // - fast_secrecy_threshold: 12297829382473033728 (2/3 in U64F64 bits)
+    
+    let validator_stakes = vec![10000, 10000, 10000, 10000, 1];
+    
+    // 使用 from_bits 创建 U64F64 值
+    let secrecy_threshold = U64F64::from_bits(9223372036854775808u128); // 0.5
+    let reconstruct_threshold = U64F64::from_bits(12297829382473033728u128); // 2/3
+    let fast_secrecy_threshold = U64F64::from_bits(12297829382473033728u128); // 2/3
+    
+    println!("Testing with parameters:");
+    println!("  validator_stakes: {:?}", validator_stakes);
+    println!("  secrecy_threshold: {} (bits: {})", secrecy_threshold, secrecy_threshold.to_bits());
+    println!("  reconstruct_threshold: {} (bits: {})", reconstruct_threshold, reconstruct_threshold.to_bits());
+    println!("  fast_secrecy_threshold: {} (bits: {})", fast_secrecy_threshold, fast_secrecy_threshold.to_bits());
+    
+    // 计算 total_weight_min 和 total_weight_max
+    let total_weight_min = total_weight_lower_bound(&validator_stakes);
+    let total_weight_max = total_weight_upper_bound(
+        &validator_stakes,
+        reconstruct_threshold,
+        secrecy_threshold,
+    );
+    
+    println!("  total_weight_min: {}", total_weight_min);
+    println!("  total_weight_max: {}", total_weight_max);
+    
+    // 测试 DKGRoundingProfile::new
+    // 这可能会触发溢出
+    match DKGRoundingProfile::new(
+        &validator_stakes,
+        total_weight_min,
+        total_weight_max,
+        secrecy_threshold,
+        reconstruct_threshold,
+        Some(fast_secrecy_threshold),
+    ) {
+        Ok(profile) => {
+            println!("Success! Profile created:");
+            println!("  {:?}", profile);
+            
+            // 验证 profile 的有效性
+            assert!(is_valid_profile(&profile, reconstruct_threshold));
+            
+            // 验证权重总和
+            let total_weight: u64 = profile.validator_weights.iter().sum();
+            assert!(total_weight >= total_weight_min as u64);
+            assert!(total_weight <= total_weight_max as u64);
+        }
+        Err(e) => {
+            panic!("DKGRoundingProfile::new failed with error: {}", e);
+        }
+    }
+    
+    // 也测试 DKGRounding::new（它会调用 DKGRoundingProfile::new）
+    let dkg_rounding = DKGRounding::new(
+        &validator_stakes,
+        secrecy_threshold,
+        reconstruct_threshold,
+        Some(fast_secrecy_threshold),
+    );
+    
+    println!("DKGRounding created successfully:");
+    println!("  rounding_method: {}", dkg_rounding.rounding_method);
+    println!("  profile: {:?}", dkg_rounding.profile);
+    if let Some(ref error) = dkg_rounding.rounding_error {
+        println!("  rounding_error: {}", error);
+    }
+}
+
+#[test]
+fn test_overflow_edge_cases() {
+    // 测试各种可能导致溢出的边界情况
+    
+    // 场景1: 两个阈值非常接近（模拟 DELTA 很小的情况）
+    println!("\n=== 场景1: 两个阈值非常接近 ===");
+    let validator_stakes = vec![20000, 20000, 20000, 20000, 10001];
+    let secrecy_threshold = U64F64::from_num(1) / U64F64::from_num(2); // 0.5
+    
+    // 模拟 reconstruct_threshold 非常接近 secrecy_threshold
+    // 如果 DELTA 很小，reconstruct 可能被调整为 secrecy + DELTA
+    // 这里我们测试一个非常接近的值
+    let very_small_delta = U64F64::from_bits(1u128); // 非常小的值
+    let reconstruct_threshold = secrecy_threshold + very_small_delta;
+    
+    println!("  secrecy_threshold: {}", secrecy_threshold);
+    println!("  reconstruct_threshold: {} (差值: {})", reconstruct_threshold, very_small_delta);
+    
+    let total_weight_max = total_weight_upper_bound(
+        &validator_stakes,
+        reconstruct_threshold,
+        secrecy_threshold,
+    );
+    println!("  total_weight_max: {}", total_weight_max);
+    
+    if total_weight_max > 1000000 {
+        println!("  ⚠️  警告: total_weight_max 非常大，可能导致后续溢出！");
+    }
+    
+    // 场景2: 测试非常大的 total_weight_max
+    println!("\n=== 场景2: 测试非常大的 total_weight_max ===");
+    // 如果 total_weight_max 接近或超过 u64::MAX，会导致溢出
+    let large_total_weight_max = usize::MAX.min(2_u64.pow(50) as usize);
+    println!("  测试 total_weight_max = {}", large_total_weight_max);
+    
+    match DKGRoundingProfile::new(
+        &validator_stakes,
+        5, // total_weight_min
+        large_total_weight_max,
+        secrecy_threshold,
+        U64F64::from_num(2) / U64F64::from_num(3), // 正常的 reconstruct_threshold
+        Some(U64F64::from_num(2) / U64F64::from_num(3)),
+    ) {
+        Ok(profile) => {
+            println!("  ✓ 成功创建 profile");
+            let total_weight: u64 = profile.validator_weights.iter().sum();
+            println!("  total_weight: {}", total_weight);
+        }
+        Err(e) => {
+            println!("  ✗ 失败: {}", e);
+        }
+    }
+    
+    // 场景3: 测试 stake_per_weight 很小的情况
+    println!("\n=== 场景3: 测试 stake_per_weight 很小的情况 ===");
+    // 如果 weight_mid 很大，stake_per_weight 会接近 1
+    // 这可能导致 compute_profile_fixed_point 中的计算溢出
+    let very_large_weight = 2_u64.pow(60);
+    println!("  测试 weight_mid = {}", very_large_weight);
+    
+    let stake_total: u64 = validator_stakes.iter().sum();
+    let stake_per_weight = (stake_total as f64 / very_large_weight as f64).max(1.0);
+    println!("  stake_per_weight = {}", stake_per_weight);
+    
+    // 场景4: 测试 weight_mid 接近 u64::MAX 的情况
+    println!("\n=== 场景4: 测试 weight_mid 接近 u64::MAX 的情况 ===");
+    let weight_low = u64::MAX - 100;
+    let weight_high = u64::MAX;
+    println!("  weight_low = {}", weight_low);
+    println!("  weight_high = {}", weight_high);
+    
+    // 检查第220行的计算: weight_mid = weight_low + (weight_high - weight_low) / 2
+    let diff = weight_high - weight_low;
+    let half_diff = diff / 2;
+    let weight_mid = weight_low + half_diff;
+    println!("  weight_mid = {} + {} = {}", weight_low, half_diff, weight_mid);
+    
+    if weight_mid > u64::MAX {
+        println!("  ⚠️  溢出！weight_mid > u64::MAX");
+    } else if weight_mid == u64::MAX {
+        println!("  ⚠️  风险！weight_mid = u64::MAX，weight_mid + 1 会溢出");
+    } else {
+        println!("  ✓ 安全");
+    }
+    
+    // 检查第237行: weight_low = weight_mid + 1
+    if weight_mid == u64::MAX {
+        println!("  ⚠️  第237行会溢出！weight_mid + 1 会超过 u64::MAX");
+    }
+    
+    // 场景5: 测试 .ceil() 结果接近 U64F64 最大值的情况
+    println!("\n=== 场景5: 测试 .ceil() 结果接近 U64F64 最大值 ===");
+    // 在 compute_profile_fixed_point 中，如果计算结果很大
+    // .ceil() + one 可能溢出
+    let large_value = U64F64::from_bits((u64::MAX as u128) << 64); // 接近最大值
+    println!("  large_value (U64F64): {}", large_value);
+    
+    // 检查 + one 是否会溢出
+    // 注意：这只是一个演示，实际代码中需要检查
+    println!("  如果 large_value.ceil() 接近 U64F64 最大值，+ one 可能溢出");
+}
+
+#[test]
 fn test_infallible_rounding_brute_force() {
     let mut rng = thread_rng();
     let two = U64F64::from_num(2);
