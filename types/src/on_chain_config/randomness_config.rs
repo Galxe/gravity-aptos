@@ -258,11 +258,6 @@ impl OnChainConfig for RandomnessConfigMoveStruct {
     const TYPE_IDENTIFIER: &'static str = "RandomnessConfig";
 
     fn deserialize_into_config(bytes: &[u8]) -> anyhow::Result<Self> {
-        // First try default BCS deserialization (MoveAny-wrapped format)
-        if let Ok(config) = Self::deserialize_default_impl(bytes) {
-            return Ok(config);
-        }
-
         // Fallback: try deserializing as flat api_types::RandomnessConfigData (from grevm-reth)
         // and convert to RandomnessConfigMoveStruct with full FixedPoint64 precision
         let api_config =
