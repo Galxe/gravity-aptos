@@ -107,7 +107,8 @@ fn verify_dkg_transcript(
     let dealt_secret_from_shares = dealt_secret_from_shares(
         dkg_session
             .metadata
-            .target_validator_consensus_infos_cloned(),
+            .target_validator_consensus_infos_cloned()
+            .expect("Failed to convert target validator consensus infos"),
         decrypt_key_map,
         &pub_params,
         &transcript,
@@ -118,7 +119,8 @@ fn verify_dkg_transcript(
     let dealt_secret_from_inputs = dealt_secret_from_input(
         &transcript,
         &pub_params,
-        &pub_params.session_metadata.dealer_consensus_infos_cloned(),
+        &pub_params.session_metadata.dealer_consensus_infos_cloned()
+            .expect("Failed to convert dealer validator consensus infos"),
     );
     println!("dealt_secret_from_inputs={:?}", dealt_secret_from_inputs);
 
@@ -232,7 +234,8 @@ async fn verify_randomness(
     let dealt_secret = dealt_secret_from_shares(
         dkg_session
             .metadata
-            .target_validator_consensus_infos_cloned(),
+            .target_validator_consensus_infos_cloned()
+            .expect("Failed to convert target validator consensus infos"),
         decrypt_key_map,
         &dkg_pub_params,
         &transcript,

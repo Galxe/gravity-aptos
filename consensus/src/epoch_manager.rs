@@ -383,15 +383,12 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
                 ))
             },
             ProposerElectionType::RoundProposer(round_proposers) => {
-                // Hardcoded to the first proposer
+                // RoundProposer is not used in Gravity. Fall back to rotating proposer.
+                warn!("RoundProposer election type is not supported in Gravity, falling back to RotatingProposer");
                 let default_proposer = proposers
                     .first()
                     .expect("INVARIANT VIOLATION: proposers is empty");
-                todo!("not invoked in Gravity")
-                // Arc::new(RoundProposer::new(
-                //     round_proposers.clone(),
-                //     *default_proposer,
-                // ))
+                Arc::new(RotatingProposer::new(vec![*default_proposer], 1))
             },
         }
     }

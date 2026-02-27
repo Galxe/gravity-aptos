@@ -50,14 +50,14 @@ pub fn convert_observed_jwks(
 
 pub fn construct_observed_jwks(bytes: &[u8]) -> Result<ObservedJWKs, JwkIdlError> {
     let observed_jwks = bcs::from_bytes::<api_types::on_chain_config::jwks::ObservedJWKs>(bytes)
-        .map_err(|e| JwkIdlError::JsonDeserializationError(e.to_string()))?;
+        .map_err(|e| JwkIdlError::BcsDeserializationError(e.to_string()))?;
     Ok(convert_observed_jwks(observed_jwks))
 }
 
 pub fn construct_oidc_providers(bytes: &[u8]) -> Result<Vec<OIDCProvider>, JwkIdlError> {
     let oidc_providers =
         bcs::from_bytes::<Vec<api_types::on_chain_config::jwks::OIDCProvider>>(bytes)
-            .map_err(|e| JwkIdlError::JsonDeserializationError(e.to_string()))?;
+            .map_err(|e| JwkIdlError::BcsDeserializationError(e.to_string()))?;
     Ok(oidc_providers
         .iter()
         .map(|oidc_provider| OIDCProvider {

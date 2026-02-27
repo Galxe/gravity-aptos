@@ -89,19 +89,19 @@ pub struct DKGSessionMetadata {
 }
 
 impl DKGSessionMetadata {
-    pub fn target_validator_consensus_infos_cloned(&self) -> Vec<ValidatorConsensusInfo> {
+    pub fn target_validator_consensus_infos_cloned(&self) -> Result<Vec<ValidatorConsensusInfo>> {
         self.target_validator_set
             .clone()
             .into_iter()
-            .map(|obj| obj.try_into().unwrap())
+            .map(|obj| obj.try_into().map_err(|e| anyhow::anyhow!("Invalid validator consensus info in target set: {}", e)))
             .collect()
     }
 
-    pub fn dealer_consensus_infos_cloned(&self) -> Vec<ValidatorConsensusInfo> {
+    pub fn dealer_consensus_infos_cloned(&self) -> Result<Vec<ValidatorConsensusInfo>> {
         self.dealer_validator_set
             .clone()
             .into_iter()
-            .map(|obj| obj.try_into().unwrap())
+            .map(|obj| obj.try_into().map_err(|e| anyhow::anyhow!("Invalid validator consensus info in dealer set: {}", e)))
             .collect()
     }
 

@@ -30,6 +30,8 @@ pub enum ValidatorInfoIdlError {
 pub enum JwkIdlError {
     #[error("JSON deserialization error: {0}")]
     JsonDeserializationError(String),
+    #[error("BCS deserialization error: {0}")]
+    BcsDeserializationError(String),
 }
 
 /// Error types for general IDL operations

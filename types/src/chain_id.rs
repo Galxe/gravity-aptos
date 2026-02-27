@@ -183,9 +183,9 @@ impl FromStr for ChainId {
     fn from_str(s: &str) -> Result<Self> {
         ensure!(!s.is_empty(), "Cannot create chain ID from empty string");
         NamedChain::str_to_chain_id(s).or_else(|_err| {
-            let value = s.parse::<u8>()?;
+            let value = s.parse::<u64>()?;
             ensure!(value > 0, "cannot have chain ID with 0");
-            Ok(ChainId::new(value as u64))
+            Ok(ChainId::new(value))
         })
     }
 }

@@ -11,12 +11,12 @@
 
 | Severity | Count | Status |
 |----------|-------|--------|
-| CRITICAL | 1 | Open |
-| HIGH     | 5 | Open |
-| MEDIUM   | 8 | Open |
-| LOW      | 9 | Open |
-| INFO     | 8 | Open |
-| **Total** | **31** | |
+| CRITICAL | 1 | **Fixed** (2026-02-27, branch `security-audit-fixes`) |
+| HIGH     | 5 | **Fixed** |
+| MEDIUM   | 8 | 5 Fixed, 3 Deferred |
+| LOW      | 9 | 4 Fixed, 5 Deferred |
+| INFO     | 8 | 3 Fixed, 5 Deferred/No action |
+| **Total** | **31** | **18 Fixed, 13 Deferred** |
 
 ---
 

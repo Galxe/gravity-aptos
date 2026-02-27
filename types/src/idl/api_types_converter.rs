@@ -15,7 +15,6 @@ use crate::{
     validator_config::ValidatorConfig,
     validator_info::ValidatorInfo,
 };
-use anyhow::format_err;
 use aptos_crypto::bls12381;
 use std::{convert::TryFrom, str::FromStr};
 
@@ -26,8 +25,9 @@ pub fn construct_and_convert_validator_set(
 ) -> Result<ValidatorSet, ValidatorInfoIdlError> {
     let validator_set =
         bcs::from_bytes::<api_types::on_chain_config::validator_set::ValidatorSet>(bytes)
-            .map_err(|e| format_err!("[on-chain config] Failed to deserialize into config: {}", e))
-            .unwrap();
+            .map_err(|e| ValidatorInfoIdlError::JsonDeserializationError(
+                format!("[on-chain config] Failed to deserialize into config: {}", e),
+            ))?;
     let validator_set = convert_validator_set(validator_set)?;
     Ok(validator_set)
 }
@@ -117,7 +117,11 @@ fn parse_network_address(
     if let Ok(addresses) = bcs::from_bytes::<Vec<NetworkAddress>>(&network_addresses) {
         return Ok(addresses);
     }
-    // As a fallback, return empty
+    // Both deserialization strategies failed — log a warning
+    tracing::warn!(
+        bytes_len = network_addresses.len(),
+        "Failed to parse network addresses: neither BCS String nor BCS Vec<NetworkAddress> deserialization succeeded"
+    );
     Ok(vec![])
 }
 

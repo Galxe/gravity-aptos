@@ -203,9 +203,13 @@ impl DKGTrait for RealDKG {
             secrecy_threshold,
             reconstruct_threshold,
             maybe_fast_path_secrecy_threshold,
-            &dkg_session_metadata.target_validator_consensus_infos_cloned(),
+            &dkg_session_metadata.target_validator_consensus_infos_cloned()
+                .expect("Failed to convert target validator consensus infos"),
         );
-        let verifier = ValidatorVerifier::new(dkg_session_metadata.dealer_consensus_infos_cloned());
+        let verifier = ValidatorVerifier::new(
+            dkg_session_metadata.dealer_consensus_infos_cloned()
+                .expect("Failed to convert dealer validator consensus infos"),
+        );
         RealDKGPublicParams {
             session_metadata: dkg_session_metadata.clone(),
             pvss_config,

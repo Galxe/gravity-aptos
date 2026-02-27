@@ -69,7 +69,16 @@ impl JWKObserver {
         };
 
         if issuer.starts_with("gravity://") {
-            let relayer = GLOBAL_RELAYER.get().unwrap();
+            let relayer = match GLOBAL_RELAYER.get() {
+                Some(r) => r,
+                None => {
+                    error!(
+                        "GLOBAL_RELAYER not initialized but gravity:// provider configured: issuer={}",
+                        issuer,
+                    );
+                    return;
+                },
+            };
             let r = relayer
                 .add_uri(issuer.as_str(), open_id_config_url.as_str())
                 .await;
@@ -92,8 +101,10 @@ impl JWKObserver {
                     let secs = timer.elapsed().as_secs_f64();
                     if let Ok((mut jwks, nonce)) = result {
                         OBSERVATION_SECONDS.with_label_values(&[issuer.as_str(), "ok"]).observe(secs);
-                        // In gravity oracle, we shouldn't do sort since the returned jwks are already sorted.
-                        // jwks.sort();
+                        // Gravity oracle returns pre-sorted JWKs; HTTPS sources may not be sorted.
+                        if !issuer.starts_with("gravity://") {
+                            jwks.sort();
+                        }
                         let _ = observation_tx.push((), (issuer.as_bytes().to_vec(), jwks, nonce));
                     } else {
                         OBSERVATION_SECONDS.with_label_values(&[issuer.as_str(), "err"]).observe(secs);
@@ -117,7 +128,8 @@ impl JWKObserver {
 }
 
 async fn fetch_jwks_with_relayer(issuer: &str) -> Result<(Vec<JWK>, Option<u64>)> {
-    let relayer = GLOBAL_RELAYER.get().unwrap();
+    let relayer = GLOBAL_RELAYER.get()
+        .ok_or_else(|| anyhow!("GLOBAL_RELAYER not initialized"))?;
     let poll_result = relayer
         .get_last_state(issuer)
         .await
