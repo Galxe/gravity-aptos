@@ -41,6 +41,8 @@ But the deserialization path in `NewEpochEvent::try_from_bytes()` (`types/src/ac
 
 **Recommendation:** Change line 482 from `serde_json::to_vec(&data).unwrap()` to `bcs::to_bytes(&data).unwrap()`.
 
+**Review Comments** reviewer: Lightman; state: accepted; comments:
+
 ---
 
 ## HIGH Severity (5)
@@ -65,6 +67,8 @@ On VFN and Public networks (using `MaybeMutual` authentication), any peer can no
 
 **Recommendation:** Restore the peer ID derivation check for non-trusted peers, or add an explicit configuration flag to disable it with clear documentation of the security implications.
 
+**Review Comments** reviewer: Lightman; state: rejected; comments: Gravity VFN peer ID uses Aptos account address, not network public key, so the original peer ID derivation check does not apply
+
 ---
 
 ### GAPTOS-003: Hardcoded DKG Randomness Config Bypasses On-Chain Config
@@ -83,6 +87,8 @@ The original code that reads the on-chain value is commented out. The `local_seq
 **Impact:** The safety mechanism for force-disabling randomness via on-chain config is broken. In an emergency where randomness needs to be disabled chain-wide, validators will ignore the on-chain sequence number.
 
 **Recommendation:** Restore the on-chain config read, or add a feature flag rather than hardcoding.
+
+**Review Comments** reviewer: Lightman; state: accepted; comments:
 
 ---
 
@@ -104,6 +110,8 @@ This is called from `ValidatorSet::deserialize_into_config()` during epoch trans
 
 **Recommendation:** Replace `.unwrap()` with `?` for proper error propagation.
 
+**Review Comments** reviewer: Lightman; state: accepted; comments:
+
 ---
 
 ### GAPTOS-005: `unwrap()` in DKG Validator Set Conversion
@@ -124,6 +132,8 @@ The `try_into()` parses BLS12381 public key bytes, which can fail for malformed 
 
 **Recommendation:** Return `Result<Vec<ValidatorConsensusInfo>>` or filter invalid entries with logging.
 
+**Review Comments** reviewer: Lightman; state: accepted; comments:
+
 ---
 
 ### GAPTOS-006: `panic!()` on Unknown JWK Type in Event Conversion
@@ -142,6 +152,8 @@ Additionally, `impl Into<ContractEvent> for GravityEvent` (line 548) wraps `TryF
 
 **Recommendation:** Replace `panic!()` with `Err(anyhow!(...))`. Remove the `Into` impl that unwraps.
 
+**Review Comments** reviewer: Lightman; state: accepted; comments:
+
 ---
 
 ## MEDIUM Severity (8)
@@ -156,6 +168,8 @@ Additionally, `impl Into<ContractEvent> for GravityEvent` (line 548) wraps `TryF
 
 **Recommendation:** Replace with error return or fallback.
 
+**Review Comments** reviewer: Lightman; state: rejected; comments: this is Aptos consensus code that has already been copied to gravity-sdk, not used in gravity-aptos
+
 ---
 
 ### GAPTOS-008: LedgerInfo Extended with `block_hash`/`block_number` Altering BCS Hash
@@ -168,6 +182,8 @@ Additionally, `impl Into<ContractEvent> for GravityEvent` (line 548) wraps `TryF
 
 **Recommendation:** Ensure these fields are set deterministically before signing. Document when/how they must be set.
 
+**Review Comments** reviewer: Lightman; state: deferred; comments: fix would require updating 92 callers of `LedgerInfo::new()` across the codebase; keeping current approach with `set_block_hash`/`set_block_number` setters in gravity-sdk
+
 ---
 
 ### GAPTOS-009: JWK Manager Does Not Garbage-Collect Revoked Providers
@@ -179,6 +195,8 @@ Additionally, `impl Into<ContractEvent> for GravityEvent` (line 548) wraps `TryF
 **Impact:** Revoked providers' JWKs remain valid, potentially allowing authentication with deprecated credentials.
 
 **Recommendation:** Add provider cleanup logic that removes JWK entries when providers are removed from the on-chain config.
+
+**Review Comments** reviewer: Lightman; state: pending; comments: @AlexYue
 
 ---
 
@@ -198,6 +216,8 @@ This applies to ALL JWK sources, not just `gravity://` prefixed ones. HTTPS OIDC
 **Impact:** Non-deterministic JWK ordering for HTTPS providers could cause consensus disagreements.
 
 **Recommendation:** Only skip sorting for `gravity://` sources. Add a debug assertion that verifies sorted order.
+
+**Review Comments** reviewer: Lightman; state: pending; comments: @AlexYue
 
 ---
 
@@ -219,6 +239,8 @@ where R: rand_core::CryptoRng + rand_core::RngCore,
 
 **Recommendation:** Use `x25519_dalek::StaticSecret::random_from_rng(rng)`.
 
+**Review Comments** reviewer: Lightman; state: rejected; comments: original Aptos code, need to verify applicability to Gravity
+
 ---
 
 ### GAPTOS-012: On-Disk Storage Logs All Key-Value Data at Debug Level
@@ -231,6 +253,8 @@ where R: rand_core::CryptoRng + rand_core::RngCore,
 
 **Recommendation:** Redact data from the log or only log key names.
 
+**Review Comments** reviewer: Lightman; state: rejected; comments: Aptos DB related code, not used in Gravity
+
 ---
 
 ### GAPTOS-013: Network Address Parsing Silently Falls Back to Empty
@@ -242,6 +266,8 @@ where R: rand_core::CryptoRng + rand_core::RngCore,
 **Impact:** Validators with malformed network addresses silently become unreachable.
 
 **Recommendation:** Return an error or log a warning.
+
+**Review Comments** reviewer: Lightman; state: accepted; comments: added `tracing::warn!` when both deserialization strategies fail
 
 ---
 
@@ -262,6 +288,8 @@ The corresponding test still uses double serialization.
 
 **Recommendation:** Verify format consistency. Fix or remove the stale test. Remove the TODO.
 
+**Review Comments** reviewer: Lightman; state: pending; comments: @AlexYue
+
 ---
 
 ## LOW Severity (9)
@@ -272,11 +300,15 @@ The corresponding test still uses double serialization.
 **Issue:** `ChainId` was widened from `u8` to `u64`, but `FromStr` still parses as `u8`, rejecting values > 255.
 **Recommendation:** Parse as `u64`.
 
+**Review Comments** reviewer: Lightman; state: accepted; comments:
+
 ### GAPTOS-016: `reth_account_address` in ValidatorInfo Has No Length Validation
 
 **File:** `types/src/validator_info.rs:31`
 **Issue:** `reth_account_address: Vec<u8>` has no size bound. Should be exactly 20 bytes for Ethereum addresses.
 **Recommendation:** Add length validation.
+
+**Review Comments** reviewer: Lightman; state: rejected; comments: length validation is the responsibility of upstream callers
 
 ### GAPTOS-017: `GravityExtension` Excluded from `PartialEq`
 
@@ -284,11 +316,15 @@ The corresponding test still uses double serialization.
 **Issue:** `SignedTransaction::PartialEq` ignores `g_ext`. Two transactions with different block metadata are considered equal.
 **Recommendation:** Include `g_ext` in equality or document the intentional exclusion.
 
+**Review Comments** reviewer: Lightman; state: accepted; comments: added `g_ext` to `PartialEq` comparison in `SignedTransaction`
+
 ### GAPTOS-018: `GLOBAL_RELAYER.get().unwrap()` Can Panic
 
 **File:** `crates/aptos-jwk-consensus/src/jwk_observer.rs:72, 120`
 **Issue:** `OnceLock` accessed with `.unwrap()` — panics if relayer not initialized but `gravity://` providers are configured.
 **Recommendation:** Handle `None` gracefully with error logging.
+
+**Review Comments** reviewer: Lightman; state: pending; comments: @AlexYue
 
 ### GAPTOS-019: `ValidatorInfoIdl` Conversion Drops `reth_account_address`
 
@@ -296,11 +332,15 @@ The corresponding test still uses double serialization.
 **Issue:** Round-trip through IDL format loses the reth account address (hardcoded to `vec![]`).
 **Recommendation:** Add field to `ValidatorInfoIdl` or document the limitation.
 
+**Review Comments** reviewer: Lightman; state: rejected; comments: `ValidatorInfoIdl` is not currently used
+
 ### GAPTOS-020: `eprintln!()` Used Instead of Structured Logging
 
 **File:** `types/src/contract_event.rs:41, 55-59`
 **Issue:** Error messages use `eprintln!()` instead of `tracing::error!()`. Raw public key bytes printed to stderr.
 **Recommendation:** Use structured logging.
+
+**Review Comments** reviewer: Lightman; state: accepted; comments:
 
 ### GAPTOS-021: Node Config HTTPS Fields Lack Validation
 
@@ -308,17 +348,23 @@ The corresponding test still uses double serialization.
 **Issue:** HTTPS cert/key paths have no existence or path traversal validation.
 **Recommendation:** Add `ConfigSanitizer` validation.
 
+**Review Comments** reviewer: Lightman; state: rejected; comments: HTTPS config fields are only used in local testing, validation not needed
+
 ### GAPTOS-022: `Bcs::meta()` Contains `todo!()` — Will Panic If Called
 
 **File:** `api/src/bcs_payload.rs:70-83`
 **Issue:** API response meta implementation panics.
 **Recommendation:** Implement or return empty default.
 
+**Review Comments** reviewer: Lightman; state: pending; comments: unused code, consider removing entirely
+
 ### GAPTOS-023: `new_v2_with_type_tag_str` Uses `unwrap()` on Type Tag Parsing
 
 **File:** `types/src/contract_event.rs:129-134`
 **Issue:** `TypeTag::from_str(type_tag_str).unwrap()` — panics on malformed type tags.
 **Recommendation:** Return `Result` or validate at compile time.
+
+**Review Comments** reviewer: Lightman; state: pending; comments: original Aptos code
 
 ---
 
@@ -328,30 +374,46 @@ The corresponding test still uses double serialization.
 **File:** `types/src/on_chain_config/consensus_config.rs:197-199`
 **Issue:** Internal notes in Chinese. Reduces maintainability for English-speaking contributors.
 
+**Review Comments** reviewer: Lightman; state: accepted; comments: translated Chinese comments to English in `consensus_config.rs`
+
 ### GAPTOS-INFO-002: ~200 Lines of Commented-Out Aptos Code
 **File:** `types/src/on_chain_config/consensus_config.rs:22-130`
 **Issue:** Original type definitions commented out. Creates noise.
+
+**Review Comments** reviewer: Lightman; state: ignored; comments:
 
 ### GAPTOS-INFO-003: `#![allow(dead_code)]` on DAG Module
 **File:** `consensus/src/dag/mod.rs:3`
 **Issue:** Module-level dead code suppression.
 
+**Review Comments** reviewer: Lightman; state: ignored; comments:
+
 ### GAPTOS-INFO-004: DKG Smoke-Test Uses Deterministic Seed
 **File:** `dkg/src/dkg_manager/mod.rs:322-326`
 **Issue:** Deterministic RNG in smoke-test mode. Correctly feature-gated.
+
+**Review Comments** reviewer: Lightman; state: ignored; comments:
 
 ### GAPTOS-INFO-005: `Into` Trait Implemented Instead of `From`
 **File:** `types/src/contract_event.rs:546-550`
 **Issue:** Rust convention prefers `impl From<A> for B` over `impl Into<B> for A`.
 
+**Review Comments** reviewer: Lightman; state: accepted; comments:
+
 ### GAPTOS-INFO-006: `JwkIdlError::JsonDeserializationError` Used for BCS Errors
 **File:** `types/src/idl/jwk_converter.rs:51-61`
 **Issue:** Error variant name says "JSON" but actual operation is BCS.
+
+**Review Comments** reviewer: Lightman; state: pending; comments: @AlexYue
 
 ### GAPTOS-INFO-007: Relayer `PollResult` Lacks Verification Documentation
 **File:** `crates/api-types/src/relayer.rs:1-27`
 **Issue:** No documentation explaining that security relies on BFT quorum, not individual relayer trust.
 
+**Review Comments** reviewer: Lightman; state: pending; comments: @AlexYue
+
 ### GAPTOS-INFO-008: VFN Upstream Roles Expanded
 **File:** `config/src/network_id.rs:183`
 **Issue:** VFN-to-VFN syncing enabled by including `NetworkId::Vfn` in upstream roles. Expands trust boundary.
+
+**Review Comments** reviewer: Lightman; state: ignored; comments:
