@@ -196,7 +196,7 @@ Additionally, `impl Into<ContractEvent> for GravityEvent` (line 548) wraps `TryF
 
 **Recommendation:** Add provider cleanup logic that removes JWK entries when providers are removed from the on-chain config.
 
-**Review Comments** reviewer: Lightman; state: pending; comments: @AlexYue
+**Review Comments** reviewer: AlexYue; state: rejected; comments: Now we don't support OIDC oracle, there would only be bridge oracle. We'll never revoked them.
 
 ---
 
@@ -217,7 +217,7 @@ This applies to ALL JWK sources, not just `gravity://` prefixed ones. HTTPS OIDC
 
 **Recommendation:** Only skip sorting for `gravity://` sources. Add a debug assertion that verifies sorted order.
 
-**Review Comments** reviewer: Lightman; state: pending; comments: @AlexYue
+**Review Comments** reviewer: AlexYue; state: rejected; comments: No sort logic is needed.
 
 ---
 
@@ -288,7 +288,7 @@ The corresponding test still uses double serialization.
 
 **Recommendation:** Verify format consistency. Fix or remove the stale test. Remove the TODO.
 
-**Review Comments** reviewer: Lightman; state: pending; comments: @AlexYue
+**Review Comments** reviewer: AlexYue; state: accepted; comments: The tests will be updated soon.
 
 ---
 
@@ -324,7 +324,7 @@ The corresponding test still uses double serialization.
 **Issue:** `OnceLock` accessed with `.unwrap()` — panics if relayer not initialized but `gravity://` providers are configured.
 **Recommendation:** Handle `None` gracefully with error logging.
 
-**Review Comments** reviewer: Lightman; state: pending; comments: @AlexYue
+**Review Comments** reviewer: AlexYue; state: accepted; comments: Use expect for readability.
 
 ### GAPTOS-019: `ValidatorInfoIdl` Conversion Drops `reth_account_address`
 
@@ -404,13 +404,13 @@ The corresponding test still uses double serialization.
 **File:** `types/src/idl/jwk_converter.rs:51-61`
 **Issue:** Error variant name says "JSON" but actual operation is BCS.
 
-**Review Comments** reviewer: Lightman; state: pending; comments: @AlexYue
+**Review Comments** reviewer: AlexYue; state: rejected; comments: no need.
 
 ### GAPTOS-INFO-007: Relayer `PollResult` Lacks Verification Documentation
 **File:** `crates/api-types/src/relayer.rs:1-27`
 **Issue:** No documentation explaining that security relies on BFT quorum, not individual relayer trust.
 
-**Review Comments** reviewer: Lightman; state: pending; comments: @AlexYue
+**Review Comments** reviewer: AlexYue; state: accepted; comments: 
 
 ### GAPTOS-INFO-008: VFN Upstream Roles Expanded
 **File:** `config/src/network_id.rs:183`
