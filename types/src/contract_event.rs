@@ -546,8 +546,8 @@ impl TryFrom<&GravityEvent> for ContractEvent {
     }
 }
 
-impl Into<ContractEvent> for GravityEvent {
-    fn into(self) -> ContractEvent {
-        ContractEvent::try_from(&self).unwrap()
+impl From<GravityEvent> for ContractEvent {
+    fn from(event: GravityEvent) -> Self {
+        ContractEvent::try_from(&event).unwrap()
     }
 }
