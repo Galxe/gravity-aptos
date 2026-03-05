@@ -474,6 +474,9 @@ impl TryFrom<&GravityEvent> for ContractEvent {
     type Error = Error;
 
     fn try_from(event: &GravityEvent) -> Result<Self> {
+        // Note: NewEpoch events use serde_json serialization while JWK/DKG events use BCS.
+        // This is intentional — NewEpoch follows the Gravity execution layer's JSON-based
+        // event format, while JWK and DKG use BCS to match the Aptos types layer expectations.
         match event {
             GravityEvent::NewEpoch(epoch, _) => {
                 let data = NewEpochEvent { epoch: *epoch };
