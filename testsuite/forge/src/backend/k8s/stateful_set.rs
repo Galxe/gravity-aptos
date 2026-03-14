@@ -4,6 +4,7 @@
 use crate::{create_k8s_client, k8s_wait_nodes_strategy, K8sApi, ReadWrite, Result, KUBECTL_BIN};
 use again::RetryPolicy;
 use anyhow::bail;
+use aptos_logger::info;
 use json_patch::{Patch as JsonPatch, PatchOperation, ReplaceOperation};
 use k8s_openapi::api::{apps::v1::StatefulSet, core::v1::Pod};
 use kube::{
@@ -11,7 +12,6 @@ use kube::{
     client::Client as K8sClient,
     ResourceExt,
 };
-use log::info;
 use serde_json::{json, Value};
 use std::{process::Command, sync::Arc, time::Duration};
 use thiserror::Error;

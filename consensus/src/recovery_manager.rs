@@ -35,7 +35,6 @@ pub struct RecoveryManager {
     max_blocks_to_request: u64,
     payload_manager: Arc<dyn TPayloadManager>,
     order_vote_enabled: bool,
-    window_size: Option<u64>,
     pending_blocks: Arc<Mutex<PendingBlocks>>,
 }
 
@@ -49,7 +48,6 @@ impl RecoveryManager {
         max_blocks_to_request: u64,
         payload_manager: Arc<dyn TPayloadManager>,
         order_vote_enabled: bool,
-        window_size: Option<u64>,
         pending_blocks: Arc<Mutex<PendingBlocks>>,
     ) -> Self {
         RecoveryManager {
@@ -61,7 +59,6 @@ impl RecoveryManager {
             max_blocks_to_request,
             payload_manager,
             order_vote_enabled,
-            window_size,
             pending_blocks,
         }
     }
@@ -109,7 +106,6 @@ impl RecoveryManager {
             self.execution_client.clone(),
             self.payload_manager.clone(),
             self.order_vote_enabled,
-            self.window_size,
         )
         .await?;
 

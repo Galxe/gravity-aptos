@@ -46,7 +46,6 @@ use move_vm_types::{
         runtime_types::Type,
     },
     natives::function::NativeResult,
-    resolver::ResourceResolver,
     values::{
         self, AbstractFunction, Closure, GlobalValue, IntegerValue, Locals, Reference, SignerRef,
         Struct, StructRef, VMValueCast, Value, Vector, VectorRef,
@@ -118,7 +117,6 @@ impl Interpreter {
         args: Vec<Value>,
         data_store: &mut TransactionDataCache,
         module_storage: &impl ModuleStorage,
-        resource_resolver: &impl ResourceResolver,
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
         extensions: &mut NativeContextExtensions,
@@ -128,7 +126,6 @@ impl Interpreter {
             args,
             data_store,
             module_storage,
-            resource_resolver,
             gas_meter,
             traversal_context,
             extensions,
@@ -144,7 +141,6 @@ impl InterpreterImpl<'_> {
         args: Vec<Value>,
         data_store: &mut TransactionDataCache,
         module_storage: &impl ModuleStorage,
-        resource_resolver: &impl ResourceResolver,
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
         extensions: &mut NativeContextExtensions,
@@ -163,7 +159,6 @@ impl InterpreterImpl<'_> {
         if interpreter.vm_config.paranoid_type_checks {
             interpreter.dispatch_execute_main::<FullRuntimeTypeCheck>(
                 data_store,
-                resource_resolver,
                 module_storage,
                 gas_meter,
                 traversal_context,
@@ -174,7 +169,6 @@ impl InterpreterImpl<'_> {
         } else {
             interpreter.dispatch_execute_main::<NoRuntimeTypeCheck>(
                 data_store,
-                resource_resolver,
                 module_storage,
                 gas_meter,
                 traversal_context,
@@ -226,7 +220,6 @@ impl InterpreterImpl<'_> {
     fn dispatch_execute_main<RTTCheck: RuntimeTypeCheck>(
         self,
         data_store: &mut TransactionDataCache,
-        resource_resolver: &impl ResourceResolver,
         module_storage: &impl ModuleStorage,
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
@@ -237,7 +230,6 @@ impl InterpreterImpl<'_> {
         if self.vm_config.use_call_tree_and_instruction_cache {
             self.execute_main::<RTTCheck, AllRuntimeCaches>(
                 data_store,
-                resource_resolver,
                 module_storage,
                 gas_meter,
                 traversal_context,
@@ -248,7 +240,6 @@ impl InterpreterImpl<'_> {
         } else {
             self.execute_main::<RTTCheck, NoRuntimeCaches>(
                 data_store,
-                resource_resolver,
                 module_storage,
                 gas_meter,
                 traversal_context,
@@ -268,7 +259,6 @@ impl InterpreterImpl<'_> {
     fn execute_main<RTTCheck: RuntimeTypeCheck, RTCaches: RuntimeCacheTraits>(
         mut self,
         data_store: &mut TransactionDataCache,
-        resource_resolver: &impl ResourceResolver,
         module_storage: &impl ModuleStorage,
         gas_meter: &mut impl GasMeter,
         traversal_context: &mut TraversalContext,
@@ -309,7 +299,7 @@ impl InterpreterImpl<'_> {
             .map_err(|e| self.set_location(e))?;
 
         loop {
-            let resolver = current_frame.resolver(module_storage, resource_resolver);
+            let resolver = current_frame.resolver(module_storage);
             let exit_code = current_frame
                 .execute_code::<RTTCheck, RTCaches>(&resolver, &mut self, data_store, gas_meter)
                 .map_err(|err| self.attach_state_if_invariant_violation(err, &current_frame))?;
@@ -343,6 +333,11 @@ impl InterpreterImpl<'_> {
                         current_frame = frame;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
                     } else {
+                        // end of execution. `self` should no longer be used afterward
+                        // Clean up access control
+                        self.access_control
+                            .exit_function(&current_frame.function)
+                            .map_err(|e| self.set_location(e))?;
                         return Ok(self.operand_stack.value);
                     }
                 },
@@ -971,7 +966,7 @@ impl InterpreterImpl<'_> {
                         ));
                 }
 
-                if target_func.is_native() {
+                if resolver.vm_config().disallow_dispatch_for_native && target_func.is_native() {
                     return Err(PartialVMError::new(StatusCode::RUNTIME_DISPATCH_ERROR)
                         .with_message("Invoking native function during dispatch".to_string()));
                 }
@@ -1123,12 +1118,7 @@ impl InterpreterImpl<'_> {
         addr: AccountAddress,
         ty: &Type,
     ) -> PartialVMResult<&'c mut GlobalValue> {
-        match data_store.load_resource(
-            resolver.module_storage(),
-            resolver.resource_resolver(),
-            addr,
-            ty,
-        ) {
+        match data_store.load_resource(resolver.module_storage(), addr, ty) {
             Ok((gv, load_res)) => {
                 if let Some(bytes_loaded) = load_res {
                     gas_meter.charge_load_resource(
@@ -2730,13 +2720,8 @@ impl Frame {
         }
     }
 
-    fn resolver<'a>(
-        &self,
-        module_storage: &'a impl ModuleStorage,
-        resource_resolver: &'a impl ResourceResolver,
-    ) -> Resolver<'a> {
-        self.function
-            .get_resolver(module_storage, resource_resolver)
+    fn resolver<'a>(&self, module_storage: &'a impl ModuleStorage) -> Resolver<'a> {
+        self.function.get_resolver(module_storage)
     }
 
     fn location(&self) -> Location {

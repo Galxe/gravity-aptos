@@ -13,10 +13,7 @@ use crate::{
     CliResult,
 };
 use aptos_build_info::build_information;
-use aptos_crypto::{
-    ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
-    ValidCryptoMaterial, ValidCryptoMaterialStringExt,
-};
+use aptos_crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
 use aptos_keygen::KeyGen;
 use aptos_logger::{debug, Level};
 use aptos_rest_client::{aptos_api_types::HashValue, Account, Client, FaucetClient, State};
@@ -30,7 +27,7 @@ use aptos_types::{
 use itertools::Itertools;
 use move_core_types::{account_address::AccountAddress, language_storage::CORE_CODE_ADDRESS};
 use reqwest::Url;
-use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::{
@@ -316,7 +313,7 @@ pub async fn chain_id(rest_client: &Client) -> CliTypedResult<ChainId> {
         .await
         .map_err(|err| CliError::ApiError(err.to_string()))?
         .into_inner();
-    Ok(ChainId::new(state.chain_id))
+    Ok(ChainId::new(state.chain_id as u64))
 }
 /// Error message for parsing a map
 const PARSE_MAP_SYNTAX_MSG: &str = "Invalid syntax for map. Example: Name=Value,Name2=Value";
@@ -629,66 +626,30 @@ pub fn strip_private_key_prefix(key: &String) -> CliTypedResult<String> {
     Ok(key.to_string())
 }
 
-pub fn serialize_address_str<S: Serializer>(
-    addr: &Option<AccountAddress>,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    if let Some(addr) = addr {
-        serializer.serialize_some(&addr.to_standard_string())
-    } else {
-        serializer.serialize_none()
-    }
-}
-
-pub fn deserialize_address_str<'de, D: Deserializer<'de>>(
+/// Deserializes an Ed25519 private key with a prefix AIP-80 prefix if present.
+///
+/// [Read about AIP-80](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-80.md)
+pub fn deserialize_private_key_with_prefix<'de, D>(
     deserializer: D,
-) -> Result<Option<AccountAddress>, D::Error> {
+) -> Result<Option<Ed25519PrivateKey>, D::Error>
+where
+    D: Deserializer<'de>,
+{
     use serde::de::Error;
 
     // Deserialize the field as an Option<String>
     let opt: Option<String> = Option::deserialize(deserializer)?;
 
-    // Transform Option<String> into Option<T>
+    // Transform Option<String> into Option<Ed25519PrivateKey>
     opt.map_or(Ok(None), |s| {
-        AccountAddress::from_str(&s)
-            .map(Some)
-            .map_err(D::Error::custom)
-    })
-}
+        // Use strip_private_key_prefix to handle the AIP-80 prefix
+        let stripped = strip_private_key_prefix(&s).map_err(D::Error::custom)?;
 
-/// Serializes an [`ValidCryptoMaterial`] with a prefix AIP-80 prefix if present.
-///
-/// [Read about AIP-80](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-80.md)
-pub fn serialize_material_with_prefix<S: Serializer, T: ValidCryptoMaterial>(
-    material: &Option<T>,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    if let Some(material) = material {
-        serializer.serialize_some(
-            &material
-                .to_aip_80_string()
-                .map_err(|err| S::Error::custom(err.to_string()))?,
-        )
-    } else {
-        serializer.serialize_none()
-    }
-}
-
-/// Deserializes an [`ValidCryptoMaterial`] with a prefix AIP-80 prefix if present.
-///
-/// [Read about AIP-80](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-80.md)
-pub fn deserialize_material_with_prefix<'de, D: Deserializer<'de>, T: ValidCryptoMaterial>(
-    deserializer: D,
-) -> Result<Option<T>, D::Error> {
-    use serde::de::Error;
-
-    // Deserialize the field as an Option<String>
-    let opt: Option<String> = Option::deserialize(deserializer)?;
-
-    // Transform Option<String> into Option<T>
-    opt.map_or(Ok(None), |s| {
-        T::from_encoded_string(&s)
-            .map(Some)
-            .map_err(D::Error::custom)
+        // Attempt deserialization with the stripped key
+        Ed25519PrivateKey::deserialize(serde::de::value::StrDeserializer::<D::Error>::new(
+            &stripped,
+        ))
+        .map(Some)
+        .map_err(D::Error::custom)
     })
 }

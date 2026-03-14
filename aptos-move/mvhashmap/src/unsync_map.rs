@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use aptos_aggregator::types::DelayedFieldValue;
+use aptos_crypto::hash::HashValue;
 use aptos_types::{
     error::{code_invariant_error, PanicError},
     executable::ModulePath,
@@ -43,7 +44,12 @@ pub struct UnsyncMap<
     group_cache: RefCell<HashMap<K, RefCell<(HashMap<T, ValueWithLayout<V>>, ResourceGroupSize)>>>,
     delayed_field_map: RefCell<HashMap<I, DelayedFieldValue>>,
 
-    // Code caches for modules and scripts.
+    // Optional hash can store the hash of the module to avoid re-computations. This map is used by
+    // V1 loader and will be removed in the future.
+    #[deprecated]
+    deprecated_module_map: RefCell<HashMap<K, (Arc<V>, Option<HashValue>)>>,
+
+    // Code caches for loader V2 implementation: contains modules and scripts.
     module_cache:
         UnsyncModuleCache<ModuleId, CompiledModule, Module, AptosModuleExtension, Option<TxnIndex>>,
     script_cache: UnsyncScriptCache<[u8; 32], CompiledScript, Script>,
@@ -60,8 +66,10 @@ impl<
     > Default for UnsyncMap<K, T, V, I>
 {
     fn default() -> Self {
+        #[allow(deprecated)]
         Self {
             resource_map: RefCell::new(HashMap::new()),
+            deprecated_module_map: RefCell::new(HashMap::new()),
             module_cache: UnsyncModuleCache::empty(),
             script_cache: UnsyncScriptCache::empty(),
             group_cache: RefCell::new(HashMap::new()),
@@ -109,11 +117,14 @@ impl<
     }
 
     pub fn stats(&self) -> BlockStateStats {
+        #[allow(deprecated)]
+        let num_modules =
+            self.deprecated_module_map.borrow().len() + self.module_cache.num_modules();
         BlockStateStats {
             num_resources: self.resource_map.borrow().len(),
             num_resource_groups: self.group_cache.borrow().len(),
             num_delayed_fields: self.delayed_field_map.borrow().len(),
-            num_modules: self.module_cache.num_modules(),
+            num_modules,
             base_resources_size: self.total_base_resource_size.load(Ordering::Relaxed),
             base_delayed_fields_size: self.total_base_delayed_field_size.load(Ordering::Relaxed),
         }
@@ -291,6 +302,15 @@ impl<
         })
     }
 
+    #[deprecated]
+    pub fn fetch_module_for_loader_v1(&self, key: &K) -> Option<Arc<V>> {
+        #[allow(deprecated)]
+        self.deprecated_module_map
+            .borrow()
+            .get(key)
+            .map(|entry| entry.0.clone())
+    }
+
     pub fn fetch_delayed_field(&self, id: &I) -> Option<DelayedFieldValue> {
         self.delayed_field_map.borrow().get(id).cloned()
     }
@@ -299,6 +319,14 @@ impl<
         self.resource_map
             .borrow_mut()
             .insert(key, ValueWithLayout::Exchanged(value, layout));
+    }
+
+    #[deprecated]
+    pub fn write_module(&self, key: K, value: V) {
+        #[allow(deprecated)]
+        self.deprecated_module_map
+            .borrow_mut()
+            .insert(key, (Arc::new(value), None));
     }
 
     pub fn set_base_value(&self, key: K, value: ValueWithLayout<V>) {

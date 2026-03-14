@@ -12,7 +12,7 @@ use crate::{
 use anyhow::Result;
 use aptos_protos::indexer::v1::grpc_manager_server::GrpcManagerServer;
 use std::{sync::Arc, time::Duration};
-use tokio::sync::{oneshot::channel, Mutex};
+use tokio::sync::Mutex;
 use tonic::{codec::CompressionEncoding, transport::Server};
 use tracing::info;
 
@@ -102,18 +102,21 @@ impl GrpcManager {
             .http2_keepalive_timeout(Some(HTTP2_PING_TIMEOUT_DURATION))
             .add_service(service);
 
-        let (tx, rx) = channel();
         tokio_scoped::scope(|s| {
             s.spawn(async move {
                 self.metadata_manager.start().await.unwrap();
             });
-            s.spawn(async move { self.data_manager.start(self.is_master, rx).await });
+            s.spawn(async move {
+                self.data_manager
+                    .start(/*watch_file_store_version=*/ !self.is_master)
+                    .await
+            });
             if self.is_master {
                 s.spawn(async move {
                     self.file_store_uploader
                         .lock()
                         .await
-                        .start(self.data_manager.clone(), tx)
+                        .start(self.data_manager.clone())
                         .await
                         .unwrap();
                 });

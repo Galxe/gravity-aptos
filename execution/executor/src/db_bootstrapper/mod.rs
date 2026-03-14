@@ -99,10 +99,10 @@ impl GenesisCommitter {
 
     pub fn commit(self) -> Result<()> {
         self.db.save_transactions(
-            self.output
+            Some(self.output
                 .output
                 .expect_complete_result()
-                .as_chunk_to_commit(),
+                .as_chunk_to_commit()),
             self.output.ledger_info_opt.as_ref(),
             true, /* sync_commit */
         )?;

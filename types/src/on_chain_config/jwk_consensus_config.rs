@@ -22,6 +22,7 @@ impl AsMoveAny for ConfigOff {
 pub struct OIDCProvider {
     pub name: String,
     pub config_url: String,
+    pub onchain_nonce: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -46,6 +47,7 @@ impl OnChainJWKConsensusConfig {
                 name: "https://accounts.google.com".to_string(),
                 config_url: "https://accounts.google.com/.well-known/openid-configuration"
                     .to_string(),
+                onchain_nonce: None,
             }],
         })
     }
@@ -86,14 +88,26 @@ impl OnChainConfig for OnChainJWKConsensusConfig {
     const TYPE_IDENTIFIER: &'static str = "JWKConsensusConfig";
 
     fn deserialize_into_config(bytes: &[u8]) -> anyhow::Result<Self> {
-        let variant = bcs::from_bytes::<MoveAny>(bytes)?;
-        match variant.type_name.as_str() {
-            ConfigOff::MOVE_TYPE_NAME => Ok(OnChainJWKConsensusConfig::Off),
-            ConfigV1::MOVE_TYPE_NAME => {
-                let config_v1 = Any::unpack::<ConfigV1>(ConfigV1::MOVE_TYPE_NAME, variant).map_err(|e|anyhow!("OnChainJWKConsensusConfig deserialization failed with ConfigV1 unpack error: {e}"))?;
-                Ok(OnChainJWKConsensusConfig::V1(config_v1))
-            },
-            _ => Err(anyhow!("unknown variant type")),
+        // Gravity replaces Aptos's MoveAny-based JWK config deserialization with
+        // api_types::JWKConsensusConfig, which is directly BCS-deserialized from the
+        // Gravity L1 contract's encoding format. The original MoveAny unpacking is not
+        // applicable in the Gravity architecture.
+        let config =
+            bcs::from_bytes::<api_types::on_chain_config::jwks::JWKConsensusConfig>(bytes)?;
+        if config.enabled {
+            Ok(OnChainJWKConsensusConfig::V1(ConfigV1 {
+                oidc_providers: config
+                    .oidc_providers
+                    .iter()
+                    .map(|oidc_provider| OIDCProvider {
+                        name: oidc_provider.name.clone(),
+                        config_url: oidc_provider.config_url.clone(),
+                        onchain_nonce: oidc_provider.onchain_nonce,
+                    })
+                    .collect(),
+            }))
+        } else {
+            Ok(OnChainJWKConsensusConfig::Off)
         }
     }
 }

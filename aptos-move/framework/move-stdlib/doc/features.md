@@ -141,12 +141,7 @@ return true.
 -  [Function `is_account_abstraction_enabled`](#0x1_features_is_account_abstraction_enabled)
 -  [Function `get_bulletproofs_batch_feature`](#0x1_features_get_bulletproofs_batch_feature)
 -  [Function `bulletproofs_batch_enabled`](#0x1_features_bulletproofs_batch_enabled)
--  [Function `is_derivable_account_abstraction_enabled`](#0x1_features_is_derivable_account_abstraction_enabled)
 -  [Function `is_domain_account_abstraction_enabled`](#0x1_features_is_domain_account_abstraction_enabled)
--  [Function `get_new_accounts_default_to_fa_store_feature`](#0x1_features_get_new_accounts_default_to_fa_store_feature)
--  [Function `new_accounts_default_to_fa_store_enabled`](#0x1_features_new_accounts_default_to_fa_store_enabled)
--  [Function `get_default_account_resource_feature`](#0x1_features_get_default_account_resource_feature)
--  [Function `is_default_account_resource_enabled`](#0x1_features_is_default_account_resource_enabled)
 -  [Function `change_feature_flags`](#0x1_features_change_feature_flags)
 -  [Function `change_feature_flags_internal`](#0x1_features_change_feature_flags_internal)
 -  [Function `change_feature_flags_for_next_epoch`](#0x1_features_change_feature_flags_for_next_epoch)
@@ -163,7 +158,6 @@ return true.
     -  [Function `partial_governance_voting_enabled`](#@Specification_1_partial_governance_voting_enabled)
     -  [Function `module_event_enabled`](#@Specification_1_module_event_enabled)
     -  [Function `abort_if_multisig_payload_mismatch_enabled`](#@Specification_1_abort_if_multisig_payload_mismatch_enabled)
-    -  [Function `is_default_account_resource_enabled`](#@Specification_1_is_default_account_resource_enabled)
     -  [Function `change_feature_flags_internal`](#@Specification_1_change_feature_flags_internal)
     -  [Function `change_feature_flags_for_next_epoch`](#@Specification_1_change_feature_flags_for_next_epoch)
     -  [Function `on_new_epoch`](#@Specification_1_on_new_epoch)
@@ -460,16 +454,6 @@ Lifetime: transient
 
 
 
-<a id="0x1_features_DEFAULT_ACCOUNT_RESOURCE"></a>
-
-Lifetime: transient
-
-
-<pre><code><b>const</b> <a href="features.md#0x1_features_DEFAULT_ACCOUNT_RESOURCE">DEFAULT_ACCOUNT_RESOURCE</a>: u64 = 91;
-</code></pre>
-
-
-
 <a id="0x1_features_DEFAULT_TO_CONCURRENT_FUNGIBLE_BALANCE"></a>
 
 Whether to default new Fungible Store to the concurrent variant.
@@ -514,18 +498,6 @@ Lifetime: transient
 
 
 
-<a id="0x1_features_DERIVABLE_ACCOUNT_ABSTRACTION"></a>
-
-Whether the account abstraction is enabled.
-
-Lifetime: transient
-
-
-<pre><code><b>const</b> <a href="features.md#0x1_features_DERIVABLE_ACCOUNT_ABSTRACTION">DERIVABLE_ACCOUNT_ABSTRACTION</a>: u64 = 88;
-</code></pre>
-
-
-
 <a id="0x1_features_DISPATCHABLE_FUNGIBLE_ASSET"></a>
 
 Whether the dispatchable fungible asset standard feature is enabled.
@@ -534,6 +506,18 @@ Lifetime: transient
 
 
 <pre><code><b>const</b> <a href="features.md#0x1_features_DISPATCHABLE_FUNGIBLE_ASSET">DISPATCHABLE_FUNGIBLE_ASSET</a>: u64 = 63;
+</code></pre>
+
+
+
+<a id="0x1_features_DOMAIN_ACCOUNT_ABSTRACTION"></a>
+
+Whether the account abstraction is enabled.
+
+Lifetime: transient
+
+
+<pre><code><b>const</b> <a href="features.md#0x1_features_DOMAIN_ACCOUNT_ABSTRACTION">DOMAIN_ACCOUNT_ABSTRACTION</a>: u64 = 88;
 </code></pre>
 
 
@@ -758,17 +742,6 @@ Lifetime: transient
 
 
 <pre><code><b>const</b> <a href="features.md#0x1_features_NEW_ACCOUNTS_DEFAULT_TO_FA_APT_STORE">NEW_ACCOUNTS_DEFAULT_TO_FA_APT_STORE</a>: u64 = 64;
-</code></pre>
-
-
-
-<a id="0x1_features_NEW_ACCOUNTS_DEFAULT_TO_FA_STORE"></a>
-
-Whether new accounts default to the Fungible Asset store.
-Lifetime: transient
-
-
-<pre><code><b>const</b> <a href="features.md#0x1_features_NEW_ACCOUNTS_DEFAULT_TO_FA_STORE">NEW_ACCOUNTS_DEFAULT_TO_FA_STORE</a>: u64 = 90;
 </code></pre>
 
 
@@ -3574,38 +3547,13 @@ Deprecated feature
 
 </details>
 
-<a id="0x1_features_is_derivable_account_abstraction_enabled"></a>
-
-## Function `is_derivable_account_abstraction_enabled`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_is_derivable_account_abstraction_enabled">is_derivable_account_abstraction_enabled</a>(): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_is_derivable_account_abstraction_enabled">is_derivable_account_abstraction_enabled</a>(): bool <b>acquires</b> <a href="features.md#0x1_features_Features">Features</a> {
-    <a href="features.md#0x1_features_is_enabled">is_enabled</a>(<a href="features.md#0x1_features_DERIVABLE_ACCOUNT_ABSTRACTION">DERIVABLE_ACCOUNT_ABSTRACTION</a>)
-}
-</code></pre>
-
-
-
-</details>
-
 <a id="0x1_features_is_domain_account_abstraction_enabled"></a>
 
 ## Function `is_domain_account_abstraction_enabled`
 
 
 
-<pre><code>#[deprecated]
-<b>public</b> <b>fun</b> <a href="features.md#0x1_features_is_domain_account_abstraction_enabled">is_domain_account_abstraction_enabled</a>(): bool
+<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_is_domain_account_abstraction_enabled">is_domain_account_abstraction_enabled</a>(): bool
 </code></pre>
 
 
@@ -3614,100 +3562,8 @@ Deprecated feature
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_is_domain_account_abstraction_enabled">is_domain_account_abstraction_enabled</a>(): bool {
-    <b>false</b>
-}
-</code></pre>
-
-
-
-</details>
-
-<a id="0x1_features_get_new_accounts_default_to_fa_store_feature"></a>
-
-## Function `get_new_accounts_default_to_fa_store_feature`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_get_new_accounts_default_to_fa_store_feature">get_new_accounts_default_to_fa_store_feature</a>(): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_get_new_accounts_default_to_fa_store_feature">get_new_accounts_default_to_fa_store_feature</a>(): u64 { <a href="features.md#0x1_features_NEW_ACCOUNTS_DEFAULT_TO_FA_STORE">NEW_ACCOUNTS_DEFAULT_TO_FA_STORE</a> }
-</code></pre>
-
-
-
-</details>
-
-<a id="0x1_features_new_accounts_default_to_fa_store_enabled"></a>
-
-## Function `new_accounts_default_to_fa_store_enabled`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_new_accounts_default_to_fa_store_enabled">new_accounts_default_to_fa_store_enabled</a>(): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_new_accounts_default_to_fa_store_enabled">new_accounts_default_to_fa_store_enabled</a>(): bool <b>acquires</b> <a href="features.md#0x1_features_Features">Features</a> {
-    <a href="features.md#0x1_features_is_enabled">is_enabled</a>(<a href="features.md#0x1_features_NEW_ACCOUNTS_DEFAULT_TO_FA_STORE">NEW_ACCOUNTS_DEFAULT_TO_FA_STORE</a>)
-}
-</code></pre>
-
-
-
-</details>
-
-<a id="0x1_features_get_default_account_resource_feature"></a>
-
-## Function `get_default_account_resource_feature`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_get_default_account_resource_feature">get_default_account_resource_feature</a>(): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_get_default_account_resource_feature">get_default_account_resource_feature</a>(): u64 { <a href="features.md#0x1_features_DEFAULT_ACCOUNT_RESOURCE">DEFAULT_ACCOUNT_RESOURCE</a> }
-</code></pre>
-
-
-
-</details>
-
-<a id="0x1_features_is_default_account_resource_enabled"></a>
-
-## Function `is_default_account_resource_enabled`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_is_default_account_resource_enabled">is_default_account_resource_enabled</a>(): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_is_default_account_resource_enabled">is_default_account_resource_enabled</a>(): bool <b>acquires</b> <a href="features.md#0x1_features_Features">Features</a> {
-    <a href="features.md#0x1_features_is_enabled">is_enabled</a>(<a href="features.md#0x1_features_DEFAULT_ACCOUNT_RESOURCE">DEFAULT_ACCOUNT_RESOURCE</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_is_domain_account_abstraction_enabled">is_domain_account_abstraction_enabled</a>(): bool <b>acquires</b> <a href="features.md#0x1_features_Features">Features</a> {
+    <a href="features.md#0x1_features_is_enabled">is_enabled</a>(<a href="features.md#0x1_features_DOMAIN_ACCOUNT_ABSTRACTION">DOMAIN_ACCOUNT_ABSTRACTION</a>)
 }
 </code></pre>
 
@@ -4029,7 +3885,7 @@ Helper to check whether a feature flag is enabled.
 
 
 
-<pre><code><b>pragma</b> bv = b"0";
+<pre><code><b>pragma</b> bv=b"0";
 </code></pre>
 
 
@@ -4055,7 +3911,7 @@ Helper to check whether a feature flag is enabled.
 
 
 
-<pre><code><b>pragma</b> bv = b"0";
+<pre><code><b>pragma</b> bv=b"0";
 </code></pre>
 
 
@@ -4148,17 +4004,6 @@ Helper to check whether a feature flag is enabled.
 
 
 
-<a id="0x1_features_spec_new_accounts_default_to_fa_store_enabled"></a>
-
-
-<pre><code><b>fun</b> <a href="features.md#0x1_features_spec_new_accounts_default_to_fa_store_enabled">spec_new_accounts_default_to_fa_store_enabled</a>(): bool {
-   <a href="features.md#0x1_features_spec_is_enabled">spec_is_enabled</a>(<a href="features.md#0x1_features_NEW_ACCOUNTS_DEFAULT_TO_FA_STORE">NEW_ACCOUNTS_DEFAULT_TO_FA_STORE</a>)
-}
-</code></pre>
-
-
-
-
 <a id="0x1_features_spec_simulation_enhancement_enabled"></a>
 
 
@@ -4183,24 +4028,6 @@ Helper to check whether a feature flag is enabled.
 <pre><code><b>pragma</b> opaque;
 <b>aborts_if</b> [abstract] <b>false</b>;
 <b>ensures</b> [abstract] result == <a href="features.md#0x1_features_spec_abort_if_multisig_payload_mismatch_enabled">spec_abort_if_multisig_payload_mismatch_enabled</a>();
-</code></pre>
-
-
-
-<a id="@Specification_1_is_default_account_resource_enabled"></a>
-
-### Function `is_default_account_resource_enabled`
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_is_default_account_resource_enabled">is_default_account_resource_enabled</a>(): bool
-</code></pre>
-
-
-
-
-<pre><code><b>pragma</b> opaque;
-<b>aborts_if</b> [abstract] <b>false</b>;
-<b>ensures</b> [abstract] result == <a href="features.md#0x1_features_spec_is_enabled">spec_is_enabled</a>(<a href="features.md#0x1_features_DEFAULT_ACCOUNT_RESOURCE">DEFAULT_ACCOUNT_RESOURCE</a>);
 </code></pre>
 
 
@@ -4247,9 +4074,7 @@ Helper to check whether a feature flag is enabled.
 
 
 <pre><code><b>fun</b> <a href="features.md#0x1_features_spec_contains">spec_contains</a>(<a href="features.md#0x1_features">features</a>: <a href="vector.md#0x1_vector">vector</a>&lt;u8&gt;, feature: u64): bool {
-   ((int2bv(
-       (((1 <b>as</b> u8) &lt;&lt; ((feature % (8 <b>as</b> u64)) <b>as</b> u64)) <b>as</b> u8)
-   ) <b>as</b> u8) & <a href="features.md#0x1_features">features</a>[feature / 8] <b>as</b> u8) &gt; (0 <b>as</b> u8)
+   ((int2bv((((1 <b>as</b> u8) &lt;&lt; ((feature % (8 <b>as</b> u64)) <b>as</b> u64)) <b>as</b> u8)) <b>as</b> u8) & <a href="features.md#0x1_features">features</a>[feature/8] <b>as</b> u8) &gt; (0 <b>as</b> u8)
        && (feature / 8) &lt; len(<a href="features.md#0x1_features">features</a>)
 }
 </code></pre>
@@ -4359,7 +4184,7 @@ Helper to check whether a feature flag is enabled.
 
 
 
-<pre><code><b>pragma</b> bv = b"0";
+<pre><code><b>pragma</b> bv=b"0";
 <b>aborts_if</b> <b>false</b>;
 <b>ensures</b> feature / 8 &lt; len(<a href="features.md#0x1_features">features</a>);
 <b>ensures</b> <b>include</b> == <a href="features.md#0x1_features_spec_contains">spec_contains</a>(<a href="features.md#0x1_features">features</a>, feature);
@@ -4378,7 +4203,7 @@ Helper to check whether a feature flag is enabled.
 
 
 
-<pre><code><b>pragma</b> bv = b"0";
+<pre><code><b>pragma</b> bv=b"0";
 <b>aborts_if</b> <b>false</b>;
 <b>ensures</b> result == <a href="features.md#0x1_features_spec_contains">spec_contains</a>(<a href="features.md#0x1_features">features</a>, feature);
 </code></pre>

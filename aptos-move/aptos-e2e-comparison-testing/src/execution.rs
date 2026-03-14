@@ -8,8 +8,7 @@ use crate::{
 };
 use anyhow::Result;
 use aptos_framework::APTOS_PACKAGES;
-use aptos_language_e2e_tests::executor::FakeExecutor;
-use aptos_transaction_simulation::{InMemoryStateStore, SimulationStateStore};
+use aptos_language_e2e_tests::{data_store::FakeDataStore, executor::FakeExecutor};
 use aptos_types::{
     contract_event::ContractEvent,
     on_chain_config::{FeatureFlag, Features, OnChainConfig},
@@ -25,8 +24,8 @@ use move_core_types::{account_address::AccountAddress, language_storage::ModuleI
 use move_model::metadata::CompilerVersion;
 use std::{cmp, collections::HashMap, path::PathBuf, sync::Arc};
 
-fn add_packages_to_state_store(
-    state_store: &impl SimulationStateStore,
+fn add_packages_to_data_store(
+    data_store: &mut FakeDataStore,
     package_info: &PackageInfo,
     compiled_package_cache: &HashMap<PackageInfo, HashMap<ModuleId, Vec<u8>>>,
 ) {
@@ -35,14 +34,12 @@ fn add_packages_to_state_store(
     }
     let compiled_package = compiled_package_cache.get(package_info).unwrap();
     for (module_id, module_blob) in compiled_package {
-        state_store
-            .add_module_blob(module_id, module_blob.clone())
-            .expect("failed to add module blob, this should not happen");
+        data_store.add_module(module_id, module_blob.clone());
     }
 }
 
-fn add_aptos_packages_to_state_store(
-    state_store: &impl SimulationStateStore,
+fn add_aptos_packages_to_data_store(
+    data_store: &mut FakeDataStore,
     compiled_package_map: &HashMap<PackageInfo, HashMap<ModuleId, Vec<u8>>>,
 ) {
     for package in APTOS_PACKAGES {
@@ -51,7 +48,7 @@ fn add_aptos_packages_to_state_store(
             package_name: package.to_string(),
             upgrade_number: None,
         };
-        add_packages_to_state_store(state_store, &package_info, compiled_package_map);
+        add_packages_to_data_store(data_store, &package_info, compiled_package_map);
     }
 }
 
@@ -293,7 +290,7 @@ impl Execution {
     pub(crate) fn execute_and_compare(
         &self,
         cur_version: Version,
-        state: InMemoryStateStore,
+        state: FakeDataStore,
         txn_idx: &TxnIndex,
         compiled_package_cache: &HashMap<PackageInfo, HashMap<ModuleId, Vec<u8>>>,
         compiled_package_cache_v2: &HashMap<PackageInfo, HashMap<ModuleId, Vec<u8>>>,
@@ -347,7 +344,7 @@ impl Execution {
     fn execute_code(
         &self,
         version: Version,
-        state: InMemoryStateStore,
+        mut state: FakeDataStore,
         package_info: &PackageInfo,
         txn: &Transaction,
         compiled_package_cache: &HashMap<PackageInfo, HashMap<ModuleId, Vec<u8>>>,
@@ -355,11 +352,11 @@ impl Execution {
         v2_flag: bool,
     ) -> Result<(WriteSet, Vec<ContractEvent>), VMStatus> {
         // Always add Aptos (0x1) packages.
-        add_aptos_packages_to_state_store(&state, compiled_package_cache);
+        add_aptos_packages_to_data_store(&mut state, compiled_package_cache);
 
         // Add other modules.
         if package_info.is_compilable() {
-            add_packages_to_state_store(&state, package_info, compiled_package_cache);
+            add_packages_to_data_store(&mut state, package_info, compiled_package_cache);
         }
 
         // Update features if needed to the correct binary format used by V2 compiler.
@@ -369,12 +366,10 @@ impl Execution {
         } else {
             features.enable(FeatureFlag::VM_BINARY_FORMAT_V6);
         }
-        state
-            .set_features(features)
-            .expect("failed to set features, this should not happen");
+        state.set_features(features);
 
         // We use executor only to get access to block executor and avoid some of
-        // the initializations, but ignore its internal state.
+        // the initializations, but ignore its internal state, i.e., FakeDataStore.
         let executor = FakeExecutor::no_genesis();
         let txns = vec![txn.clone()];
 

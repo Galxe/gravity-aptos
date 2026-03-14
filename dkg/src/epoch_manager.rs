@@ -167,9 +167,11 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
             .get(&self.my_addr)
             .copied();
 
-        let onchain_randomness_config_seq_num = payload
-            .get::<RandomnessConfigSeqNum>()
-            .unwrap_or_else(|_| RandomnessConfigSeqNum::default_if_missing());
+        // TODO(gravity_lightman_dkg): mock randomness config seq num
+        // let onchain_randomness_config_seq_num = payload
+        //     .get::<RandomnessConfigSeqNum>()
+        //     .unwrap_or_else(|_| RandomnessConfigSeqNum::default_if_missing());
+        let onchain_randomness_config_seq_num = RandomnessConfigSeqNum { seq_num: 0 };
 
         let randomness_config_move_struct = payload.get::<RandomnessConfigMoveStruct>();
 
@@ -219,7 +221,6 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
                 BoundedExecutor::new(8, tokio::runtime::Handle::current()),
             );
             let agg_trx_producer = AggTranscriptProducer::new(rb);
-
             let (dkg_start_event_tx, dkg_start_event_rx) =
                 aptos_channel::new(QueueStyle::KLAST, 1, None);
             self.dkg_start_event_tx = Some(dkg_start_event_tx);

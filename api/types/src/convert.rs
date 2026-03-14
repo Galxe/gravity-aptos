@@ -36,7 +36,6 @@ use aptos_types::{
         BlockEndInfo, BlockEpiloguePayload, EntryFunction, ExecutionStatus, Multisig,
         RawTransaction, Script, SignedTransaction, TransactionAuxiliaryData,
     },
-    vm::module_metadata::get_metadata,
     vm_status::AbortLocation,
     write_set::WriteOp,
 };
@@ -99,7 +98,7 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
 
     pub fn is_resource_group(&self, tag: &StructTag) -> bool {
         if let Ok(Some(module)) = self.inner.view_module(&tag.module_id()) {
-            if let Some(md) = get_metadata(&module.metadata) {
+            if let Some(md) = aptos_framework::get_metadata(&module.metadata) {
                 if let Some(attrs) = md.struct_attributes.get(tag.name.as_ident_str().as_str()) {
                     return attrs
                         .iter()
@@ -369,9 +368,8 @@ impl<'a, S: StateView> MoveConverter<'a, S> {
                     transaction_payload,
                 })
             },
-
-            // Deprecated.
             ModuleBundle(_) => bail!("Module bundle payload has been removed"),
+            GTxnBytes(_) => todo!(),
         };
         Ok(ret)
     }

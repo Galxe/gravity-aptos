@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{compiler::compile_modules_in_file, tests::execute_function_for_test};
+use crate::compiler::compile_modules_in_file;
 use move_binary_format::{
     file_format::{
         empty_module, AddressIdentifierIndex, Bytecode, CodeUnit, FunctionDefinition,
@@ -12,17 +12,25 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_core_types::{
-    ability::AbilitySet, account_address::AccountAddress, ident_str, identifier::Identifier,
+    ability::AbilitySet,
+    account_address::AccountAddress,
+    ident_str,
+    identifier::{IdentStr, Identifier},
     language_storage::ModuleId,
 };
-use move_vm_runtime::{AsUnsyncModuleStorage, ModuleStorage, StagingModuleStorage};
+use move_vm_runtime::{
+    module_traversal::*, move_vm::MoveVM, AsUnsyncModuleStorage, ModuleStorage,
+    StagingModuleStorage,
+};
 use move_vm_test_utils::InMemoryStorage;
-use std::path::PathBuf;
+use move_vm_types::gas::UnmeteredGasMeter;
+use std::{path::PathBuf, sync::Arc};
 
 const WORKING_ACCOUNT: AccountAddress = AccountAddress::TWO;
 
 struct Adapter {
     store: InMemoryStorage,
+    vm: Arc<MoveVM>,
     functions: Vec<(ModuleId, Identifier)>,
 }
 
@@ -51,7 +59,12 @@ impl Adapter {
             ),
         ];
 
-        Self { store, functions }
+        let vm = Arc::new(MoveVM::new());
+        Self {
+            store,
+            vm,
+            functions,
+        }
     }
 
     fn publish_modules_using_loader_v2<'a, M: ModuleStorage>(
@@ -75,9 +88,29 @@ impl Adapter {
 
     fn call_functions(&self, module_storage: &impl ModuleStorage) {
         for (module_id, name) in &self.functions {
-            execute_function_for_test(&self.store, module_storage, module_id, name, &[], vec![])
-                .unwrap_or_else(|_| panic!("Failure executing {:?}::{:?}", module_id, name));
+            self.call_function(module_id, name, module_storage);
         }
+    }
+
+    fn call_function(
+        &self,
+        module: &ModuleId,
+        name: &IdentStr,
+        module_storage: &impl ModuleStorage,
+    ) {
+        let mut session = self.vm.new_session(&self.store);
+        let traversal_storage = TraversalStorage::new();
+        session
+            .execute_function_bypass_visibility(
+                module,
+                name,
+                vec![],
+                Vec::<Vec<u8>>::new(),
+                &mut UnmeteredGasMeter,
+                &mut TraversalContext::new(&traversal_storage),
+                module_storage,
+            )
+            .unwrap_or_else(|_| panic!("Failure executing {:?}::{:?}", module, name));
     }
 }
 

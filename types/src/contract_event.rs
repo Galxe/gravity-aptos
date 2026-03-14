@@ -9,11 +9,18 @@ use crate::{
     },
     dkg::DKGStartEvent,
     event::EventKey,
-    jwks::ObservedJWKsUpdated,
+    jwks::{
+        jwk::JWKMoveStruct, rsa::RSA_JWK, unsupported::UnsupportedJWK, AllProvidersJWKs,
+        ObservedJWKsUpdated, ProviderJWKs,
+    },
+    move_any::{Any, AsMoveAny},
     transaction::Version,
+    validator_verifier::ValidatorConsensusInfo,
 };
 use anyhow::{bail, Error, Result};
+use api_types::events::contract_event::GravityEvent;
 use aptos_crypto_derive::{BCSCryptoHash, CryptoHasher};
+use hex;
 use move_core_types::{
     ident_str,
     language_storage::{StructTag, TypeTag, CORE_CODE_ADDRESS},
@@ -24,6 +31,42 @@ use once_cell::sync::Lazy;
 use proptest_derive::Arbitrary;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{convert::TryFrom, ops::Deref, str::FromStr};
+
+/// Helper function to convert ValidatorConsensusInfoMoveStruct to ValidatorConsensusInfo
+fn convert_validator_consensus_info(
+    v: &api_types::on_chain_config::dkg::ValidatorConsensusInfo,
+) -> Result<ValidatorConsensusInfo, Error> {
+    let addr =
+        crate::account_address::AccountAddress::from_bytes(&v.addr.bytes()).map_err(|e| {
+            eprintln!("Failed to parse address: {:?}, error: {}", v.addr, e);
+            e
+        })?;
+
+    // pk_bytes is already raw bytes (Vec<u8>), just validate length
+    if v.pk_bytes.len() != 48 {
+        return Err(anyhow::anyhow!(
+            "Invalid BLS12381 public key length: expected 48 bytes, got {} bytes",
+            v.pk_bytes.len()
+        ));
+    }
+
+    let public_key =
+        aptos_crypto::bls12381::PublicKey::try_from(v.pk_bytes.as_slice()).map_err(|e| {
+            eprintln!(
+                "Failed to parse BLS12381 public key: pk_bytes length: {}, bytes: {:?}, error: {}",
+                v.pk_bytes.len(),
+                v.pk_bytes,
+                e
+            );
+            e
+        })?;
+
+    Ok(ValidatorConsensusInfo {
+        address: addr,
+        public_key,
+        voting_power: v.voting_power,
+    })
+}
 
 pub static FEE_STATEMENT_EVENT_TYPE: Lazy<TypeTag> = Lazy::new(|| {
     TypeTag::Struct(Box::new(StructTag {
@@ -424,5 +467,87 @@ impl EventWithVersion {
             transaction_version,
             event,
         }
+    }
+}
+
+impl TryFrom<&GravityEvent> for ContractEvent {
+    type Error = Error;
+
+    fn try_from(event: &GravityEvent) -> Result<Self> {
+        // Note: NewEpoch events use serde_json serialization while JWK/DKG events use BCS.
+        // This is intentional — NewEpoch follows the Gravity execution layer's JSON-based
+        // event format, while JWK and DKG use BCS to match the Aptos types layer expectations.
+        match event {
+            GravityEvent::NewEpoch(epoch, _) => {
+                let data = NewEpochEvent { epoch: *epoch };
+                Ok(ContractEvent::V2(ContractEventV2::new(
+                    TypeTag::Struct(Box::new(NewEpochEvent::struct_tag())),
+                    serde_json::to_vec(&data).unwrap(),
+                )))
+            },
+            GravityEvent::ObservedJWKsUpdated(epoch, jwks) => {
+                let data = ObservedJWKsUpdated {
+                    epoch: *epoch,
+                    jwks: AllProvidersJWKs {
+                        entries: jwks
+                            .iter()
+                            .map(|jwk| ProviderJWKs {
+                                issuer: jwk.issuer.clone(),
+                                version: jwk.version,
+                                jwks: jwk
+                                    .jwks
+                                    .iter()
+                                    .map(|jwk| {
+                                        match jwk.type_name.as_str() {
+                                            // TODO(Gravity_byteyue): Support RSA later
+                                            RSA_JWK::MOVE_TYPE_NAME => JWKMoveStruct {
+                                                variant: Any {
+                                                    type_name: RSA_JWK::MOVE_TYPE_NAME.to_string(),
+                                                    data: jwk.data.clone(),
+                                                },
+                                            },
+                                            UnsupportedJWK::MOVE_TYPE_NAME => {
+                                                let unsupported_jwk = UnsupportedJWK {
+                                                    id: UnsupportedJWK::MOVE_TYPE_NAME
+                                                        .as_bytes()
+                                                        .to_vec(),
+                                                    payload: jwk.data.clone(),
+                                                };
+                                                JWKMoveStruct {
+                                                    variant: unsupported_jwk.as_move_any(),
+                                                }
+                                            },
+                                            _ => panic!("unknown jwk type: {}", jwk.type_name),
+                                        }
+                                    })
+                                    .collect(),
+                            })
+                            .collect(),
+                    },
+                };
+                Ok(ContractEvent::V2(ContractEventV2::new(
+                    TypeTag::Struct(Box::new(ObservedJWKsUpdated::struct_tag())),
+                    bcs::to_bytes(&data).unwrap(),
+                )))
+            },
+            GravityEvent::DKG(dkg) => {
+                let data = DKGStartEvent {
+                    session_metadata: crate::dkg::DKGSessionMetadata::from_api_types(
+                        dkg.session_metadata.clone(),
+                    )?,
+                    start_time_us: dkg.start_time_us,
+                };
+                Ok(ContractEvent::V2(ContractEventV2::new(
+                    TypeTag::Struct(Box::new(crate::dkg::DKGStartEvent::struct_tag())),
+                    bcs::to_bytes(&data).unwrap(),
+                )))
+            },
+        }
+    }
+}
+
+impl From<GravityEvent> for ContractEvent {
+    fn from(event: GravityEvent) -> Self {
+        ContractEvent::try_from(&event).unwrap()
     }
 }

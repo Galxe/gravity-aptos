@@ -160,7 +160,7 @@ async fn test_jwk_manager_state_transition() {
     // When JWK consensus is `NotStarted` for issuer Bob, JWKConsensusManager should:
     // do nothing to an observation equal to on-chain state (except storing it, which may be unnecessary).
     assert!(jwk_manager
-        .process_new_observation(issuer_bob.clone(), bob_jwks.clone())
+        .process_new_observation(issuer_bob.clone(), bob_jwks.clone(), None)
         .is_ok());
     expected_states.get_mut(&issuer_bob).unwrap().observed = Some(bob_jwks.clone());
     assert_eq!(expected_states, jwk_manager.states_by_issuer);
@@ -173,7 +173,7 @@ async fn test_jwk_manager_state_transition() {
     ))
     .into()];
     assert!(jwk_manager
-        .process_new_observation(issuer_alice.clone(), alice_jwks_new.clone())
+        .process_new_observation(issuer_alice.clone(), alice_jwks_new.clone(), None)
         .is_ok());
     {
         let expected_alice_state = expected_states.get_mut(&issuer_alice).unwrap();
@@ -202,7 +202,7 @@ async fn test_jwk_manager_state_transition() {
     ))
     .into()];
     assert!(jwk_manager
-        .process_new_observation(issuer_carl.clone(), carl_jwks_new.clone())
+        .process_new_observation(issuer_carl.clone(), carl_jwks_new.clone(), None)
         .is_ok());
     {
         let expected_carl_state = expected_states.get_mut(&issuer_carl).unwrap();
@@ -280,7 +280,7 @@ async fn test_jwk_manager_state_transition() {
         .into(),
     ];
     assert!(jwk_manager
-        .process_new_observation(issuer_alice.clone(), alice_jwks_new_2.clone())
+        .process_new_observation(issuer_alice.clone(), alice_jwks_new_2.clone(), None)
         .is_ok());
     {
         let expected_alice_state = expected_states.get_mut(&issuer_alice).unwrap();
@@ -434,7 +434,8 @@ async fn test_jwk_manager_state_transition() {
         .collect::<HashSet<_>>();
     assert_eq!(expected_vtxn_hashes, actual_vtxn_hashes);
 
-    // At any time, JWKConsensusManager should fully follow on-chain update notification and re-initialize.
+    // NOTE(Gravity): At any time, JWKConsensusManager should follow on-chain update notification.
+    // With incremental update model, missing entries are NOT deleted.
     let second_on_chain_state = AllProvidersJWKs {
         entries: vec![on_chain_state_alice_v111.clone()],
     };
@@ -442,8 +443,10 @@ async fn test_jwk_manager_state_transition() {
     assert!(jwk_manager
         .reset_with_on_chain_state(second_on_chain_state)
         .is_ok());
-    expected_states.remove(&issuer_bob);
-    expected_states.remove(&issuer_carl);
+    // NOTE(Gravity): With incremental model, Bob and Carl remain (they just weren't updated).
+    // Commented out for easier upstream merge comparison.
+    // expected_states.remove(&issuer_bob);
+    // expected_states.remove(&issuer_carl);
     assert_eq!(expected_states, jwk_manager.states_by_issuer);
 }
 

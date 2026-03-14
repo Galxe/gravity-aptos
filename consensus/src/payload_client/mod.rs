@@ -13,6 +13,7 @@ pub mod validator;
 
 #[async_trait::async_trait]
 pub trait PayloadClient: Send + Sync {
+    #[allow(clippy::too_many_arguments)]
     async fn pull_payload(
         &self,
         config: PayloadPullParameters,

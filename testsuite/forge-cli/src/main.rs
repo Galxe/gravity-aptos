@@ -38,7 +38,7 @@ const MEGABYTE: usize = KILOBYTE * 1000;
 
 #[cfg(unix)]
 #[global_allocator]
-static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -236,8 +236,6 @@ fn main() -> Result<()> {
     let mut logger = aptos_logger::Logger::new();
     logger.channel_size(1000).is_async(false).level(Level::Info);
     logger.build();
-
-    env_logger::init();
 
     let args = Args::parse();
     let duration = Duration::from_secs(args.duration_secs as u64);

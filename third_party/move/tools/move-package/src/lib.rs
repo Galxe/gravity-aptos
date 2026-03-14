@@ -19,7 +19,7 @@ use crate::{
 };
 use anyhow::Result;
 use clap::*;
-use legacy_move_compiler::{
+use move_compiler::{
     command_line::SKIP_ATTRIBUTE_CHECKS, shared::known_attributes::KnownAttribute,
 };
 use move_compiler_v2::external_checks::ExternalChecks;

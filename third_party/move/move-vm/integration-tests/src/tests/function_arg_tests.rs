@@ -2,10 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    compiler::{as_module, compile_units},
-    tests::execute_function_with_single_storage_for_test,
-};
+use crate::compiler::{as_module, compile_units};
 use move_binary_format::errors::VMResult;
 use move_core_types::{
     account_address::AccountAddress,
@@ -15,7 +12,9 @@ use move_core_types::{
     value::{MoveStruct, MoveValue},
     vm_status::StatusCode,
 };
+use move_vm_runtime::{module_traversal::*, move_vm::MoveVM, AsUnsyncModuleStorage};
 use move_vm_test_utils::InMemoryStorage;
+use move_vm_types::gas::UnmeteredGasMeter;
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
 
@@ -45,7 +44,7 @@ fn run(
 
             fun foo<{}>({}) {{ }}
         }}
-        "#,
+    "#,
         TEST_ADDR.to_hex(),
         ty_params,
         params
@@ -59,17 +58,26 @@ fn run(
     let mut storage = InMemoryStorage::new();
     storage.add_module_bytes(m.self_addr(), m.self_name(), blob.into());
 
+    let vm = MoveVM::new();
+    let mut sess = vm.new_session(&storage);
+
     let fun_name = Identifier::new("foo").unwrap();
+    let traversal_storage = TraversalStorage::new();
+    let module_storage = storage.as_unsync_module_storage();
+
     let args: Vec<_> = args
         .into_iter()
         .map(|val| val.simple_serialize().unwrap())
         .collect();
-    execute_function_with_single_storage_for_test(
-        &storage,
+
+    sess.execute_function_bypass_visibility(
         &m.self_id(),
         &fun_name,
-        &ty_args,
+        ty_args,
         args,
+        &mut UnmeteredGasMeter,
+        &mut TraversalContext::new(&traversal_storage),
+        &module_storage,
     )?;
 
     Ok(())

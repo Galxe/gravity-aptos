@@ -13,6 +13,7 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 
 [dependencies]
+api-types = { workspace = true }
 anyhow = { workspace = true }
 aptos-bitvec = { workspace = true }
 aptos-crypto = { workspace = true }
@@ -40,10 +41,8 @@ hashbrown = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
 jsonwebtoken = { workspace = true }
-lru = { workspace = true }
 move-binary-format = { workspace = true }
 move-core-types = { workspace = true }
-move-model = { workspace = true }
 move-table-extension = { workspace = true }
 move-vm-types = { workspace = true }
 num-bigint = { workspace = true }
@@ -97,6 +96,7 @@ url = { workspace = true }
 default = []
 testing = ["aptos-crypto/fuzzing"]
 fuzzing = ["proptest", "proptest-derive", "aptos-crypto/fuzzing", "move-core-types/fuzzing", "arbitrary"]
+randomness_disabled = []
 
 [[bench]]
 name = "keyless"

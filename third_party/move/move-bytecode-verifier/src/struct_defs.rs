@@ -90,16 +90,18 @@ impl<'a> StructDefGraphBuilder<'a> {
     ) -> PartialVMResult<()> {
         let struct_def = self.module.struct_def_at(idx);
         let struct_def = StructDefinitionView::new(self.module, struct_def);
+        // The fields iterator is an option in the case of native structs. Flatten makes an empty
+        // iterator for that case
         let variant_count = struct_def.variant_count();
         if variant_count > 0 {
             for i in 0..variant_count {
                 for field in struct_def.fields_optional_variant(Some(i as VariantIndex)) {
-                    self.add_signature_token(neighbors, idx, field.signature_token(), false)?
+                    self.add_signature_token(neighbors, idx, field.signature_token())?
                 }
             }
         } else {
             for field in struct_def.fields_optional_variant(None) {
-                self.add_signature_token(neighbors, idx, field.signature_token(), false)?
+                self.add_signature_token(neighbors, idx, field.signature_token())?
             }
         }
         Ok(())
@@ -111,7 +113,6 @@ impl<'a> StructDefGraphBuilder<'a> {
         neighbors: &mut BTreeMap<StructDefinitionIndex, BTreeSet<StructDefinitionIndex>>,
         cur_idx: StructDefinitionIndex,
         token: &SignatureToken,
-        ref_allowed: bool,
     ) -> PartialVMResult<()> {
         use SignatureToken as T;
         Ok(match token {
@@ -125,24 +126,16 @@ impl<'a> StructDefGraphBuilder<'a> {
             | T::Address
             | T::Signer
             | T::TypeParameter(_) => (),
-            T::Reference(t) | T::MutableReference(t) => {
-                if ref_allowed {
-                    self.add_signature_token(neighbors, cur_idx, t, false)?
-                } else {
-                    return Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(
-                                "Reference field when checking recursive structs".to_owned(),
-                            ),
-                    );
-                }
+            T::Reference(_) | T::MutableReference(_) => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("Reference field when checking recursive structs".to_owned()),
+                )
             },
-            T::Vector(inner) => self.add_signature_token(neighbors, cur_idx, inner, false)?,
+            T::Vector(inner) => self.add_signature_token(neighbors, cur_idx, inner)?,
             T::Function(args, result, _) => {
                 for t in args.iter().chain(result) {
-                    // Function arguments and results can have references at outer
-                    // position, so set ref_allowed to true
-                    self.add_signature_token(neighbors, cur_idx, t, true)?
+                    self.add_signature_token(neighbors, cur_idx, t)?
                 }
             },
             T::Struct(sh_idx) => {
@@ -161,7 +154,7 @@ impl<'a> StructDefGraphBuilder<'a> {
                         .insert(*struct_def_idx);
                 }
                 for t in inners {
-                    self.add_signature_token(neighbors, cur_idx, t, false)?
+                    self.add_signature_token(neighbors, cur_idx, t)?
                 }
             },
         })

@@ -234,8 +234,6 @@ impl Length for MultiEd25519PrivateKey {
 }
 
 impl ValidCryptoMaterial for MultiEd25519PrivateKey {
-    const AIP_80_PREFIX: &'static str = "multied25519-priv-";
-
     fn to_bytes(&self) -> Vec<u8> {
         self.to_bytes()
     }
@@ -341,8 +339,6 @@ impl Length for MultiEd25519PublicKey {
 }
 
 impl ValidCryptoMaterial for MultiEd25519PublicKey {
-    const AIP_80_PREFIX: &'static str = "multied25519-pub-";
-
     fn to_bytes(&self) -> Vec<u8> {
         self.to_bytes()
     }
@@ -482,8 +478,6 @@ impl fmt::Debug for MultiEd25519Signature {
 }
 
 impl ValidCryptoMaterial for MultiEd25519Signature {
-    const AIP_80_PREFIX: &'static str = "multied25519-sig-";
-
     fn to_bytes(&self) -> Vec<u8> {
         self.to_bytes()
     }

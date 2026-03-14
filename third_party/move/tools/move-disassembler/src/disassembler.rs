@@ -5,7 +5,6 @@
 use anyhow::{anyhow, bail, format_err, Error, Result};
 use clap::Parser;
 use colored::*;
-use legacy_move_compiler::compiled_unit::{CompiledUnit, NamedCompiledModule, NamedCompiledScript};
 use move_binary_format::{
     binary_views::BinaryIndexedView,
     control_flow_graph::{ControlFlowGraph, VMControlFlowGraph},
@@ -21,6 +20,7 @@ use move_bytecode_source_map::{
     mapping::SourceMapping,
     source_map::{FunctionSourceMap, SourceName, StructSourceMap},
 };
+use move_compiler::compiled_unit::{CompiledUnit, NamedCompiledModule, NamedCompiledScript};
 use move_core_types::{
     ability::{Ability, AbilitySet},
     ident_str,

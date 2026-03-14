@@ -387,10 +387,11 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
                 let default_proposer = proposers
                     .first()
                     .expect("INVARIANT VIOLATION: proposers is empty");
-                Arc::new(RoundProposer::new(
-                    round_proposers.clone(),
-                    *default_proposer,
-                ))
+                todo!("not invoked in Gravity")
+                // Arc::new(RoundProposer::new(
+                //     round_proposers.clone(),
+                //     *default_proposer,
+                // ))
             },
         }
     }
@@ -584,8 +585,8 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
                         if let Err(e) = monitor!(
                             "process_block_retrieval",
                             block_store
-                                .process_block_retrieval(IncomingBlockRetrievalRequest {
-                                    req: BlockRetrievalRequest::V1(v1),
+                                .process_block_retrieval(DeprecatedIncomingBlockRetrievalRequest {
+                                    req: v1,
                                     protocol: request.protocol,
                                     response_sender: request.response_sender,
                                 })
@@ -605,7 +606,7 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
                         if let Err(e) = monitor!(
                             "process_block_retrieval_v2",
                             block_store
-                                .process_block_retrieval(IncomingBlockRetrievalRequest {
+                                .process_block_retrieval_v2(IncomingBlockRetrievalRequest {
                                     req: BlockRetrievalRequest::V2(v2),
                                     protocol: request.protocol,
                                     response_sender: request.response_sender,
@@ -693,7 +694,6 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
                 .max_blocks_per_sending_request(onchain_consensus_config.quorum_store_enabled()),
             self.payload_manager.clone(),
             onchain_consensus_config.order_vote_enabled(),
-            onchain_consensus_config.window_size(),
             self.pending_blocks.clone(),
         );
         tokio::spawn(recovery_manager.start(recovery_manager_rx, close_rx));
@@ -802,7 +802,7 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
         info!(
             epoch = epoch_state.epoch,
             validators = epoch_state.verifier.to_string(),
-            root_block = %recovery_data.commit_root_block(),
+            root_block = %recovery_data.root_block(),
             "Starting new epoch",
         );
 
@@ -856,7 +856,7 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
                 rand_config,
                 fast_rand_config.clone(),
                 rand_msg_rx,
-                recovery_data.commit_root_block().round(),
+                recovery_data.root_block().round(),
                 self.config.enable_pipeline,
             )
             .await;
@@ -880,7 +880,6 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
             self.config.vote_back_pressure_limit,
             payload_manager,
             onchain_consensus_config.order_vote_enabled(),
-            onchain_consensus_config.window_size(),
             self.pending_blocks.clone(),
             maybe_pipeline_builder,
         ));
@@ -1269,7 +1268,7 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
             )
             .await
         } else {
-            self.start_new_epoch_with_jolteon(
+            self.start_new_epoch_with_joltean(
                 loaded_consensus_key.clone(),
                 epoch_state,
                 consensus_config,
@@ -1323,7 +1322,7 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
         )
     }
 
-    async fn start_new_epoch_with_jolteon(
+    async fn start_new_epoch_with_joltean(
         &mut self,
         consensus_key: Arc<PrivateKey>,
         epoch_state: Arc<EpochState>,
@@ -1338,10 +1337,7 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
         fast_rand_config: Option<RandConfig>,
         rand_msg_rx: aptos_channel::Receiver<AccountAddress, IncomingRandGenRequest>,
     ) {
-        match self.storage.start(
-            consensus_config.order_vote_enabled(),
-            consensus_config.window_size(),
-        ) {
+        match self.storage.start(consensus_config.order_vote_enabled()) {
             LivenessStorageData::FullRecoveryData(initial_data) => {
                 self.recovery_mode = false;
                 self.start_round_manager(
@@ -1745,22 +1741,16 @@ impl<P: OnChainConfigProvider> EpochManager<P> {
 
         match request {
             // TODO @bchocho @hariria can remove after all nodes upgrade to release with enum BlockRetrievalRequest (not struct)
-            IncomingRpcRequest::DeprecatedBlockRetrieval(
-                DeprecatedIncomingBlockRetrievalRequest {
-                    req,
-                    protocol,
-                    response_sender,
-                },
-            ) => {
+            IncomingRpcRequest::DeprecatedBlockRetrieval(request) => {
                 if let Some(tx) = &self.block_retrieval_tx {
                     let incoming_block_retrieval_request = IncomingBlockRetrievalRequest {
-                        req: BlockRetrievalRequest::V1(req),
-                        protocol,
-                        response_sender,
+                        req: BlockRetrievalRequest::V1(request.req),
+                        protocol: request.protocol,
+                        response_sender: request.response_sender,
                     };
                     tx.push(peer_id, incoming_block_retrieval_request)
                 } else {
-                    error!("Round manager not started (in IncomingRpcRequest::DeprecatedBlockRetrieval)");
+                    error!("Round manager not started");
                     Ok(())
                 }
             },

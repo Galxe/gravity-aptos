@@ -97,10 +97,7 @@ impl EncodingType {
     }
 }
 
-/// Reads bytes from files
-///
-/// TODO: verify that this isn't duplicated
-pub fn read_from_file(path: &Path) -> Result<Vec<u8>, EncodingError> {
+fn read_from_file(path: &Path) -> Result<Vec<u8>, EncodingError> {
     std::fs::read(path)
         .map_err(|e| EncodingError::UnableToReadFile(format!("{}", path.display()), e.to_string()))
 }

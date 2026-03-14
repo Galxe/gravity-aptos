@@ -104,7 +104,7 @@ impl JWKManager {
             .into_provider_vec()
             .into_iter()
             .filter_map(|provider| {
-                let OIDCProvider { name, config_url } = provider;
+                let OIDCProvider { name, config_url, onchain_nonce } = provider;
                 let maybe_issuer = String::from_utf8(name);
                 let maybe_config_url = String::from_utf8(config_url);
                 match (maybe_issuer, maybe_config_url) {
@@ -141,9 +141,9 @@ impl JWKManager {
                 qc_update = self.qc_update_rx.select_next_some() => {
                     self.process_quorum_certified_update(qc_update)
                 },
-                (issuer, jwks) = local_observation_rx.select_next_some() => {
+                (issuer, jwks, observed_nonce) = local_observation_rx.select_next_some() => {
                     let jwks = jwks.into_iter().map(JWKMoveStruct::from).collect();
-                    self.process_new_observation(issuer, jwks)
+                    self.process_new_observation(issuer, jwks, observed_nonce)
                 },
                 ack_tx = close_rx.select_next_some() => {
                     self.tear_down(ack_tx.ok()).await
@@ -177,15 +177,41 @@ impl JWKManager {
         &mut self,
         issuer: Issuer,
         jwks: Vec<JWKMoveStruct>,
+        observed_nonce: Option<u128>,
     ) -> Result<()> {
         debug!(
             epoch = self.epoch_state.epoch,
             issuer = String::from_utf8(issuer.clone()).ok(),
+            observed_nonce = ?observed_nonce,
             "Processing new observation."
         );
         let state = self.states_by_issuer.entry(issuer.clone()).or_default();
         state.observed = Some(jwks.clone());
-        if state.observed.as_ref() != state.on_chain.as_ref().map(ProviderJWKs::jwks) {
+        
+        // Determine if update is needed based on source type
+        let needs_update = match observed_nonce {
+            Some(nonce) => {
+                // For blockchain events: compare nonce (version) only
+                let on_chain_version = state.convert_oracle_nonce();
+                let should_update = nonce > on_chain_version;
+                if should_update {
+                    debug!(
+                        epoch = self.epoch_state.epoch,
+                        issuer = String::from_utf8(issuer.clone()).ok(),
+                        observed_nonce = nonce,
+                        on_chain_version = on_chain_version,
+                        "Blockchain source needs update (version comparison)"
+                    );
+                }
+                should_update
+            }
+            None => {
+                // For JWK sources (https://): compare full jwks content
+                state.observed.as_ref() != state.on_chain.as_ref().map(ProviderJWKs::jwks)
+            }
+        };
+        
+        if needs_update {
             let observed = ProviderJWKs {
                 issuer: issuer.clone(),
                 version: state.on_chain_version() + 1,
@@ -214,49 +240,118 @@ impl JWKManager {
         Ok(())
     }
 
+    /// Extract (sourceType, sourceId) from gravity:// issuer URI
+    /// Handles both formats:
+    /// - Full URI: "gravity://0/1/events?portal=..."
+    /// - Simplified: "gravity://0/1"
+    fn extract_source_key(issuer: &Issuer) -> Option<(u32, u64)> {
+        let issuer_str = String::from_utf8(issuer.clone()).ok()?;
+        if !issuer_str.starts_with("gravity://") {
+            return None;
+        }
+        let rest = &issuer_str[10..]; // skip "gravity://"
+        let parts: Vec<&str> = rest.split('/').collect();
+        if parts.len() >= 2 {
+            let source_type: u32 = parts[0].parse().ok()?;
+            // Handle case where source_id might have query params attached
+            let source_id: u64 = parts[1].split('?').next()?.parse().ok()?;
+            Some((source_type, source_id))
+        } else {
+            None
+        }
+    }
+
     /// Invoked on start, or on on-chain JWK updated event.
+    /// NOTE(Gravity): Modified for incremental update model - only updates entries
+    /// that are present in on_chain_state, does not delete missing entries.
     pub fn reset_with_on_chain_state(&mut self, on_chain_state: AllProvidersJWKs) -> Result<()> {
         info!(
             epoch = self.epoch_state.epoch,
             "reset_with_on_chain_state starting."
         );
-        let onchain_issuer_set: HashSet<Issuer> = on_chain_state
-            .entries
-            .iter()
-            .map(|entry| entry.issuer.clone())
-            .collect();
-        let local_issuer_set: HashSet<Issuer> = self.states_by_issuer.keys().cloned().collect();
 
-        for issuer in local_issuer_set.difference(&onchain_issuer_set) {
-            info!(
-                epoch = self.epoch_state.epoch,
-                op = "delete",
-                issuer = issuer.clone(),
-                "reset_with_on_chain_state"
-            );
-        }
+        // NOTE(Gravity): Commented out delete logic for incremental update model.
+        // The new design from gravity-reth sends only entries that had DataRecorded events,
+        // not the complete set. Missing entries means "no update", not "deleted".
+        // Keeping this commented for easier upstream merge comparison.
+        //
+        // let onchain_issuer_set: HashSet<Issuer> = on_chain_state
+        //     .entries
+        //     .iter()
+        //     .map(|entry| entry.issuer.clone())
+        //     .collect();
+        // let local_issuer_set: HashSet<Issuer> = self.states_by_issuer.keys().cloned().collect();
+        //
+        // for issuer in local_issuer_set.difference(&onchain_issuer_set) {
+        //     info!(
+        //         epoch = self.epoch_state.epoch,
+        //         op = "delete",
+        //         issuer = issuer.clone(),
+        //         "reset_with_on_chain_state"
+        //     );
+        // }
+        //
+        // self.states_by_issuer
+        //     .retain(|issuer, _| onchain_issuer_set.contains(issuer));
 
-        self.states_by_issuer
-            .retain(|issuer, _| onchain_issuer_set.contains(issuer));
         for on_chain_provider_jwks in on_chain_state.entries {
-            let issuer = on_chain_provider_jwks.issuer.clone();
+            let incoming_issuer = on_chain_provider_jwks.issuer.clone();
+
+            // Match by source key to handle issuer format differences
+            // Aptos uses: gravity://0/1/events?portal=...
+            // Reth uses:  gravity://0/1
+            let source_key = Self::extract_source_key(&incoming_issuer);
+            let matching_local_issuer = source_key.and_then(|key| {
+                self.states_by_issuer
+                    .keys()
+                    .find(|local| Self::extract_source_key(local) == Some(key))
+                    .cloned()
+            });
+
+            // Use local format if match found, otherwise use incoming
+            let target_issuer = match &matching_local_issuer {
+                Some(local) => local.clone(),
+                None => {
+                    // Log error if this is a gravity:// source with no local match
+                    if source_key.is_some() {
+                        error!(
+                            epoch = self.epoch_state.epoch,
+                            incoming_issuer = String::from_utf8_lossy(&incoming_issuer).to_string(),
+                            source_key = ?source_key,
+                            "No matching local issuer found for gravity:// source"
+                        );
+                    }
+                    incoming_issuer.clone()
+                }
+            };
+
             let locally_cached = self
                 .states_by_issuer
-                .get(&on_chain_provider_jwks.issuer)
+                .get(&target_issuer)
                 .and_then(|s| s.on_chain.as_ref());
-            if locally_cached == Some(&on_chain_provider_jwks) {
-                // The on-chain update did not touch this provider.
-                // The corresponding local state does not have to be reset.
+
+            // Compare by version for gravity:// sources, by content otherwise
+            let is_same = match (locally_cached, source_key) {
+                (Some(cached), Some(_)) => cached.version >= on_chain_provider_jwks.version,
+                (Some(cached), None) => cached == &on_chain_provider_jwks,
+                (None, _) => false,
+            };
+
+            if is_same {
                 info!(
                     epoch = self.epoch_state.epoch,
                     op = "no-op",
-                    issuer = issuer,
+                    issuer = String::from_utf8_lossy(&target_issuer).to_string(),
                     "reset_with_on_chain_state"
                 );
             } else {
+                // Update with local issuer format preserved
+                let mut updated_jwks = on_chain_provider_jwks.clone();
+                updated_jwks.issuer = target_issuer.clone();
+
                 let old_value = self.states_by_issuer.insert(
-                    on_chain_provider_jwks.issuer.clone(),
-                    PerProviderState::new(on_chain_provider_jwks),
+                    target_issuer.clone(),
+                    PerProviderState::new(updated_jwks),
                 );
                 let op = if old_value.is_some() {
                     "update"
@@ -266,7 +361,7 @@ impl JWKManager {
                 info!(
                     epoch = self.epoch_state.epoch,
                     op = op,
-                    issuer = issuer,
+                    issuer = String::from_utf8_lossy(&target_issuer).to_string(),
                     "reset_with_on_chain_state"
                 );
             }
@@ -461,6 +556,21 @@ impl PerProviderState {
         self.on_chain
             .as_ref()
             .map_or(0, |provider_jwks| provider_jwks.version)
+    }
+
+    pub fn convert_oracle_nonce(&self) -> u128 {
+        self.on_chain.as_ref().map_or(0, |provider_jwks| {
+            provider_jwks
+                .jwks
+                .first()
+                .and_then(|jwk| {
+                    let data = jwk.variant.data.as_slice();
+                    data.try_into()
+                        .ok()
+                        .map(|bytes: [u8; 16]| u128::from_be_bytes(bytes))
+                })
+                .unwrap_or(0)
+        })
     }
 }
 

@@ -1,6 +1,6 @@
 spec aptos_token::token_transfers {
     spec module {
-        pragma verify = false;
+        pragma verify = true;
         pragma aborts_if_is_strict;
     }
 

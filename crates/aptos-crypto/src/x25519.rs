@@ -175,18 +175,16 @@ impl traits::PrivateKey for PrivateKey {
 }
 
 impl traits::Uniform for PrivateKey {
-    fn generate<R>(rng: &mut R) -> Self
+    fn generate<R>(_rng: &mut R) -> Self
     where
-        R: RngCore + CryptoRng,
+        R: rand_core::CryptoRng + rand_core::RngCore,
     {
-        Self(x25519_dalek::StaticSecret::new(rng))
+        Self(x25519_dalek::StaticSecret::random())
     }
 }
 
 // TODO: should this be gated under test flag? (mimoo)
 impl traits::ValidCryptoMaterial for PrivateKey {
-    const AIP_80_PREFIX: &'static str = "x25519-priv-";
-
     fn to_bytes(&self) -> Vec<u8> {
         self.0.to_bytes().to_vec()
     }
@@ -242,8 +240,6 @@ impl traits::PublicKey for PublicKey {
 }
 
 impl traits::ValidCryptoMaterial for PublicKey {
-    const AIP_80_PREFIX: &'static str = "x25519-pub-";
-
     fn to_bytes(&self) -> Vec<u8> {
         self.0.to_vec()
     }

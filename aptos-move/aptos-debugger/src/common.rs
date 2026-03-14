@@ -27,7 +27,7 @@ pub struct Opts {
     #[clap(flatten)]
     pub(crate) target: Target,
 
-    #[clap(long, num_args = 0.., default_values_t = [1])]
+    #[clap(long, num_args = 0..)]
     pub(crate) concurrency_level: Vec<usize>,
 }
 

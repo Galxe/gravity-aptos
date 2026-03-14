@@ -118,7 +118,7 @@ pub struct LogEntry {
     data: BTreeMap<Key, serde_json::Value>,
     message: Option<String>,
     peer_id: Option<&'static str>,
-    chain_id: Option<u8>,
+    chain_id: Option<u64>,
 }
 
 // implement custom serializer for LogEntry since we want to promote the `metadata.level` field into a top-level `level` field
@@ -206,7 +206,7 @@ impl LogEntry {
         let namespace = NAMESPACE.as_deref();
 
         let peer_id: Option<&str>;
-        let chain_id: Option<u8>;
+        let chain_id: Option<u64>;
 
         #[cfg(node_identity)]
         {
@@ -287,7 +287,7 @@ impl LogEntry {
         self.peer_id
     }
 
-    pub fn chain_id(&self) -> Option<u8> {
+    pub fn chain_id(&self) -> Option<u64> {
         self.chain_id
     }
 }

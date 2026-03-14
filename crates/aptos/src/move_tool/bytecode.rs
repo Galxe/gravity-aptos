@@ -12,7 +12,10 @@ use crate::{
     update::get_revela_path,
 };
 use anyhow::Context;
-use aptos_types::vm::module_metadata::prelude::*;
+use aptos_framework::{
+    get_compilation_metadata_from_compiled_module, get_compilation_metadata_from_compiled_script,
+    get_metadata_from_compiled_module, get_metadata_from_compiled_script, RuntimeModuleMetadataV1,
+};
 use async_trait::async_trait;
 use clap::{Args, Parser};
 use itertools::Itertools;

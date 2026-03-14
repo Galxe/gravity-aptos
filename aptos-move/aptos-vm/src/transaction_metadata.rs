@@ -66,6 +66,7 @@ impl TransactionMetadata {
                 // Deprecated. Return an empty vec because we cannot do anything
                 // else here, only `unreachable!` otherwise.
                 TransactionPayload::ModuleBundle(_) => vec![],
+                TransactionPayload::GTxnBytes(_) => todo!(),
             },
             script_size: match txn.payload() {
                 TransactionPayload::Script(s) => (s.code().len() as u64).into(),
@@ -164,7 +165,7 @@ impl TransactionMetadata {
             self.fee_payer.unwrap_or(self.sender),
             self.max_gas_amount.into(),
             self.gas_unit_price.into(),
-            self.chain_id.id(),
+            self.chain_id.id() as u8,
             self.entry_function_payload()
                 .map(|entry_func| entry_func.as_entry_function_payload()),
             self.multisig_payload()

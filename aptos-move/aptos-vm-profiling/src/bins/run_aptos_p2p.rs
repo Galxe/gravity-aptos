@@ -3,13 +3,16 @@
 
 use anyhow::Result;
 use aptos_block_executor::txn_provider::default::DefaultTxnProvider;
-use aptos_transaction_simulation::{AccountData, InMemoryStateStore, SimulationStateStore};
+use aptos_language_e2e_tests::{account::AccountData, data_store::FakeDataStore};
 use aptos_types::{
     transaction::{signature_verified_transaction::SignatureVerifiedTransaction, Transaction},
     write_set::WriteSet,
 };
 use aptos_vm::{aptos_vm::AptosVMBlockExecutor, VMBlockExecutor};
-use std::io::{self, Read};
+use std::{
+    collections::HashMap,
+    io::{self, Read},
+};
 
 fn main() -> Result<()> {
     let mut blob = vec![];
@@ -18,13 +21,13 @@ fn main() -> Result<()> {
 
     println!("Start running");
 
-    let state_store = InMemoryStateStore::new();
-    state_store.apply_write_set(&genesis_write_set)?;
+    let mut state_store = FakeDataStore::new(HashMap::new());
+    state_store.add_write_set(&genesis_write_set);
 
     let alice = AccountData::new(100_000_000, 0);
     let bob = AccountData::new(100_000_000, 0);
-    state_store.add_account_data(&alice)?;
-    state_store.add_account_data(&bob)?;
+    state_store.add_account_data(&alice);
+    state_store.add_account_data(&bob);
 
     const NUM_TXNS: u64 = 100;
 

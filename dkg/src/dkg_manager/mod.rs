@@ -29,7 +29,7 @@ use rand::{prelude::StdRng, thread_rng, SeedableRng};
 use std::{sync::Arc, time::Duration};
 
 #[derive(Clone, Debug)]
-enum InnerState {
+pub enum InnerState {
     NotStarted,
     InProgress {
         start_time: Duration,
@@ -66,7 +66,7 @@ pub struct DKGManager<DKG: DKGTrait> {
 
     // Control states.
     stopped: bool,
-    state: InnerState,
+    pub state: InnerState,
 }
 
 impl InnerState {
@@ -78,7 +78,6 @@ impl InnerState {
         }
     }
 
-    #[cfg(test)]
     pub fn my_node_cloned(&self) -> DKGTranscript {
         match self {
             InnerState::NotStarted => panic!("my_node unavailable"),
@@ -306,6 +305,7 @@ impl<DKG: DKGTrait> DKGManager<DKG> {
             epoch = self.epoch_state.epoch,
             my_addr = self.my_addr,
             secs_since_dkg_start = secs_since_dkg_start,
+            randomness_config = dkg_session_metadata.randomness_config,
             "[DKG] Deal transcript started.",
         );
         let public_params = DKG::new_public_params(dkg_session_metadata);
@@ -371,7 +371,7 @@ impl<DKG: DKGTrait> DKGManager<DKG> {
     }
 
     /// On a locally aggregated transcript, put it into the validator txn pool and update inner states.
-    async fn process_aggregated_transcript(&mut self, agg_trx: DKG::Transcript) -> Result<()> {
+    pub async fn process_aggregated_transcript(&mut self, agg_trx: DKG::Transcript) -> Result<()> {
         info!(
             epoch = self.epoch_state.epoch,
             my_addr = self.my_addr,
@@ -420,10 +420,9 @@ impl<DKG: DKGTrait> DKGManager<DKG> {
         Ok(())
     }
 
-    async fn process_dkg_start_event(&mut self, event: DKGStartEvent) -> Result<()> {
+    pub async fn process_dkg_start_event(&mut self, event: DKGStartEvent) -> Result<()> {
         info!(
-            epoch = self.epoch_state.epoch,
-            my_addr = self.my_addr,
+            event = event,
             "[DKG] Processing DKGStart event."
         );
         fail_point!("dkg::process_dkg_start_event");
@@ -447,7 +446,7 @@ impl<DKG: DKGTrait> DKGManager<DKG> {
     }
 
     /// Process an RPC request from DKG peers.
-    async fn process_peer_rpc_msg(&mut self, req: IncomingRpcRequest) -> Result<()> {
+    pub async fn process_peer_rpc_msg(&mut self, req: IncomingRpcRequest) -> Result<()> {
         let IncomingRpcRequest {
             msg,
             mut response_sender,

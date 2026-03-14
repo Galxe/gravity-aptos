@@ -191,17 +191,14 @@ module aptos_framework::genesis {
     /// This creates an funds an account if it doesn't exist.
     /// If it exists, it just returns the signer.
     fun create_account(aptos_framework: &signer, account_address: address, balance: u64): signer {
-        let account = if (account::exists_at(account_address)) {
+        if (account::exists_at(account_address)) {
             create_signer(account_address)
         } else {
-            account::create_account(account_address)
-        };
-
-        if (coin::balance<AptosCoin>(account_address) == 0) {
+            let account = account::create_account(account_address);
             coin::register<AptosCoin>(&account);
             aptos_coin::mint(aptos_framework, account_address, balance);
-        };
-        account
+            account
+        }
     }
 
     fun create_employee_validators(

@@ -262,7 +262,15 @@ impl ValidatorVerifier {
         match self.get_public_key(&author) {
             Some(public_key) => public_key
                 .verify_struct_signature(message, signature)
-                .map_err(|_| VerifyError::InvalidMultiSignature),
+                .map_err(|e| {
+                    tracing::error!(
+                        "author {} verify with public key {:?} error {:?}",
+                        author,
+                        public_key,
+                        e
+                    );
+                    VerifyError::InvalidMultiSignature
+                }),
             None => Err(VerifyError::UnknownAuthor),
         }
     }

@@ -80,6 +80,7 @@ impl<P: OnChainConfigProvider> ValidatorSetStream<P> {
                 .get(&self.network_context.peer_id())
                 .map(|peer| &peer.keys),
         );
+        info!("extract_updates with peer set {:?}", peer_set);
 
         inc_by_with_context(
             &DISCOVERY_COUNTS,
@@ -111,6 +112,7 @@ pub(crate) fn extract_validator_set_updates(
     node_set: ValidatorSet,
 ) -> PeerSet {
     let is_validator = network_context.network_id().is_validator_network();
+    info!("extract_validator_set_updates with node_set {:?}", node_set);
 
     // Decode addresses while ignoring bad addresses
     node_set
@@ -258,6 +260,7 @@ mod tests {
                 fullnode_encoded_addresses,
                 0,
             ),
+            Vec::new(),
         );
         let validator_set = ValidatorSet::new(vec![validator]);
         let mut configs = HashMap::new();

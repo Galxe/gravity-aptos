@@ -30,7 +30,7 @@ mod execution_config;
 mod gas_schedule;
 mod jwk_consensus_config;
 pub mod randomness_api_v0_config;
-mod randomness_config;
+pub(crate) mod randomness_config;
 mod timed_features;
 mod timestamp;
 mod transaction_fee;
@@ -46,7 +46,7 @@ pub use self::{
     consensus_config::{
         AnchorElectionMode, ConsensusAlgorithmConfig, ConsensusConfigV1, DagConsensusConfigV1,
         LeaderReputationType, OnChainConsensusConfig, ProposerAndVoterConfig, ProposerElectionType,
-        ValidatorTxnConfig, DEFAULT_ENABLED_WINDOW_SIZE, DEFAULT_WINDOW_SIZE,
+        ValidatorTxnConfig, DEFAULT_WINDOW_SIZE,
     },
     execution_config::{
         BlockGasLimitType, ExecutionConfigV1, ExecutionConfigV2, ExecutionConfigV4,
@@ -237,7 +237,7 @@ pub fn struct_tag_for_config(config_id: ConfigID) -> StructTag {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ConfigurationResource {
-    epoch: u64,
+    pub epoch: u64,
     /// Unix epoch timestamp (in microseconds) of the last reconfiguration time.
     last_reconfiguration_time: u64,
     events: EventHandle,

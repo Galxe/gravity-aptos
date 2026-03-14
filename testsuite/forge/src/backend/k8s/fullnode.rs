@@ -15,6 +15,7 @@ use aptos_config::{
     },
     network_id::NetworkId,
 };
+use aptos_logger::info;
 use aptos_sdk::types::PeerId;
 use aptos_short_hex_str::AsShortHexStr;
 use k8s_openapi::{
@@ -29,7 +30,6 @@ use k8s_openapi::{
     apimachinery::pkg::apis::meta::v1::LabelSelector,
 };
 use kube::api::{ObjectMeta, PostParams};
-use log::info;
 use std::{
     collections::BTreeMap,
     env,

@@ -16,6 +16,24 @@ use proptest::{collection::vec, prelude::*};
 proptest! {
     #![proptest_config(ProptestConfig{cases: 5000, verbose: 1, ..ProptestConfig::default()})]
 
+    /// Test in all combinations the semi-lattice properties of the join and subsumes.
+    /// Together with testing basic membership, this gives extensive coverage of the operators.
+    #[test]
+    fn access_specifier_semi_lattice_properties(
+        access in access_instance_strategy(),
+        s1 in access_specifier_strategy(4, 3),
+        s2 in access_specifier_strategy(4, 3)
+    ) {
+        if s1.enables(&access) && s2.enables(&access) {
+            assert!(s1.join(&s2).enables(&access))
+        } else {
+            assert!(!s1.join(&s2).enables(&access))
+        }
+        if s1.subsumes(&s2).unwrap_or_default() && s2.enables(&access) {
+            assert!(s1.enables(&access))
+        }
+    }
+
     /// Test membership, by constructing all combinations of specifiers derivable from a given
     /// instance.
     #[test]
@@ -29,6 +47,8 @@ proptest! {
         let excl = AccessSpecifier::Constraint(vec![], clauses.clone());
         assert!(incl.enables(&access1));
         assert!(incl.enables(&access2));
+        assert!(incl.join(&incl).enables(&access1));
+        assert!(incl.join(&incl).enables(&access2));
         assert!(!incl_excl.enables(&access1));
         assert!(!incl_excl.enables(&access2));
         assert!(!excl.enables(&access1));
@@ -50,8 +70,6 @@ fn access_instance_strategy() -> impl Strategy<Value = AccessInstance> {
             address,
         })
 }
-
-#[allow(unused)] // currently unused, but maybe helpful for future tests
 fn access_specifier_strategy(
     incl_size: usize,
     excl_size: usize,
@@ -66,7 +84,6 @@ fn access_specifier_strategy(
     ]
 }
 
-#[allow(unused)] // currently unused, but maybe helpful for future tests
 fn access_specifier_clause_strategy() -> impl Strategy<Value = AccessSpecifierClause> {
     (
         any::<AccessKind>(),
@@ -80,7 +97,6 @@ fn access_specifier_clause_strategy() -> impl Strategy<Value = AccessSpecifierCl
         })
 }
 
-#[allow(unused)] // currently unused, but maybe helpful for future tests
 fn resource_specifier_strategy() -> impl Strategy<Value = ResourceSpecifier> {
     prop_oneof![
         Just(ResourceSpecifier::Any),
@@ -92,7 +108,6 @@ fn resource_specifier_strategy() -> impl Strategy<Value = ResourceSpecifier> {
     ]
 }
 
-#[allow(unused)] // currently unused, but maybe helpful for future tests
 fn address_specifier_strategy() -> impl Strategy<Value = AddressSpecifier> {
     prop_oneof![
         Just(AddressSpecifier::Any),

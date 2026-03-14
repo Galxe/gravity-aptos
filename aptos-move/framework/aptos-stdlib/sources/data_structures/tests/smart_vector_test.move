@@ -8,8 +8,8 @@ module aptos_std::smart_vector_test {
         let v = V::new<u64>();
         let i = 1u64;
         while (i <= k) {
-            v.push_back(i);
-            i += 1;
+            V::push_back(&mut v, i);
+            i = i + 1;
         };
         v
     }
@@ -18,9 +18,9 @@ module aptos_std::smart_vector_test {
     fun smart_vector_for_each_test() {
         let v = make_smart_vector(100);
         let i = 0;
-        v.for_each(|x| {
+        V::for_each(v, |x| {
             assert!(i + 1 == x, 0);
-            i += 1;
+            i = i + 1;
         });
     }
 
@@ -28,9 +28,9 @@ module aptos_std::smart_vector_test {
     fun smart_vector_for_each_reverse_test() {
         let v = make_smart_vector(100);
         let i = 0;
-        v.for_each_reverse(|x| {
+        V::for_each_reverse(v, |x| {
             assert!(i == 100 - x, 0);
-            i += 1;
+            i = i + 1;
         });
     }
 
@@ -38,21 +38,21 @@ module aptos_std::smart_vector_test {
     fun smart_vector_for_each_ref_test() {
         let v = make_smart_vector(100);
         let s = 0;
-        v.for_each_ref(|x| {
-            s += *x;
+        V::for_each_ref(&v, |x| {
+            s = s + *x;
         });
         assert!(s == 5050, 0);
-        v.destroy();
+        V::destroy(v);
     }
 
     #[test]
     fun smart_vector_for_each_mut_test() {
         let v = make_smart_vector(100);
-        v.for_each_mut(|x| {
+        V::for_each_mut(&mut v, |x| {
             let x: &mut u64 = x;
-            *x += 1;
+            *x = *x + 1;
         });
-        assert!(v.fold(0, |s, x| {
+        assert!(V::fold(v, 0, |s, x| {
             s + x
         }) == 5150, 0);
     }
@@ -60,21 +60,21 @@ module aptos_std::smart_vector_test {
     #[test]
     fun smart_vector_enumerate_ref_test() {
         let v = make_smart_vector(100);
-        v.enumerate_ref(|i, x| {
+        V::enumerate_ref(&v, |i, x| {
             assert!(i + 1 == *x, 0);
         });
-        v.destroy();
+        V::destroy(v);
     }
 
     #[test]
     fun smart_vector_enumerate_mut_test() {
         let v = make_smart_vector(100);
-        v.enumerate_mut(|i, x| {
+        V::enumerate_mut(&mut v, |i, x| {
             let x: &mut u64 = x;
             assert!(i + 1 == *x, 0);
-            *x += 1;
+            *x = *x + 1;
         });
-        assert!(v.fold(0, |s, x| {
+        assert!(V::fold(v, 0, |s, x| {
             s + x
         }) == 5150, 0);
     }
@@ -83,9 +83,9 @@ module aptos_std::smart_vector_test {
     fun smart_vector_fold_test() {
         let v = make_smart_vector(100);
         let i = 0;
-        let sum = v.fold(0, |s, x| {
+        let sum = V::fold(v, 0, |s, x| {
             assert!(i + 1 == x, 0);
-            i += 1;
+            i = i + 1;
             s + x
         });
         assert!(sum == 5050, 0);
@@ -95,9 +95,9 @@ module aptos_std::smart_vector_test {
     fun smart_vector_for_foldr_test() {
         let v = make_smart_vector(100);
         let i = 0;
-        let sum = v.foldr(0, |x, s| {
+        let sum = V::foldr(v, 0, |x, s| {
             assert!(i == 100 - x, i);
-            i += 1;
+            i = i + 1;
             s + x
         });
         assert!(sum == 5050, 0);
@@ -106,8 +106,8 @@ module aptos_std::smart_vector_test {
     #[test]
     fun smart_vector_map_test() {
         let v = make_smart_vector(100);
-        let mapped_v = v.map(|x| { x * 2 });
-        let sum = mapped_v.fold(0, |s, x| {
+        let mapped_v = V::map(v, |x| { x * 2 });
+        let sum = V::fold(mapped_v, 0, |s, x| {
             s + x
         });
         assert!(sum == 10100, 0);
@@ -116,11 +116,11 @@ module aptos_std::smart_vector_test {
     #[test]
     fun smart_vector_map_ref_test() {
         let v = make_smart_vector(100);
-        let mapped_v = v.map_ref(|x|  *x * 2);
-        assert!(v.fold(0, |s, x| {
+        let mapped_v = V::map_ref(&v, |x|  *x * 2);
+        assert!(V::fold(v, 0, |s, x| {
             s + x
         }) == 5050, 0);
-        assert!(mapped_v.fold(0, |s, x| {
+        assert!(V::fold(mapped_v, 0, |s, x| {
             s + x
         }) == 10100, 0);
     }
@@ -128,11 +128,11 @@ module aptos_std::smart_vector_test {
     #[test]
     fun smart_vector_filter_test() {
         let v = make_smart_vector(100);
-        let filtered_v = v.filter(|x| *x % 10 == 0);
-        filtered_v.enumerate_ref(|i, x| {
+        let filtered_v = V::filter(v, |x| *x % 10 == 0);
+        V::enumerate_ref(&filtered_v, |i, x| {
             assert!((i + 1) * 10 == *x, 0);
         });
-        filtered_v.destroy();
+        V::destroy(filtered_v);
     }
 
     #[test]
@@ -140,10 +140,10 @@ module aptos_std::smart_vector_test {
         let v1 = make_smart_vector(100);
         let v2 = make_smart_vector(100);
         let s = 0;
-        v1.zip(v2, |e1, e2| {
+        V::zip(v1, v2, |e1, e2| {
             let e1: u64 = e1;
             let e2: u64 = e2;
-            s += e1 / e2
+            s = s + e1 / e2
         });
         assert!(s == 100, 0);
     }
@@ -155,10 +155,10 @@ module aptos_std::smart_vector_test {
         let v1 = make_smart_vector(100);
         let v2 = make_smart_vector(99);
         let s = 0;
-        v1.zip(v2, |e1, e2| {
+        V::zip(v1, v2, |e1, e2| {
             let e1: u64 = e1;
             let e2: u64 = e2;
-            s += e1 / e2
+            s = s + e1 / e2
         });
     }
 
@@ -167,10 +167,10 @@ module aptos_std::smart_vector_test {
         let v1 = make_smart_vector(100);
         let v2 = make_smart_vector(100);
         let s = 0;
-        v1.zip_ref(&v2, |e1, e2| s += *e1 / *e2);
+        V::zip_ref(&v1, &v2, |e1, e2| s = s + *e1 / *e2);
         assert!(s == 100, 0);
-        v1.destroy();
-        v2.destroy();
+        V::destroy(v1);
+        V::destroy(v2);
     }
 
     #[test]
@@ -180,42 +180,42 @@ module aptos_std::smart_vector_test {
         let v1 = make_smart_vector(100);
         let v2 = make_smart_vector(99);
         let s = 0;
-        v1.zip_ref(&v2, |e1, e2| s += *e1 / *e2);
-        v1.destroy();
-        v2.destroy();
+        V::zip_ref(&v1, &v2, |e1, e2| s = s + *e1 / *e2);
+        V::destroy(v1);
+        V::destroy(v2);
     }
 
     #[test]
     fun smart_vector_test_zip_mut() {
         let v1 = make_smart_vector(100);
         let v2 = make_smart_vector(100);
-        v1.zip_mut(&mut v2, |e1, e2| {
+        V::zip_mut(&mut v1, &mut v2, |e1, e2| {
             let e1: &mut u64 = e1;
             let e2: &mut u64 = e2;
-            *e1 += 1;
-            *e2 -= 1;
+            *e1 = *e1 + 1;
+            *e2 = *e2 - 1;
         });
-        v1.zip_ref(&v2, |e1, e2| assert!(*e1 == *e2 + 2, 0));
-        v1.destroy();
-        v2.destroy();
+        V::zip_ref(&v1, &v2, |e1, e2| assert!(*e1 == *e2 + 2, 0));
+        V::destroy(v1);
+        V::destroy(v2);
     }
 
     #[test]
     fun smart_vector_test_zip_map() {
         let v1 = make_smart_vector(100);
         let v2 = make_smart_vector(100);
-        let result = v1.zip_map(v2, |e1, e2| e1 / e2);
-        result.for_each(|v| assert!(v == 1, 0));
+        let result = V::zip_map(v1, v2, |e1, e2| e1 / e2);
+        V::for_each(result, |v| assert!(v == 1, 0));
     }
 
     #[test]
     fun smart_vector_test_zip_map_ref() {
         let v1 = make_smart_vector(100);
         let v2 = make_smart_vector(100);
-        let result = v1.zip_map_ref(&v2, |e1, e2| *e1 / *e2);
-        result.for_each(|v| assert!(v == 1, 0));
-        v1.destroy();
-        v2.destroy();
+        let result = V::zip_map_ref(&v1, &v2, |e1, e2| *e1 / *e2);
+        V::for_each(result, |v| assert!(v == 1, 0));
+        V::destroy(v1);
+        V::destroy(v2);
     }
 
     #[test]
@@ -225,9 +225,9 @@ module aptos_std::smart_vector_test {
         let v1 = make_smart_vector(100);
         let v2 = make_smart_vector(99);
         let s = 0;
-        v1.zip_mut(&mut v2, |e1, e2| s += *e1 / *e2);
-        v1.destroy();
-        v2.destroy();
+        V::zip_mut(&mut v1, &mut v2, |e1, e2| s = s + *e1 / *e2);
+        V::destroy(v1);
+        V::destroy(v2);
     }
 
     #[test]
@@ -236,7 +236,7 @@ module aptos_std::smart_vector_test {
     fun smart_vector_test_zip_map_mismatching_lengths_should_fail() {
         let v1 = make_smart_vector(100);
         let v2 = make_smart_vector(99);
-        v1.zip_map(v2, |e1, e2| e1 / e2).destroy();
+        V::destroy(V::zip_map(v1, v2, |e1, e2| e1 / e2));
     }
 
     #[test]
@@ -245,8 +245,8 @@ module aptos_std::smart_vector_test {
     fun smart_vector_test_zip_map_ref_mismatching_lengths_should_fail() {
         let v1 = make_smart_vector(100);
         let v2 = make_smart_vector(99);
-        v1.zip_map_ref(&v2, |e1, e2| *e1 / *e2).destroy();
-        v1.destroy();
-        v2.destroy();
+        V::destroy(V::zip_map_ref(&v1, &v2, |e1, e2| *e1 / *e2));
+        V::destroy(v1);
+        V::destroy(v2);
     }
 }

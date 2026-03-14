@@ -118,10 +118,9 @@ module aptos_framework::aptos_account {
         if (!account::exists_at(to)) {
             create_account(to);
             spec {
-                // TODO(fa_migration)
-                // assert coin::spec_is_account_registered<AptosCoin>(to);
-                // assume aptos_std::type_info::type_of<CoinType>() == aptos_std::type_info::type_of<AptosCoin>() ==>
-                //     coin::spec_is_account_registered<CoinType>(to);
+                assert coin::spec_is_account_registered<AptosCoin>(to);
+                assume aptos_std::type_info::type_of<CoinType>() == aptos_std::type_info::type_of<AptosCoin>() ==>
+                    coin::spec_is_account_registered<CoinType>(to);
             };
         };
         if (!coin::is_account_registered<CoinType>(to)) {

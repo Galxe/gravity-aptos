@@ -6,8 +6,8 @@ use self::{
     rsa::{INSECURE_TEST_RSA_JWK, RSA_JWK, SECURE_TEST_RSA_JWK},
 };
 use crate::{
-    aggregate_signature::AggregateSignature, move_utils::as_move_value::AsMoveValue,
-    on_chain_config::OnChainConfig,
+    aggregate_signature::AggregateSignature, idl::jwk_converter::construct_observed_jwks,
+    move_utils::as_move_value::AsMoveValue, on_chain_config::OnChainConfig,
 };
 use anyhow::{bail, Context};
 use aptos_crypto_derive::{BCSCryptoHash, CryptoHasher};
@@ -56,6 +56,7 @@ pub fn dummy_issuer() -> Issuer {
 pub struct OIDCProvider {
     pub name: Issuer,
     pub config_url: Vec<u8>,
+    pub onchain_nonce: Option<u64>,
 }
 
 impl OIDCProvider {
@@ -63,6 +64,7 @@ impl OIDCProvider {
         Self {
             name: name.as_bytes().to_vec(),
             config_url: config_url.as_bytes().to_vec(),
+            onchain_nonce: None,
         }
     }
 }
@@ -72,6 +74,7 @@ impl From<crate::on_chain_config::OIDCProvider> for OIDCProvider {
         OIDCProvider {
             name: value.name.as_bytes().to_vec(),
             config_url: value.config_url.as_bytes().to_vec(),
+            onchain_nonce: None,
         }
     }
 }
@@ -80,10 +83,10 @@ impl TryFrom<OIDCProvider> for crate::on_chain_config::OIDCProvider {
     type Error = anyhow::Error;
 
     fn try_from(value: OIDCProvider) -> Result<Self, Self::Error> {
-        let OIDCProvider { name, config_url } = value;
+        let OIDCProvider { name, config_url, onchain_nonce } = value;
         let name = String::from_utf8(name)?;
         let config_url = String::from_utf8(config_url)?;
-        Ok(crate::on_chain_config::OIDCProvider { name, config_url })
+        Ok(crate::on_chain_config::OIDCProvider { name, config_url, onchain_nonce })
     }
 }
 
@@ -227,6 +230,10 @@ impl ObservedJWKs {
 impl OnChainConfig for ObservedJWKs {
     const MODULE_IDENTIFIER: &'static str = "jwks";
     const TYPE_IDENTIFIER: &'static str = "ObservedJWKs";
+
+    fn deserialize_into_config(bytes: &[u8]) -> anyhow::Result<Self> {
+        Ok(construct_observed_jwks(bytes)?)
+    }
 }
 
 /// Reflection of Move type `0x1::jwks::PatchedJWKs`.

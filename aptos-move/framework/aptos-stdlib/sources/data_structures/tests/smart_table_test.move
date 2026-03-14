@@ -5,8 +5,10 @@ module aptos_std::smart_table_test {
     #[test_only]
     public fun make_smart_table(): SmartTable<u64, u64> {
         let table = smart_table::new_with_config<u64, u64>(0, 50, 10);
-        for (i in 0..100) {
-            table.add(i, i);
+        let i = 0u64;
+        while (i < 100) {
+            smart_table::add(&mut table, i, i);
+            i = i + 1;
         };
         table
     }
@@ -15,42 +17,42 @@ module aptos_std::smart_table_test {
     public fun smart_table_for_each_ref_test() {
         let t = make_smart_table();
         let s = 0;
-        t.for_each_ref(|x, y| {
-            s += *x + *y;
+        smart_table::for_each_ref(&t, |x, y| {
+            s = s + *x + *y;
         });
         assert!(s == 9900, 0);
-        t.destroy();
+        smart_table::destroy(t);
     }
 
     #[test]
     public fun smart_table_for_each_mut_test() {
         let t = make_smart_table();
-        t.for_each_mut(|_key, val| {
+        smart_table::for_each_mut(&mut t, |_key, val| {
             let val: &mut u64 = val;
-            *val += 1
+            *val = *val + 1
         });
-        t.for_each_ref(|key, val| {
+        smart_table::for_each_ref(&t, |key, val| {
             assert!(*key + 1 == *val, *key);
         });
-        t.destroy();
+        smart_table::destroy(t);
     }
 
     #[test]
     public fun smart_table_test_map_ref_test() {
         let t = make_smart_table();
-        let r = t.map_ref(|val| *val + 1);
-        r.for_each_ref(|key, val| {
+        let r = smart_table::map_ref(&t, |val| *val + 1);
+        smart_table::for_each_ref(&r, |key, val| {
             assert!(*key + 1 == *val, *key);
         });
-        t.destroy();
-        r.destroy();
+        smart_table::destroy(t);
+        smart_table::destroy(r);
     }
 
     #[test]
     public fun smart_table_any_test() {
         let t = make_smart_table();
-        let r = t.any(|_k, v| *v >= 99);
+        let r = smart_table::any(&t, |_k, v| *v >= 99);
         assert!(r, 0);
-        t.destroy();
+        smart_table::destroy(t);
     }
 }

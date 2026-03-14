@@ -1,4 +1,4 @@
-//# publish
+//# publish --print-bytecode
 module 0x42::test {
 
     fun if_then(c: bool, t: u64, f: u64): u64 {
@@ -20,4 +20,4 @@ module 0x42::test {
 
 }
 
-//# run 0x42::test::run
+//# run 0x42::test::run --verbose

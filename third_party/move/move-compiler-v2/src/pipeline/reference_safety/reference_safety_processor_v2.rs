@@ -121,9 +121,9 @@ use abstract_domain_derive::AbstractDomain;
 use codespan_reporting::diagnostic::Severity;
 use itertools::Itertools;
 use log::{debug, log_enabled, Level};
-use move_binary_format::file_format::CodeOffset;
+use move_binary_format::{file_format, file_format::CodeOffset};
 use move_model::{
-    ast::{AccessSpecifierKind, TempIndex},
+    ast::TempIndex,
     model::{FieldId, FunId, FunctionEnv, GlobalEnv, Loc, Parameter, QualifiedInstId, StructId},
     symbol::Symbol,
     ty::{ReferenceKind, Type},
@@ -1712,9 +1712,7 @@ impl<'env, 'state> LifetimeAnalysisStep<'env, 'state> {
                     .matches(self.global_env(), &fun_id.inst, global)
                     // For mut global borrows, no access is allowed at all. For
                     // non-mut, write access is not allowed.
-                    // TODO: needs to be updated to use acquired resources instead
-                    //   access specifiers (see v3 code).
-                    && (is_mut || spec.kind.subsumes(&AccessSpecifierKind::Writes))
+                    && (is_mut || spec.kind.subsumes(&file_format::AccessKind::Writes))
                 {
                     self.error_with_hints(
                         self.cur_loc(),

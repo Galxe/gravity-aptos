@@ -139,10 +139,8 @@ pub enum FeatureFlag {
     AccountAbstraction,
     VMBinaryFormatV8,
     BulletproofsBatchNatives,
-    DerivableAccountAbstraction,
+    DomainAccountAbstraction,
     EnableFunctionValues,
-    NewAccountsDefaultToFaStore,
-    DefaultAccountResource,
 }
 
 fn generate_features_blob(writer: &CodeWriter, data: &[u64]) {
@@ -312,7 +310,7 @@ impl From<FeatureFlag> for AptosFeatureFlag {
                 AptosFeatureFlag::DELEGATION_POOL_ALLOWLISTING
             },
             FeatureFlag::ModuleEventMigration => AptosFeatureFlag::MODULE_EVENT_MIGRATION,
-            FeatureFlag::RejectUnstableBytecode => AptosFeatureFlag::_REJECT_UNSTABLE_BYTECODE,
+            FeatureFlag::RejectUnstableBytecode => AptosFeatureFlag::REJECT_UNSTABLE_BYTECODE,
             FeatureFlag::TransactionContextExtension => {
                 AptosFeatureFlag::TRANSACTION_CONTEXT_EXTENSION
             },
@@ -339,23 +337,23 @@ impl From<FeatureFlag> for AptosFeatureFlag {
             FeatureFlag::DefaultToConcurrentFungibleBalance => {
                 AptosFeatureFlag::DEFAULT_TO_CONCURRENT_FUNGIBLE_BALANCE
             },
-            FeatureFlag::LimitVMTypeSize => AptosFeatureFlag::_LIMIT_VM_TYPE_SIZE,
+            FeatureFlag::LimitVMTypeSize => AptosFeatureFlag::LIMIT_VM_TYPE_SIZE,
             FeatureFlag::AbortIfMultisigPayloadMismatch => {
                 AptosFeatureFlag::ABORT_IF_MULTISIG_PAYLOAD_MISMATCH
             },
-            FeatureFlag::DisallowUserNative => AptosFeatureFlag::_DISALLOW_USER_NATIVES,
+            FeatureFlag::DisallowUserNative => AptosFeatureFlag::DISALLOW_USER_NATIVES,
             FeatureFlag::AllowSerializedScriptArgs => {
                 AptosFeatureFlag::ALLOW_SERIALIZED_SCRIPT_ARGS
             },
             FeatureFlag::UseCompatibilityCheckerV2 => {
-                AptosFeatureFlag::_USE_COMPATIBILITY_CHECKER_V2
+                AptosFeatureFlag::USE_COMPATIBILITY_CHECKER_V2
             },
             FeatureFlag::EnableEnumTypes => AptosFeatureFlag::ENABLE_ENUM_TYPES,
             FeatureFlag::EnableResourceAccessControl => {
                 AptosFeatureFlag::ENABLE_RESOURCE_ACCESS_CONTROL
             },
             FeatureFlag::RejectUnstableBytecodeForScript => {
-                AptosFeatureFlag::_REJECT_UNSTABLE_BYTECODE_FOR_SCRIPT
+                AptosFeatureFlag::REJECT_UNSTABLE_BYTECODE_FOR_SCRIPT
             },
             FeatureFlag::FederatedKeyless => AptosFeatureFlag::FEDERATED_KEYLESS,
             FeatureFlag::TransactionSimulationEnhancement => {
@@ -373,14 +371,8 @@ impl From<FeatureFlag> for AptosFeatureFlag {
             FeatureFlag::PermissionedSigner => AptosFeatureFlag::PERMISSIONED_SIGNER,
             FeatureFlag::AccountAbstraction => AptosFeatureFlag::ACCOUNT_ABSTRACTION,
             FeatureFlag::BulletproofsBatchNatives => AptosFeatureFlag::BULLETPROOFS_BATCH_NATIVES,
-            FeatureFlag::DerivableAccountAbstraction => {
-                AptosFeatureFlag::DERIVABLE_ACCOUNT_ABSTRACTION
-            },
+            FeatureFlag::DomainAccountAbstraction => AptosFeatureFlag::DOMAIN_ACCOUNT_ABSTRACTION,
             FeatureFlag::EnableFunctionValues => AptosFeatureFlag::ENABLE_FUNCTION_VALUES,
-            FeatureFlag::NewAccountsDefaultToFaStore => {
-                AptosFeatureFlag::NEW_ACCOUNTS_DEFAULT_TO_FA_STORE
-            },
-            FeatureFlag::DefaultAccountResource => AptosFeatureFlag::DEFAULT_ACCOUNT_RESOURCE,
         }
     }
 }
@@ -477,7 +469,7 @@ impl From<AptosFeatureFlag> for FeatureFlag {
                 FeatureFlag::DelegationPoolAllowlisting
             },
             AptosFeatureFlag::MODULE_EVENT_MIGRATION => FeatureFlag::ModuleEventMigration,
-            AptosFeatureFlag::_REJECT_UNSTABLE_BYTECODE => FeatureFlag::RejectUnstableBytecode,
+            AptosFeatureFlag::REJECT_UNSTABLE_BYTECODE => FeatureFlag::RejectUnstableBytecode,
             AptosFeatureFlag::TRANSACTION_CONTEXT_EXTENSION => {
                 FeatureFlag::TransactionContextExtension
             },
@@ -504,22 +496,22 @@ impl From<AptosFeatureFlag> for FeatureFlag {
             AptosFeatureFlag::DEFAULT_TO_CONCURRENT_FUNGIBLE_BALANCE => {
                 FeatureFlag::DefaultToConcurrentFungibleBalance
             },
-            AptosFeatureFlag::_LIMIT_VM_TYPE_SIZE => FeatureFlag::LimitVMTypeSize,
+            AptosFeatureFlag::LIMIT_VM_TYPE_SIZE => FeatureFlag::LimitVMTypeSize,
             AptosFeatureFlag::ABORT_IF_MULTISIG_PAYLOAD_MISMATCH => {
                 FeatureFlag::AbortIfMultisigPayloadMismatch
             },
-            AptosFeatureFlag::_DISALLOW_USER_NATIVES => FeatureFlag::DisallowUserNative,
+            AptosFeatureFlag::DISALLOW_USER_NATIVES => FeatureFlag::DisallowUserNative,
             AptosFeatureFlag::ALLOW_SERIALIZED_SCRIPT_ARGS => {
                 FeatureFlag::AllowSerializedScriptArgs
             },
-            AptosFeatureFlag::_USE_COMPATIBILITY_CHECKER_V2 => {
+            AptosFeatureFlag::USE_COMPATIBILITY_CHECKER_V2 => {
                 FeatureFlag::UseCompatibilityCheckerV2
             },
             AptosFeatureFlag::ENABLE_ENUM_TYPES => FeatureFlag::EnableEnumTypes,
             AptosFeatureFlag::ENABLE_RESOURCE_ACCESS_CONTROL => {
                 FeatureFlag::EnableResourceAccessControl
             },
-            AptosFeatureFlag::_REJECT_UNSTABLE_BYTECODE_FOR_SCRIPT => {
+            AptosFeatureFlag::REJECT_UNSTABLE_BYTECODE_FOR_SCRIPT => {
                 FeatureFlag::RejectUnstableBytecodeForScript
             },
             AptosFeatureFlag::FEDERATED_KEYLESS => FeatureFlag::FederatedKeyless,
@@ -538,14 +530,8 @@ impl From<AptosFeatureFlag> for FeatureFlag {
             AptosFeatureFlag::PERMISSIONED_SIGNER => FeatureFlag::PermissionedSigner,
             AptosFeatureFlag::ACCOUNT_ABSTRACTION => FeatureFlag::AccountAbstraction,
             AptosFeatureFlag::BULLETPROOFS_BATCH_NATIVES => FeatureFlag::BulletproofsBatchNatives,
-            AptosFeatureFlag::DERIVABLE_ACCOUNT_ABSTRACTION => {
-                FeatureFlag::DerivableAccountAbstraction
-            },
+            AptosFeatureFlag::DOMAIN_ACCOUNT_ABSTRACTION => FeatureFlag::DomainAccountAbstraction,
             AptosFeatureFlag::ENABLE_FUNCTION_VALUES => FeatureFlag::EnableFunctionValues,
-            AptosFeatureFlag::NEW_ACCOUNTS_DEFAULT_TO_FA_STORE => {
-                FeatureFlag::NewAccountsDefaultToFaStore
-            },
-            AptosFeatureFlag::DEFAULT_ACCOUNT_RESOURCE => FeatureFlag::DefaultAccountResource,
         }
     }
 }

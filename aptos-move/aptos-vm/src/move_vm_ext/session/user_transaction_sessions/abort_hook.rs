@@ -20,16 +20,16 @@ use derive_more::{Deref, DerefMut};
 use move_core_types::vm_status::VMStatus;
 
 #[derive(Deref, DerefMut)]
-pub struct AbortHookSession<'r> {
+pub struct AbortHookSession<'r, 'l> {
     #[deref]
     #[deref_mut]
-    session: RespawnedSession<'r>,
+    session: RespawnedSession<'r, 'l>,
 }
 
-impl<'r> AbortHookSession<'r> {
+impl<'r, 'l> AbortHookSession<'r, 'l> {
     pub fn new(
-        vm: &AptosVM,
-        txn_meta: &TransactionMetadata,
+        vm: &'l AptosVM,
+        txn_meta: &'l TransactionMetadata,
         resolver: &'r impl AptosMoveResolver,
         prologue_session_change_set: SystemSessionChangeSet,
     ) -> Self {

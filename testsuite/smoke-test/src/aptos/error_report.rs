@@ -68,7 +68,7 @@ async fn test_error_report() {
         &local_account,
         &mut info,
         |t| t.sender(AccountAddress::random()),
-        "INVALID_AUTH_KEY",
+        "SENDING_ACCOUNT_DOES_NOT_EXIST",
     )
     .await;
     submit_and_check_err(

@@ -3,10 +3,11 @@
 
 use crate::counters::OBSERVATION_SECONDS;
 use anyhow::{anyhow, Result};
+use api_types::{on_chain_config::jwks, relayer::{PollResult, GLOBAL_RELAYER}};
 use aptos_channels::aptos_channel;
 use aptos_jwk_utils::{fetch_jwks_from_jwks_uri, fetch_jwks_uri_from_openid_config};
-use aptos_logger::{debug, info};
-use aptos_types::jwks::{jwk::JWK, Issuer};
+use aptos_logger::{debug, error, info};
+use aptos_types::jwks::{jwk::JWK, unsupported::UnsupportedJWK, Issuer};
 use futures::{FutureExt, StreamExt};
 use move_core_types::account_address::AccountAddress;
 use std::time::{Duration, Instant};
@@ -25,7 +26,7 @@ impl JWKObserver {
         issuer: String,
         config_url: String,
         fetch_interval: Duration,
-        observation_tx: aptos_channel::Sender<(), (Issuer, Vec<JWK>)>,
+        observation_tx: aptos_channel::Sender<(), (Issuer, Vec<JWK>, Option<u128>)>,
     ) -> Self {
         let (close_tx, close_rx) = oneshot::channel();
         let join_handle = tokio::spawn(Self::start(
@@ -53,7 +54,7 @@ impl JWKObserver {
         my_addr: AccountAddress,
         issuer: String,
         open_id_config_url: String,
-        observation_tx: aptos_channel::Sender<(), (Issuer, Vec<JWK>)>,
+        observation_tx: aptos_channel::Sender<(), (Issuer, Vec<JWK>, Option<u128>)>,
         close_rx: oneshot::Receiver<()>,
     ) {
         let mut interval = tokio::time::interval(fetch_interval);
@@ -67,17 +68,39 @@ impl JWKObserver {
             None
         };
 
+        if issuer.starts_with("gravity://") {
+            let relayer = match GLOBAL_RELAYER.get() {
+                Some(r) => r,
+                None => {
+                    error!("GLOBAL_RELAYER not initialized, cannot add issuer uri={}", open_id_config_url);
+                    return;
+                }
+            };
+            let r = relayer
+                .add_uri(issuer.as_str(), open_id_config_url.as_str())
+                .await;
+            if r.is_err() {
+                error!(
+                    "Failed to add issuer to relayer with uri={:?}, error={:?}",
+                    open_id_config_url,
+                    r.unwrap_err(),
+                );
+                return;
+            }
+        }
+
         loop {
             tokio::select! {
                 _ = interval.tick().fuse() => {
                     let timer = Instant::now();
-                    let result = fetch_jwks(open_id_config_url.as_str(), my_addr).await;
+                    let result = fetch_jwks(open_id_config_url.as_str(), my_addr, issuer.as_str()).await;
                     debug!(issuer = issuer, "observe_result={:?}", result);
                     let secs = timer.elapsed().as_secs_f64();
-                    if let Ok(mut jwks) = result {
+                    if let Ok((mut jwks, nonce)) = result {
                         OBSERVATION_SECONDS.with_label_values(&[issuer.as_str(), "ok"]).observe(secs);
-                        jwks.sort();
-                        let _ = observation_tx.push((), (issuer.as_bytes().to_vec(), jwks));
+                        // In gravity oracle, we shouldn't do sort since the returned jwks are already sorted.
+                        // jwks.sort();
+                        let _ = observation_tx.push((), (issuer.as_bytes().to_vec(), jwks, nonce));
                     } else {
                         OBSERVATION_SECONDS.with_label_values(&[issuer.as_str(), "err"]).observe(secs);
                     }
@@ -99,12 +122,39 @@ impl JWKObserver {
     }
 }
 
-async fn fetch_jwks(open_id_config_url: &str, my_addr: Option<AccountAddress>) -> Result<Vec<JWK>> {
+async fn fetch_jwks_with_relayer(issuer: &str) -> Result<(Vec<JWK>, Option<u128>)> {
+    let relayer = GLOBAL_RELAYER.get().expect("Relayer not initialized");
+    let poll_result = relayer
+        .get_last_state(issuer)
+        .await
+        .map_err(|e| anyhow!("fetch_jwks failed with relayer request: {:?}", e))?;
+    let PollResult { jwk_structs, max_block_number, nonce, updated } = poll_result;
+    debug!(issuer = issuer, max_block_number = max_block_number, nonce = ?nonce, updated = updated, "fetch_jwks_with_relayer");
+    let jwks = jwk_structs
+        .into_iter()
+        .map(|jwk| {
+            JWK::Unsupported(UnsupportedJWK {
+                id: jwk.type_name.into_bytes(),
+                payload: jwk.data,
+            })
+        })
+        .collect();
+    Ok((jwks, nonce))
+}
+
+async fn fetch_jwks(
+    open_id_config_url: &str,
+    my_addr: Option<AccountAddress>,
+    issuer: &str,
+) -> Result<(Vec<JWK>, Option<u128>)> {
+    if issuer.starts_with("gravity://") {
+        return fetch_jwks_with_relayer(issuer).await;
+    }
     let jwks_uri = fetch_jwks_uri_from_openid_config(open_id_config_url)
         .await
         .map_err(|e| anyhow!("fetch_jwks failed with open-id config request: {e}"))?;
     let jwks = fetch_jwks_from_jwks_uri(my_addr, jwks_uri.as_str())
         .await
         .map_err(|e| anyhow!("fetch_jwks failed with jwks uri request: {e}"))?;
-    Ok(jwks)
+    Ok((jwks, None))  // Traditional JWK sources don't have nonce
 }

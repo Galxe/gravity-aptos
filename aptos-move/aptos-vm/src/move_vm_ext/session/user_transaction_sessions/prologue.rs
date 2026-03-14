@@ -22,16 +22,16 @@ use derive_more::{Deref, DerefMut};
 use move_core_types::vm_status::VMStatus;
 
 #[derive(Deref, DerefMut)]
-pub struct PrologueSession<'r> {
+pub struct PrologueSession<'r, 'l> {
     #[deref]
     #[deref_mut]
-    session: RespawnedSession<'r>,
+    session: RespawnedSession<'r, 'l>,
 }
 
-impl<'r> PrologueSession<'r> {
-    pub fn new(
-        vm: &AptosVM,
-        txn_meta: &TransactionMetadata,
+impl<'r, 'l> PrologueSession<'r, 'l> {
+    pub fn new<'m>(
+        vm: &'l AptosVM,
+        txn_meta: &'m TransactionMetadata,
         resolver: &'r impl AptosMoveResolver,
     ) -> Self {
         let session_id = SessionId::prologue_meta(txn_meta);
@@ -48,15 +48,16 @@ impl<'r> PrologueSession<'r> {
 
     pub fn into_user_session(
         self,
-        vm: &AptosVM,
-        txn_meta: &TransactionMetadata,
+        vm: &'l AptosVM,
+        txn_meta: &'l TransactionMetadata,
         resolver: &'r impl AptosMoveResolver,
+        gas_feature_version: u64,
         change_set_configs: &ChangeSetConfigs,
         module_storage: &impl AptosModuleStorage,
-    ) -> Result<(SystemSessionChangeSet, UserSession<'r>), VMStatus> {
+    ) -> Result<(SystemSessionChangeSet, UserSession<'r, 'l>), VMStatus> {
         let Self { session } = self;
 
-        if vm.gas_feature_version() >= 1 {
+        if gas_feature_version >= 1 {
             // Create a new session so that the data cache is flushed.
             // This is to ensure we correctly charge for loading certain resources, even if they
             // have been previously cached in the prologue.

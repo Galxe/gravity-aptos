@@ -27,16 +27,16 @@ use move_core_types::{
 use move_vm_runtime::{module_traversal::TraversalContext, ModuleStorage, StagingModuleStorage};
 
 #[derive(Deref, DerefMut)]
-pub struct UserSession<'r> {
+pub struct UserSession<'r, 'l> {
     #[deref]
     #[deref_mut]
-    pub session: RespawnedSession<'r>,
+    pub session: RespawnedSession<'r, 'l>,
 }
 
-impl<'r> UserSession<'r> {
+impl<'r, 'l> UserSession<'r, 'l> {
     pub fn new(
-        vm: &AptosVM,
-        txn_meta: &TransactionMetadata,
+        vm: &'l AptosVM,
+        txn_meta: &'l TransactionMetadata,
         resolver: &'r impl AptosMoveResolver,
         prologue_change_set: VMChangeSet,
     ) -> Self {
@@ -53,7 +53,7 @@ impl<'r> UserSession<'r> {
         Self { session }
     }
 
-    pub fn legacy_inherit_prologue_session(prologue_session: RespawnedSession<'r>) -> Self {
+    pub fn legacy_inherit_prologue_session(prologue_session: RespawnedSession<'r, 'l>) -> Self {
         Self {
             session: prologue_session,
         }

@@ -86,6 +86,18 @@ pub struct NodeConfig {
     pub validator_network: Option<NetworkConfig>,
     #[serde(default)]
     pub indexer_db_config: InternalIndexerDBConfig,
+    #[serde(default)]
+    pub enable_pre_commit: bool,
+    #[serde(default)]
+    pub log_file_path: PathBuf,
+    #[serde(default)]
+    pub https_server_address: String,
+    #[serde(default)]
+    pub https_cert_pem_path: PathBuf,
+    #[serde(default)]
+    pub https_key_pem_path: PathBuf,
+    #[serde(default)]
+    pub node_config_path: PathBuf,
 }
 
 impl NodeConfig {

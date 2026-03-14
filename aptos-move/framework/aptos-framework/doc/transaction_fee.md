@@ -3,6 +3,7 @@
 
 # Module `0x1::transaction_fee`
 
+This module provides an interface to burn or collect and redistribute transaction fees.
 
 
 -  [Resource `AptosCoinCapabilities`](#0x1_transaction_fee_AptosCoinCapabilities)

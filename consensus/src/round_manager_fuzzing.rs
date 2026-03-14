@@ -42,7 +42,7 @@ use aptos_types::{
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
     on_chain_config::{
         OnChainConsensusConfig, OnChainJWKConsensusConfig, OnChainRandomnessConfig, ValidatorSet,
-        ValidatorTxnConfig, DEFAULT_ENABLED_WINDOW_SIZE,
+        ValidatorTxnConfig,
     },
     validator_info::ValidatorInfo,
     validator_signer::ValidatorSigner,
@@ -92,7 +92,6 @@ fn build_empty_store(
         10,
         Arc::from(DirectMempoolPayloadManager::new()),
         false,
-        DEFAULT_ENABLED_WINDOW_SIZE,
         Arc::new(Mutex::new(PendingBlocks::new())),
         None,
     ))

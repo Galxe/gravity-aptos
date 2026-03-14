@@ -19,7 +19,7 @@ use aptos_executor_types::{
     state_compute_result::StateComputeResult, BlockExecutorTrait, ExecutorError, ExecutorResult,
 };
 use aptos_experimental_runtimes::thread_manager::optimal_min_len;
-use aptos_logger::{debug, warn};
+use aptos_logger::{debug, warn, error};
 use aptos_types::{
     block_executor::{config::BlockExecutorConfigFromOnchain, partitioner::ExecutableBlock},
     block_metadata_ext::BlockMetadataExt,
@@ -446,5 +446,26 @@ fn log_failed_to_send_result<T>(
                 false,
             );
         }
+    }
+}
+
+fn process_failed_to_send_result(
+    value: Result<PipelineExecutionResult, ExecutorError>,
+    block_id: HashValue,
+    from_stage: &str,
+) {
+    error!(
+        block_id = block_id,
+        is_err = value.is_err(),
+        "Failed to send back execution result from {from_stage} stage",
+    );
+    if let Err(e) = value {
+        // receive channel discarding error, log for debugging.
+        log_executor_error_occurred(
+            e,
+            &counters::PIPELINE_DISCARDED_EXECUTOR_ERROR_COUNT,
+            block_id,
+            false,
+        );
     }
 }

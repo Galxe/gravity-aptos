@@ -9,7 +9,7 @@
 use codespan_reporting::diagnostic::Severity;
 use move_model::{
     ast::{ExpData, TempIndex, VisitorPosition},
-    model::{FunctionEnv, GlobalEnv, Loc, NodeId, Parameter},
+    model::{GlobalEnv, Loc, NodeId, Parameter},
     symbol::Symbol,
     well_known,
 };
@@ -22,15 +22,15 @@ pub fn check_for_unused_vars_and_params(env: &mut GlobalEnv) {
             for func in module.get_functions() {
                 if let Some(def) = func.get_def() {
                     let params = &func.get_parameters();
-                    find_unused_params_and_vars(&func, params, def)
+                    find_unused_params_and_vars(env, params, def)
                 }
             }
         }
     }
 }
 
-fn find_unused_params_and_vars(func: &FunctionEnv, params: &[Parameter], exp: &ExpData) {
-    let mut visitor = SymbolVisitor::new(func, params);
+fn find_unused_params_and_vars(env: &GlobalEnv, params: &[Parameter], exp: &ExpData) {
+    let mut visitor = SymbolVisitor::new(env, params);
     exp.visit_positions(&mut |position, exp_data| visitor.entry(position, exp_data));
     visitor.check_parameter_usage();
 }
@@ -111,17 +111,11 @@ struct SymbolVisitor<'env, 'params> {
 }
 
 impl<'env, 'params> SymbolVisitor<'env, 'params> {
-    fn new(func: &'env FunctionEnv, params: &'params [Parameter]) -> SymbolVisitor<'env, 'params> {
-        let mut seen_uses = ScopedVisibleSet::new();
-        for spec in func.get_access_specifiers().unwrap_or_default() {
-            for var in spec.used_vars() {
-                seen_uses.insert(var)
-            }
-        }
+    fn new(env: &'env GlobalEnv, params: &'params [Parameter]) -> SymbolVisitor<'env, 'params> {
         SymbolVisitor {
-            env: func.module_env.env,
+            env,
             params,
-            seen_uses,
+            seen_uses: ScopedVisibleSet::new(),
         }
     }
 

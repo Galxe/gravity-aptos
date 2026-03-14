@@ -5,7 +5,8 @@
 
 //! Build a vector of module test plans for a Move program compiled with V2.
 //!
-//! This reimplements the legacy move compiler functionality.
+//! This reimplements move-compiler/src/unit_test/plan_builder.rs in terms
+//! of data structures available in V2's `GlobalEnv` structure after AST processing.
 //!
 //! Each module containing any labeled `#[test]` functions gets an item in the output list, which
 //! includes info about each '#[test]' function: name, arguments to provide, and expected failure or
@@ -13,11 +14,11 @@
 
 use crate::options::Options;
 use codespan_reporting::diagnostic::Severity;
-use legacy_move_compiler::{
+use move_command_line_common::{address::NumericalAddress, parser::NumberFormat};
+use move_compiler::{
     shared::known_attributes::{AttributeKind, TestingAttribute},
     unit_test::{ExpectedFailure, ExpectedMoveError, ModuleTestPlan, TestCase},
 };
-use move_command_line_common::{address::NumericalAddress, parser::NumberFormat};
 use move_core_types::{
     identifier::Identifier, language_storage::ModuleId, value::MoveValue, vm_status::StatusCode,
 };

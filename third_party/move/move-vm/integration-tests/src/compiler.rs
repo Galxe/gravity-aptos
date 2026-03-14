@@ -4,11 +4,11 @@
 
 use anyhow::{bail, Result};
 use codespan_reporting::term::termcolor::Buffer;
-use legacy_move_compiler::{
+use move_binary_format::file_format::{CompiledModule, CompiledScript};
+use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
     shared::{known_attributes::KnownAttribute, NumericalAddress},
 };
-use move_binary_format::file_format::{CompiledModule, CompiledScript};
 use move_model::metadata::LanguageVersion;
 use std::{
     collections::BTreeMap,

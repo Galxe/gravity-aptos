@@ -11,10 +11,8 @@ use aptos_crypto::{
     ValidCryptoMaterialStringExt,
 };
 use aptos_gas_schedule::{InitialGasSchedule, TransactionGasParameters};
+use aptos_language_e2e_tests::data_store::{FakeDataStore, GENESIS_CHANGE_SET_HEAD};
 use aptos_resource_viewer::{AnnotatedMoveValue, AptosValueAnnotator};
-use aptos_transaction_simulation::{
-    InMemoryStateStore, SimulationStateStore, GENESIS_CHANGE_SET_HEAD,
-};
 use aptos_types::{
     account_config::{aptos_test_root_address, AccountResource, CoinStoreResource},
     block_metadata::BlockMetadata,
@@ -54,10 +52,10 @@ use move_transactional_test_runner::{
     tasks::{InitCommand, SyntaxChoice, TaskInput},
     vm_test_harness::{PrecompiledFilesModules, TestRunConfig},
 };
-use move_vm_runtime::move_vm::SerializedReturnValues;
+use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     convert::TryFrom,
     fmt,
     path::Path,
@@ -78,7 +76,7 @@ use tempfile::NamedTempFile;
 ///   - It executes transactions through AptosVM, instead of MoveVM directly
 struct AptosTestAdapter<'a> {
     compiled_state: CompiledState<'a>,
-    storage: InMemoryStateStore,
+    storage: FakeDataStore,
     default_syntax: SyntaxChoice,
     private_key_mapping: BTreeMap<String, Ed25519PrivateKey>,
     run_config: TestRunConfig,
@@ -378,25 +376,18 @@ impl<'a> AptosTestAdapter<'a> {
 
     /// Obtain a Rust representation of the account resource from storage, which is used to derive
     /// a few default transaction parameters.
-    fn fetch_account_resource(&self, signer_addr: &AccountAddress) -> AccountResource {
-        self.storage
-            .get_state_value_bytes(
-                &StateKey::resource_typed::<AccountResource>(signer_addr).unwrap(),
-            )
+    fn fetch_account_resource(&self, signer_addr: &AccountAddress) -> Result<AccountResource> {
+        let account_blob = self
+            .storage
+            .get_state_value_bytes(&StateKey::resource_typed::<AccountResource>(signer_addr)?)
             .unwrap()
-            .map(|bytes| bcs::from_bytes(&bytes).unwrap())
-            .unwrap_or(AccountResource::new(
-                0,
-                signer_addr.to_vec(),
-                aptos_types::event::EventHandle::new(
-                    aptos_types::event::EventKey::new(0, *signer_addr),
-                    0,
-                ),
-                aptos_types::event::EventHandle::new(
-                    aptos_types::event::EventKey::new(1, *signer_addr),
-                    0,
-                ),
-            ))
+            .ok_or_else(|| {
+                format_err!(
+                "Failed to fetch account resource under address {}. Has the account been created?",
+                signer_addr
+            )
+            })?;
+        Ok(bcs::from_bytes(&account_blob).unwrap())
     }
 
     /// Obtain the AptosCoin amount under address `signer_addr`
@@ -450,7 +441,7 @@ impl<'a> AptosTestAdapter<'a> {
         gas_unit_price: Option<u64>,
         max_gas_amount: Option<u64>,
     ) -> Result<TransactionParameters> {
-        let account_resource = self.fetch_account_resource(signer_addr);
+        let account_resource = self.fetch_account_resource(signer_addr)?;
 
         let sequence_number = sequence_number.unwrap_or_else(|| account_resource.sequence_number());
         let max_number_of_gas_units =
@@ -493,7 +484,7 @@ impl<'a> AptosTestAdapter<'a> {
         let output = outputs.pop().unwrap();
         match output.status() {
             TransactionStatus::Keep(kept_vm_status) => {
-                self.storage.apply_write_set(output.write_set())?;
+                self.storage.add_write_set(output.write_set());
                 match kept_vm_status {
                     ExecutionStatus::Success => Ok(output),
                     _ => {
@@ -598,10 +589,8 @@ impl<'a> MoveTestAdapter<'a> for AptosTestAdapter<'a> {
         }
 
         // Genesis modules
-        let storage = InMemoryStateStore::new();
-        storage
-            .apply_write_set(GENESIS_CHANGE_SET_HEAD.write_set())
-            .unwrap();
+        let mut storage = FakeDataStore::new(HashMap::new());
+        storage.add_write_set(GENESIS_CHANGE_SET_HEAD.write_set());
 
         // Builtin private key mapping
         let mut private_key_mapping = BTreeMap::new();
@@ -774,7 +763,7 @@ impl<'a> MoveTestAdapter<'a> for AptosTestAdapter<'a> {
         //  through native context. Implement in a cleaner way, and simply run the bytecode verifier
         //  for now.
         verify_module(&module)?;
-        self.storage.add_module_blob(&module_id, module_blob)?;
+        self.storage.add_module(&module_id, module_blob);
         Ok((None, module))
     }
 

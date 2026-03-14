@@ -25,6 +25,12 @@ module 0x42::test {
         true
     }
 
+    fun ok5(): bool acquires R {
+        borrow_global_mut<R>(@0x1).value = false;
+        true
+    }
+
+
     fun fail1(): bool reads Other {
         !borrow_global<R>(@0x1).value
     }
@@ -61,6 +67,8 @@ module 0x42::test {
 //# run --verbose --signers 0x2 -- 0x42::test::ok3
 
 //# run --verbose -- 0x42::test::ok4
+
+//# run --verbose -- 0x42::test::ok5
 
 //# run --verbose -- 0x42::test::fail1
 

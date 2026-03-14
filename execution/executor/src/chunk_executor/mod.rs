@@ -269,7 +269,7 @@ impl<V: VMBlockExecutor> ChunkExecutorInner<V> {
                 Err(anyhow::anyhow!("Injected error in commit_chunk"))
             });
             self.db.writer.save_transactions(
-                output.as_chunk_to_commit(),
+                Some(output.as_chunk_to_commit()),
                 chunk.ledger_info_opt.as_ref(),
                 false, // sync_commit
             )?;

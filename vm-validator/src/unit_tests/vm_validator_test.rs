@@ -209,6 +209,7 @@ fn test_get_account_sequence_number() {
     let state_view = vm_validator
         .vm_validator
         .get_next_vm()
+        .unwrap()
         .lock()
         .unwrap()
         .db_reader
@@ -317,7 +318,10 @@ fn test_validate_account_doesnt_exist() {
         None,
     );
     let ret = vm_validator.validate_transaction(transaction).unwrap();
-    assert_eq!(ret.status().unwrap(), StatusCode::INVALID_AUTH_KEY);
+    assert_eq!(
+        ret.status().unwrap(),
+        StatusCode::SENDING_ACCOUNT_DOES_NOT_EXIST
+    );
 }
 
 #[test]

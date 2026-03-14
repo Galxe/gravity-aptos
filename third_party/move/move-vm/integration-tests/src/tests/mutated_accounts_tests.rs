@@ -41,7 +41,8 @@ fn mutated_accounts() {
     let mut storage = InMemoryStorage::new();
     storage.add_module_bytes(m.self_addr(), m.self_name(), blob.into());
 
-    let mut sess = MoveVM::new_session(&storage);
+    let vm = MoveVM::new();
+    let mut sess = vm.new_session(&storage);
 
     let publish = Identifier::new("publish").unwrap();
     let flip = Identifier::new("flip").unwrap();
@@ -95,7 +96,7 @@ fn mutated_accounts() {
     let changes = sess.finish(&module_storage).unwrap();
     storage.apply(changes).unwrap();
 
-    let mut sess = MoveVM::new_session(&storage);
+    let mut sess = vm.new_session(&storage);
     sess.execute_function_bypass_visibility(
         &m.self_id(),
         &get,

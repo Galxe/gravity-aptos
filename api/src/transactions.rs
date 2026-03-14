@@ -1010,6 +1010,7 @@ impl TransactionsApi {
     ) -> BasicResultWith404<Vec<Transaction>> {
         // Verify the account exists
         let account = Account::new(self.context.clone(), address, None, None, None)?;
+        account.get_account_resource()?;
 
         let latest_ledger_info = account.latest_ledger_info;
         // TODO: Return more specific errors from within this function.
@@ -1105,6 +1106,8 @@ impl TransactionsApi {
                             ledger_info,
                         ))
                     },
+
+                    TransactionPayload::GTxnBytes(_) => todo!(),
                 }
                 // TODO: Verify script args?
 
@@ -1422,6 +1425,7 @@ impl TransactionsApi {
                     "Multisig::unknown".to_string()
                 }
             },
+            TransactionPayload::GTxnBytes(_) => todo!(),
         };
         self.context
             .simulate_txn_stats()

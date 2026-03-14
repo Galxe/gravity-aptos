@@ -47,7 +47,10 @@ use codespan_reporting::{
     term::termcolor::{ColorChoice, StandardStream, WriteColor},
 };
 pub use experiments::{Experiment, EXPERIMENTS};
-use legacy_move_compiler::{
+use log::{debug, info, log_enabled, Level};
+use move_binary_format::errors::VMError;
+use move_bytecode_source_map::source_map::SourceMap;
+use move_compiler::{
     command_line,
     compiled_unit::{
         AnnotatedCompiledModule, AnnotatedCompiledScript, AnnotatedCompiledUnit, CompiledUnit,
@@ -56,9 +59,6 @@ use legacy_move_compiler::{
     diagnostics::FilesSourceText,
     shared::known_attributes::KnownAttribute,
 };
-use log::{debug, info, log_enabled, Level};
-use move_binary_format::errors::VMError;
-use move_bytecode_source_map::source_map::SourceMap;
 use move_core_types::vm_status::StatusType;
 use move_disassembler::disassembler::Disassembler;
 use move_model::{

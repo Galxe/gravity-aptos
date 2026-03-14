@@ -11,10 +11,8 @@ use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
 #[derive(Debug, EnumCountMacro, EnumIter, Clone, Copy, Eq, PartialEq)]
 pub enum TimedFeatureFlag {
     DisableInvariantViolationCheckInSwapLoc,
-    // Was always enabled.
-    _LimitTypeTagSize,
-    // Enabled on mainnet, cannot be disabled.
-    _ModuleComplexityCheck,
+    LimitTypeTagSize,
+    ModuleComplexityCheck,
     EntryCompatibility,
     ChargeBytesForPrints,
 
@@ -47,8 +45,8 @@ impl TimedFeatureOverride {
 
         Some(match self {
             Replay => match flag {
-                _LimitTypeTagSize => true,
-                _ModuleComplexityCheck => true,
+                LimitTypeTagSize => true,
+                ModuleComplexityCheck => true,
                 // Add overrides for replay here.
                 _ => return None,
             },
@@ -74,14 +72,14 @@ impl TimedFeatureFlag {
             (DisableInvariantViolationCheckInSwapLoc, MAINNET) => BEGINNING_OF_TIME,
 
             // Note: These have been enabled since the start due to a bug.
-            (_LimitTypeTagSize, TESTNET) => BEGINNING_OF_TIME,
-            (_LimitTypeTagSize, MAINNET) => BEGINNING_OF_TIME,
+            (LimitTypeTagSize, TESTNET) => BEGINNING_OF_TIME,
+            (LimitTypeTagSize, MAINNET) => BEGINNING_OF_TIME,
 
-            (_ModuleComplexityCheck, TESTNET) => Los_Angeles
+            (ModuleComplexityCheck, TESTNET) => Los_Angeles
                 .with_ymd_and_hms(2024, 6, 25, 16, 0, 0)
                 .unwrap()
                 .with_timezone(&Utc),
-            (_ModuleComplexityCheck, MAINNET) => Los_Angeles
+            (ModuleComplexityCheck, MAINNET) => Los_Angeles
                 .with_ymd_and_hms(2024, 7, 3, 12, 0, 0)
                 .unwrap()
                 .with_timezone(&Utc),
@@ -230,13 +228,13 @@ mod test {
         );
 
         assert_eq!(
-            TimedFeatureFlag::_ModuleComplexityCheck
+            TimedFeatureFlag::ModuleComplexityCheck
                 .activation_time_on(&TESTNET)
                 .timestamp_micros(),
             1_719_356_400_000_000
         );
         assert_eq!(
-            TimedFeatureFlag::_ModuleComplexityCheck
+            TimedFeatureFlag::ModuleComplexityCheck
                 .activation_time_on(&MAINNET)
                 .timestamp_micros(),
             1_720_033_200_000_000
@@ -275,11 +273,11 @@ mod test {
             "DisableInvariantViolationCheckInSwapLoc should always be enabled"
         );
         assert!(
-            testnet_jan_1_2024.is_enabled(_LimitTypeTagSize),
+            testnet_jan_1_2024.is_enabled(LimitTypeTagSize),
             "LimitTypeTagSize should always be enabled"
         );
         assert!(
-            !testnet_jan_1_2024.is_enabled(_ModuleComplexityCheck),
+            !testnet_jan_1_2024.is_enabled(ModuleComplexityCheck),
             "ModuleComplexityCheck should be disabled on Jan 1, 2024 on testnet"
         );
         assert!(
@@ -293,11 +291,11 @@ mod test {
             "DisableInvariantViolationCheckInSwapLoc should always be enabled"
         );
         assert!(
-            testnet_nov_15_2024.is_enabled(_LimitTypeTagSize),
+            testnet_nov_15_2024.is_enabled(LimitTypeTagSize),
             "LimitTypeTagSize should always be enabled"
         );
         assert!(
-            testnet_nov_15_2024.is_enabled(_ModuleComplexityCheck),
+            testnet_nov_15_2024.is_enabled(ModuleComplexityCheck),
             "ModuleComplexityCheck should be enabled on Nov 15, 2024 on testnet"
         );
         assert!(
@@ -311,11 +309,11 @@ mod test {
             "DisableInvariantViolationCheckInSwapLoc should always be enabled"
         );
         assert!(
-            mainnet_jan_1_2024.is_enabled(_LimitTypeTagSize),
+            mainnet_jan_1_2024.is_enabled(LimitTypeTagSize),
             "LimitTypeTagSize should always be enabled"
         );
         assert!(
-            !mainnet_jan_1_2024.is_enabled(_ModuleComplexityCheck),
+            !mainnet_jan_1_2024.is_enabled(ModuleComplexityCheck),
             "ModuleComplexityCheck should be disabled on Jan 1, 2024 on mainnet"
         );
         assert!(
@@ -329,11 +327,11 @@ mod test {
             "DisableInvariantViolationCheckInSwapLoc should always be enabled"
         );
         assert!(
-            mainnet_nov_15_2024.is_enabled(_LimitTypeTagSize),
+            mainnet_nov_15_2024.is_enabled(LimitTypeTagSize),
             "LimitTypeTagSize should always be enabled"
         );
         assert!(
-            mainnet_nov_15_2024.is_enabled(_ModuleComplexityCheck),
+            mainnet_nov_15_2024.is_enabled(ModuleComplexityCheck),
             "ModuleComplexityCheck should be enabled on Nov 15, 2024 on mainnet"
         );
         assert!(
