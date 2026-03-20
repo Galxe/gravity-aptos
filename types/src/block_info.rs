@@ -22,6 +22,20 @@ pub const GENESIS_ROUND: Round = 0;
 pub const GENESIS_VERSION: Version = 0;
 pub const GENESIS_TIMESTAMP_USECS: u64 = 0;
 
+/// Additional block-level information associated with an epoch transition.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+pub struct EpochBlockInfo {
+    /// The block identifier (hash) of the epoch-starting block.
+    pub block_id: HashValue,
+    /// The block number (height) of the epoch-starting block.
+    pub block_number: u64,
+    /// The round at which this epoch started.
+    pub epoch_start_round: Round,
+    /// The timestamp (in microseconds) at which this epoch started.
+    pub epoch_start_timestamp_usecs: u64,
+}
+
 /// This structure contains all the information needed for tracking a block
 /// without having access to the block or its execution output state. It
 /// assumes that the block is the last block executed within the ledger.
@@ -42,6 +56,9 @@ pub struct BlockInfo {
     timestamp_usecs: u64,
     /// An optional field containing the next epoch info
     next_epoch_state: Option<EpochState>,
+    /// Optional epoch-level block info (e.g., epoch start round/timestamp)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    epoch_block_info: Option<EpochBlockInfo>,
 }
 
 impl BlockInfo {
@@ -62,6 +79,7 @@ impl BlockInfo {
             version,
             timestamp_usecs,
             next_epoch_state,
+            epoch_block_info: None,
         }
     }
 
@@ -74,6 +92,7 @@ impl BlockInfo {
             version: 0,
             timestamp_usecs: 0,
             next_epoch_state: None,
+            epoch_block_info: None,
         }
     }
 
@@ -91,6 +110,7 @@ impl BlockInfo {
             version: 0,
             timestamp_usecs: 0,
             next_epoch_state: None,
+            epoch_block_info: None,
         }
     }
 
@@ -104,6 +124,7 @@ impl BlockInfo {
             version: 0,
             timestamp_usecs: 0,
             next_epoch_state: None,
+            epoch_block_info: None,
         }
     }
 
@@ -130,6 +151,7 @@ impl BlockInfo {
                 epoch: 1,
                 verifier: verifier.into(),
             }),
+            epoch_block_info: None,
         }
     }
 
@@ -191,6 +213,14 @@ impl BlockInfo {
         self.version
     }
 
+    pub fn epoch_block_info(&self) -> Option<&EpochBlockInfo> {
+        self.epoch_block_info.as_ref()
+    }
+
+    pub fn set_epoch_block_info(&mut self, info: EpochBlockInfo) {
+        self.epoch_block_info = Some(info);
+    }
+
     /// This function checks if the current BlockInfo has
     /// exactly the same values in those fields that will not change
     /// after execution, compared to a given BlockInfo
@@ -224,7 +254,7 @@ impl Display for BlockInfo {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "BlockInfo: [epoch: {}, round: {}, id: {}, executed_state_id: {}, version: {}, timestamp (us): {}, next_epoch_state: {}]",
+            "BlockInfo: [epoch: {}, round: {}, id: {}, executed_state_id: {}, version: {}, timestamp (us): {}, next_epoch_state: {}, epoch_block_info: {:?}]",
             self.epoch(),
             self.round(),
             self.id(),
@@ -232,6 +262,7 @@ impl Display for BlockInfo {
             self.version(),
             self.timestamp_usecs(),
             self.next_epoch_state.as_ref().map_or_else(|| "None".to_string(), |epoch_state| format!("{}", epoch_state)),
+            self.epoch_block_info,
         )
     }
 }
