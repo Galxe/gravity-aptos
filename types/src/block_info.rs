@@ -57,7 +57,6 @@ pub struct BlockInfo {
     /// An optional field containing the next epoch info
     next_epoch_state: Option<EpochState>,
     /// Optional epoch-level block info (e.g., epoch start round/timestamp)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     epoch_block_info: Option<EpochBlockInfo>,
 }
 
