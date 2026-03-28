@@ -186,16 +186,12 @@ impl<'de> Deserialize<'de> for BlockInfo {
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(6, &self))?;
 
-                // Gracefully handle the optional 8th field:
-                // - For 8-field data (post-hardfork): remaining > 0, reads normally
-                // - For 7-field data (legacy): remaining == 0, returns Ok(None)
-                //   which means the outer Option is None (no more elements)
-                let epoch_block_info: Option<EpochBlockInfo> =
-                    match seq.next_element::<Option<EpochBlockInfo>>() {
-                        Ok(Some(v)) => v,  // got Some(inner) from seq → inner is Option<EpochBlockInfo>
-                        Ok(None) => None,  // seq exhausted (remaining == 0) → legacy format
-                        Err(_) => None,    // EOF or parse error → legacy format
-                    };
+                let mut epoch_block_info = None;
+                if is_consensus_fork_active_at_epoch(ConsensusHardfork::ConsensusAlpha, epoch) {
+                    epoch_block_info = seq.next_element()?.ok_or_else(|| {
+                        serde::de::Error::invalid_length(7, &self)
+                    })?;
+                }
 
                 Ok(BlockInfo {
                     epoch,
