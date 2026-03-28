@@ -188,7 +188,6 @@ impl<'de> Deserialize<'de> for BlockInfo {
 
                 let mut epoch_block_info = None;
                 if is_consensus_fork_active_at_epoch(ConsensusHardfork::ConsensusAlpha, epoch) {
-                    panic!("should not happen");
                     epoch_block_info = seq.next_element()?.ok_or_else(|| {
                         serde::de::Error::invalid_length(7, &self)
                     })?;
