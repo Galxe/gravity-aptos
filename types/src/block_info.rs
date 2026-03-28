@@ -204,6 +204,49 @@ impl<'de> Deserialize<'de> for BlockInfo {
                     epoch_block_info,
                 })
             }
+
+            fn visit_map<V>(self, mut map: V) -> Result<BlockInfo, V::Error>
+            where
+                V: serde::de::MapAccess<'de>,
+            {
+                let mut epoch = None;
+                let mut round = None;
+                let mut id = None;
+                let mut executed_state_id = None;
+                let mut version = None;
+                let mut timestamp_usecs = None;
+                let mut next_epoch_state = None;
+                let mut epoch_block_info = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "epoch" => epoch = Some(map.next_value()?),
+                        "round" => round = Some(map.next_value()?),
+                        "id" => id = Some(map.next_value()?),
+                        "executed_state_id" => executed_state_id = Some(map.next_value()?),
+                        "version" => version = Some(map.next_value()?),
+                        "timestamp_usecs" => timestamp_usecs = Some(map.next_value()?),
+                        "next_epoch_state" => next_epoch_state = Some(map.next_value()?),
+                        "epoch_block_info" => epoch_block_info = Some(map.next_value()?),
+                        _ => {
+                            let _ = map.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+
+                Ok(BlockInfo {
+                    epoch: epoch.ok_or_else(|| serde::de::Error::missing_field("epoch"))?,
+                    round: round.ok_or_else(|| serde::de::Error::missing_field("round"))?,
+                    id: id.ok_or_else(|| serde::de::Error::missing_field("id"))?,
+                    executed_state_id: executed_state_id
+                        .ok_or_else(|| serde::de::Error::missing_field("executed_state_id"))?,
+                    version: version.ok_or_else(|| serde::de::Error::missing_field("version"))?,
+                    timestamp_usecs: timestamp_usecs
+                        .ok_or_else(|| serde::de::Error::missing_field("timestamp_usecs"))?,
+                    next_epoch_state: next_epoch_state.unwrap_or(None),
+                    epoch_block_info: epoch_block_info.unwrap_or(None),
+                })
+            }
         }
 
         // Use deserialize_struct with 8 fields to match post-hardfork format.
