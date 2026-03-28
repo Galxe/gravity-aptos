@@ -53,7 +53,7 @@ pub struct EpochBlockInfo {
 /// - **Pre-hardfork**: serialized as 7 fields (compatible with legacy nodes)
 /// - **Post-hardfork**: serialized as 8 fields (includes `epoch_block_info`)
 /// - **Deserialization**: always accepts both 7-field and 8-field formats
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct BlockInfo {
     /// The epoch to which the block belongs.
@@ -74,6 +74,32 @@ pub struct BlockInfo {
     /// Only serialized after hardfork activation.
     epoch_block_info: Option<EpochBlockInfo>,
 }
+
+impl PartialEq for BlockInfo {
+    fn eq(&self, other: &Self) -> bool {
+        let base_match = self.epoch == other.epoch
+            && self.round == other.round
+            && self.id == other.id
+            && self.executed_state_id == other.executed_state_id
+            && self.version == other.version
+            && self.timestamp_usecs == other.timestamp_usecs
+            && self.next_epoch_state == other.next_epoch_state;
+
+        use api_types::on_chain_config::consensus_hardfork::{
+            is_consensus_fork_active_at_epoch, ConsensusHardfork,
+        };
+
+        if is_consensus_fork_active_at_epoch(ConsensusHardfork::ConsensusAlpha, self.epoch) {
+            // Post-hardfork: epoch_block_info must match strictly
+            base_match && self.epoch_block_info == other.epoch_block_info
+        } else {
+            // Pre-hardfork: ignore epoch_block_info entirely since legacy nodes don't send it
+            base_match
+        }
+    }
+}
+
+impl Eq for BlockInfo {}
 
 // Field name constants for BCS struct serialization/deserialization.
 // BCS ignores field names but serde requires them for serialize_struct/deserialize_struct.
