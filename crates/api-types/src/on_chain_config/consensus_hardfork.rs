@@ -10,7 +10,7 @@
 //!
 //! ```text
 //! ┌────────────────────────────┐
-//! │  genesis.json              │  Config: extra_fields["consensusAlphaEpoch"]
+//! │  genesis.json              │  Config: extra_fields["consensusAlpha"]
 //! ├────────────────────────────┤
 //! │  ConsensusHardfork enum    │  Definition: add variants for new forks
 //! ├────────────────────────────┤
@@ -32,7 +32,7 @@
 //! ```json
 //! {
 //!   "config": {
-//!     "consensusAlphaEpoch": 100
+//!     "consensusAlpha": 100
 //!   }
 //! }
 //! ```
@@ -154,7 +154,7 @@ impl ConsensusHardforks {
     /// Reads known field names and registers corresponding fork conditions.
     ///
     /// Currently recognized fields:
-    /// - `consensusAlphaEpoch` → `ConsensusAlpha` (Epoch)
+    /// - `consensusAlpha` → `ConsensusAlpha` (Epoch)
     ///
     /// Unknown fields are silently ignored so that new forks can be added
     /// by simply extending this method.
@@ -163,7 +163,7 @@ impl ConsensusHardforks {
         F: Fn(&str) -> Option<u64>,
     {
         let mut hardforks = Self::new();
-        if let Some(epoch) = get("consensusAlphaEpoch") {
+        if let Some(epoch) = get("consensusAlpha") {
             hardforks.insert(
                 ConsensusHardfork::ConsensusAlpha,
                 ForkCondition::Epoch(epoch),
