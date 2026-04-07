@@ -145,11 +145,7 @@ impl VerifiedTxn {
     pub fn committed_hash(&self) -> [u8; 32] {
         self.committed_hash
             .get_or_init(|| {
-                let hash_bytes = match GLOBAL_CRYPTO_TXN_HASHER.get() {
-                    Some(hasher) => hasher(self.bytes()),
-                    None => simple_hash::hash_to_fixed_array(self.bytes()),
-                };
-                u256_define::TxnHash::new(hash_bytes)
+                u256_define::TxnHash::new(GLOBAL_CRYPTO_TXN_HASHER.get().unwrap()(self.bytes()))
             })
             .bytes()
     }
