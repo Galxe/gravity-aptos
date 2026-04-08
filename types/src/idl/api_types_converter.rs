@@ -121,12 +121,14 @@ fn parse_network_address(
     if let Ok(addresses) = bcs::from_bytes::<Vec<NetworkAddress>>(&network_addresses) {
         return Ok(addresses);
     }
-    // Both deserialization strategies failed — log a warning
-    tracing::warn!(
-        bytes_len = network_addresses.len(),
-        "Failed to parse network addresses: neither BCS String nor BCS Vec<NetworkAddress> deserialization succeeded"
-    );
-    Ok(vec![])
+    // Both deserialization strategies failed — return error instead of empty vec
+    // to prevent phantom validators with unreachable addresses
+    Err(ValidatorInfoIdlError::NetworkAddressParseError(
+        format!(
+            "Failed to parse network addresses ({} bytes): neither BCS String nor BCS Vec<NetworkAddress> deserialization succeeded",
+            network_addresses.len()
+        )
+    ))
 }
 
 /// Convert api-types ValidatorConfig to gravity-aptos ValidatorConfig

@@ -552,8 +552,7 @@ impl TryFrom<&GravityEvent> for ContractEvent {
     }
 }
 
-impl From<GravityEvent> for ContractEvent {
-    fn from(event: GravityEvent) -> Self {
-        ContractEvent::try_from(&event).unwrap()
-    }
-}
+// NOTE: The infallible `From<GravityEvent>` impl was removed because it wraps
+// `TryFrom` with `.unwrap()`, which panics on malformed events (e.g. unknown JWK types).
+// Callers should use `ContractEvent::try_from(&event)` and handle errors explicitly.
+// See gravity-sdk `StateComputeResult::events()` for the primary call site.

@@ -86,12 +86,12 @@ pub struct ExecutionArgs {
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct VerifiedTxn {
-    pub bytes: Vec<u8>,
-    pub sender: ExternalAccountAddress,
-    pub sequence_number: u64,
-    pub chain_id: ExternalChainId,
+    bytes: Vec<u8>,
+    sender: ExternalAccountAddress,
+    sequence_number: u64,
+    chain_id: ExternalChainId,
     #[serde(skip)]
-    pub committed_hash: OnceCell<TxnHash>,
+    committed_hash: OnceCell<TxnHash>,
 }
 
 // implment the Debug for VerifiedTxn
@@ -122,9 +122,8 @@ impl VerifiedTxn {
         sender: ExternalAccountAddress,
         sequence_number: u64,
         chain_id: ExternalChainId,
-        committed_hash: TxnHash,
     ) -> Self {
-        Self { bytes, sender, sequence_number, chain_id, committed_hash: committed_hash.into() }
+        Self { bytes, sender, sequence_number, chain_id, committed_hash: OnceCell::new() }
     }
 
     pub fn bytes(&self) -> &Vec<u8> {
@@ -137,6 +136,10 @@ impl VerifiedTxn {
 
     pub fn seq_number(&self) -> u64 {
         self.sequence_number
+    }
+
+    pub fn chain_id(&self) -> &ExternalChainId {
+        &self.chain_id
     }
 
     pub fn committed_hash(&self) -> [u8; 32] {
