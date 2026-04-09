@@ -98,6 +98,21 @@ impl LedgerInfo {
         }
     }
 
+    /// Constructs a `LedgerInfo` with block hash and block number set at construction time.
+    pub fn new_with_block_info(
+        commit_info: BlockInfo,
+        consensus_data_hash: HashValue,
+        block_hash: HashValue,
+        block_number: u64,
+    ) -> Self {
+        Self {
+            commit_info,
+            consensus_data_hash,
+            block_hash,
+            block_number,
+        }
+    }
+
     /// Create a new LedgerInfo at genesis with the given genesis state and
     /// initial validator set.
     pub fn genesis(genesis_state_root_hash: HashValue, validator_set: ValidatorSet) -> Self {
@@ -143,6 +158,14 @@ impl LedgerInfo {
         self.commit_info.version()
     }
 
+    /// Returns the version used for waypoint construction.
+    ///
+    /// NOTE: When `epoch_block_info` is present (after epoch change), this returns
+    /// `block_number` (block height) instead of the transaction `version`. These are
+    /// different number spaces — block heights increment per block while versions
+    /// increment per transaction. Callers that compare `waypoint_version()` against
+    /// `self.version()` (transaction version) must be aware of this semantic difference
+    /// to avoid state-sync mismatches at epoch boundaries.
     pub fn waypoint_version(&self) -> Version {
         self.commit_info()
             .epoch_block_info()
@@ -173,14 +196,6 @@ impl LedgerInfo {
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn set_executed_state_id(&mut self, id: HashValue) {
         self.commit_info.set_executed_state_id(id)
-    }
-
-    pub fn set_block_hash(&mut self, block_hash: HashValue) {
-        self.block_hash = block_hash;
-    }
-
-    pub fn set_block_number(&mut self, block_number: u64) {
-        self.block_number = block_number;
     }
 
     pub fn block_hash(&self) -> HashValue {

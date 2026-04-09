@@ -218,9 +218,6 @@ impl BlockInfo {
         self.epoch_block_info.as_ref()
     }
 
-    pub fn set_epoch_block_info(&mut self, info: EpochBlockInfo) {
-        self.epoch_block_info = Some(info);
-    }
 
     /// This function checks if the current BlockInfo has
     /// exactly the same values in those fields that will not change
