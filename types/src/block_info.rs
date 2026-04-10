@@ -71,6 +71,27 @@ impl BlockInfo {
         version: Version,
         timestamp_usecs: u64,
         next_epoch_state: Option<EpochState>,
+    ) -> Self {
+        Self {
+            epoch,
+            round,
+            id,
+            executed_state_id,
+            version,
+            timestamp_usecs,
+            next_epoch_state,
+            None,
+        }
+    }
+
+    pub fn new_with_epoch_block_info(
+        epoch: u64,
+        round: Round,
+        id: HashValue,
+        executed_state_id: HashValue,
+        version: Version,
+        timestamp_usecs: u64,
+        next_epoch_state: Option<EpochState>,
         epoch_block_info: Option<EpochBlockInfo>,
     ) -> Self {
         Self {
