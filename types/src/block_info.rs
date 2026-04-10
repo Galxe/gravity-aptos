@@ -80,7 +80,7 @@ impl BlockInfo {
             version,
             timestamp_usecs,
             next_epoch_state,
-            None,
+            epoch_block_info: None,
         }
     }
 
