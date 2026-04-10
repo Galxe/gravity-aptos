@@ -71,6 +71,7 @@ impl BlockInfo {
         version: Version,
         timestamp_usecs: u64,
         next_epoch_state: Option<EpochState>,
+        epoch_block_info: Option<EpochBlockInfo>,
     ) -> Self {
         Self {
             epoch,
@@ -80,7 +81,7 @@ impl BlockInfo {
             version,
             timestamp_usecs,
             next_epoch_state,
-            epoch_block_info: None,
+            epoch_block_info,
         }
     }
 
