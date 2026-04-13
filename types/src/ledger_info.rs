@@ -199,10 +199,16 @@ impl LedgerInfo {
     }
 
     pub fn block_hash(&self) -> HashValue {
+        if let Some(info) = self.commit_info.epoch_block_info() {
+            return info.block_hash;
+        }
         self.block_hash
     }
 
     pub fn block_number(&self) -> u64 {
+        if let Some(info) = self.commit_info.epoch_block_info() {
+            return info.block_number;
+        }
         self.block_number
     }
 }
