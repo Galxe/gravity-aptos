@@ -36,6 +36,8 @@ pub struct EpochBlockInfo {
     pub epoch_start_round: Round,
     /// The timestamp (in microseconds) at which this epoch started.
     pub epoch_start_timestamp_usecs: u64,
+    /// The block hash (from reth execution) of the epoch change block.
+    pub block_hash: HashValue,
 }
 
 /// This structure contains all the information needed for tracking a block
