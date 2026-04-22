@@ -270,17 +270,8 @@ impl OnChainConfig for RandomnessConfigMoveStruct {
                 })?;
 
         let on_chain_config = match api_config.variant {
-            api_types::on_chain_config::dkg::ConfigVariant::V1 => {
-                OnChainRandomnessConfig::V1(ConfigV1 {
-                    secrecy_threshold: FixedPoint64MoveStruct::from_u64f64(
-                        fixed::types::U64F64::from_bits(api_config.configV1.secrecyThreshold.value),
-                    ),
-                    reconstruction_threshold: FixedPoint64MoveStruct::from_u64f64(
-                        fixed::types::U64F64::from_bits(
-                            api_config.configV1.reconstructionThreshold.value,
-                        ),
-                    ),
-                })
+            api_types::on_chain_config::dkg::ConfigVariant::Off => {
+                OnChainRandomnessConfig::Off
             },
             api_types::on_chain_config::dkg::ConfigVariant::V2 => {
                 OnChainRandomnessConfig::V2(ConfigV2 {

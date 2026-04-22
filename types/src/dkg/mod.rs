@@ -221,18 +221,8 @@ impl DKGSessionMetadata {
         use crate::on_chain_config::randomness_config::{ConfigV1, ConfigV2};
 
         let on_chain_config = match api_config.variant {
-            api_types::on_chain_config::dkg::ConfigVariant::V1 => {
-                let config_v1 = &api_config.configV1;
-                let secrecy_threshold =
-                    DKGSessionMetadata::convert_fixed_point_from_api(&config_v1.secrecyThreshold)?;
-                let reconstruction_threshold = DKGSessionMetadata::convert_fixed_point_from_api(
-                    &config_v1.reconstructionThreshold,
-                )?;
-
-                OnChainRandomnessConfig::V1(ConfigV1 {
-                    secrecy_threshold,
-                    reconstruction_threshold,
-                })
+            api_types::on_chain_config::dkg::ConfigVariant::Off => {
+                OnChainRandomnessConfig::Off
             },
             api_types::on_chain_config::dkg::ConfigVariant::V2 => {
                 let config_v2 = &api_config.configV2;
@@ -267,8 +257,7 @@ impl DKGSessionMetadata {
             .map_err(|e| format_err!("Failed to convert RandomnessConfigMoveStruct: {}", e))?;
 
         match on_chain_config {
-            OnChainRandomnessConfig::Off => {
-                // For Off config, return a default V1 config with zero values
+            OnChainRandomnessConfig::Off | OnChainRandomnessConfig::V1(_) => {
                 let config_v1 = ConfigV1 {
                     secrecyThreshold: FixedPoint64 { value: 0 },
                     reconstructionThreshold: FixedPoint64 { value: 0 },
@@ -281,32 +270,8 @@ impl DKGSessionMetadata {
                 };
 
                 Ok(api_types::on_chain_config::dkg::RandomnessConfigData {
-                    variant: ConfigVariant::V1,
+                    variant: ConfigVariant::Off,
                     configV1: config_v1,
-                    configV2: config_v2,
-                })
-            },
-            OnChainRandomnessConfig::V1(config_v1) => {
-                let secrecy_threshold =
-                    DKGSessionMetadata::convert_fixed_point_to_api(&config_v1.secrecy_threshold)?;
-                let reconstruction_threshold = DKGSessionMetadata::convert_fixed_point_to_api(
-                    &config_v1.reconstruction_threshold,
-                )?;
-
-                let api_config_v1 = ConfigV1 {
-                    secrecyThreshold: secrecy_threshold,
-                    reconstructionThreshold: reconstruction_threshold,
-                };
-
-                let config_v2 = ConfigV2 {
-                    secrecyThreshold: FixedPoint64 { value: 0 },
-                    reconstructionThreshold: FixedPoint64 { value: 0 },
-                    fastPathSecrecyThreshold: FixedPoint64 { value: 0 },
-                };
-
-                Ok(api_types::on_chain_config::dkg::RandomnessConfigData {
-                    variant: ConfigVariant::V1,
-                    configV1: api_config_v1,
                     configV2: config_v2,
                 })
             },

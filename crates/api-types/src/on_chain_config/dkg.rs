@@ -31,7 +31,9 @@ pub struct RandomnessConfigData {
 
 #[derive(Hash, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
 pub enum ConfigVariant {
-    V1,
+    /// Randomness disabled. Matches Solidity `ConfigVariant.Off` (discriminant 0).
+    /// Previously named `V1` — Gravity contracts never had a V1 config on-chain.
+    Off,
     V2,
 }
 
