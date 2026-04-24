@@ -237,6 +237,12 @@ impl InitialSafetyRulesConfig {
                 overriding_identity_paths,
                 ..
             } => overriding_identity_paths,
+            InitialSafetyRulesConfig::FromGcpSecret { .. } => {
+                unreachable!(
+                    "overriding_identity_blob_paths_mut is not applicable to \
+                     InitialSafetyRulesConfig::FromGcpSecret (smoke tests use the file variant)"
+                )
+            },
             InitialSafetyRulesConfig::None => {
                 unreachable!()
             },
