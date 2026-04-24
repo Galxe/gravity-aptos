@@ -201,6 +201,11 @@ impl NetworkConfig {
                 let identity_blob: IdentityBlob = IdentityBlob::from_file(&config.path).unwrap();
                 Some(identity_blob.network_private_key)
             },
+            Identity::FromGcpSecret(config) => {
+                let identity_blob: IdentityBlob =
+                    IdentityBlob::from_gcp_secret(&config.resource).unwrap();
+                Some(identity_blob.network_private_key)
+            },
             Identity::None => None,
         };
         key.expect("identity key should be present")
@@ -265,6 +270,17 @@ impl NetworkConfig {
                     ))
                 }
             },
+            Identity::FromGcpSecret(config) => {
+                let identity_blob: IdentityBlob =
+                    IdentityBlob::from_gcp_secret(&config.resource).unwrap();
+                if let Some(address) = identity_blob.account_address {
+                    Some(address)
+                } else {
+                    Some(from_identity_public_key(
+                        identity_blob.network_private_key.public_key(),
+                    ))
+                }
+            },
             Identity::None => None,
         }
         .expect("peer id should be present")
@@ -285,6 +301,7 @@ impl NetworkConfig {
                 }
             },
             Identity::FromFile(_) => (),
+            Identity::FromGcpSecret(_) => (),
         };
     }
 

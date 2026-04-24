@@ -22,10 +22,12 @@ aptos-short-hex-str = { workspace = true }
 aptos-temppath = { workspace = true }
 aptos-types = { workspace = true }
 arr_macro = { workspace = true }
+base64 = { workspace = true }
 bcs = { workspace = true }
 byteorder = { workspace = true }
 cfg-if = { workspace = true }
 get_if_addrs = { workspace = true }
+reqwest = { workspace = true }
 maplit = { workspace = true }
 num_cpus = { workspace = true }
 poem-openapi = { workspace = true }
