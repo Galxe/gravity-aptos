@@ -15,6 +15,7 @@ mod dkg_config;
 mod error;
 mod execution_config;
 mod gas_estimation_config;
+mod gcp_secret;
 mod identity_config;
 mod indexer_config;
 mod indexer_grpc_config;

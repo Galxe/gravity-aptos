@@ -1,7 +1,10 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{config::SecureBackend, keys::ConfigKey};
+use crate::{
+    config::{gcp_secret, SecureBackend},
+    keys::ConfigKey,
+};
 use anyhow::anyhow;
 use aptos_crypto::{
     bls12381,
@@ -41,6 +44,17 @@ impl IdentityBlob {
         Ok(serde_yaml::from_str(&fs::read_to_string(path)?)?)
     }
 
+    /// Load an identity blob from a GCP Secret Manager secret version.
+    ///
+    /// The secret payload must be the same YAML bytes that `from_file` would
+    /// read from disk. `resource` accepts the full
+    /// `projects/<P>/secrets/<S>/versions/<V>` path, or the short form without
+    /// `/versions/<V>` (defaults to `latest`).
+    pub fn from_gcp_secret(resource: &str) -> anyhow::Result<IdentityBlob> {
+        let bytes = gcp_secret::fetch_secret(resource)?;
+        Ok(serde_yaml::from_slice(&bytes)?)
+    }
+
     pub fn to_file(&self, path: &Path) -> anyhow::Result<()> {
         let mut file = File::open(path)?;
         Ok(file.write_all(serde_yaml::to_string(self)?.as_bytes())?)
@@ -68,6 +82,9 @@ pub enum Identity {
     FromConfig(IdentityFromConfig),
     FromStorage(IdentityFromStorage),
     FromFile(IdentityFromFile),
+    /// Load the identity blob from a GCP Secret Manager secret version at
+    /// startup. The payload format is identical to the on-disk YAML.
+    FromGcpSecret(IdentityFromGcpSecret),
     None,
 }
 
@@ -100,6 +117,10 @@ impl Identity {
 
     pub fn from_file(path: PathBuf) -> Self {
         Identity::FromFile(IdentityFromFile { path })
+    }
+
+    pub fn from_gcp_secret(resource: String) -> Self {
+        Identity::FromGcpSecret(IdentityFromGcpSecret { resource })
     }
 
     pub fn load_identity(path: &PathBuf) -> anyhow::Result<Option<Self>> {
@@ -160,4 +181,15 @@ pub struct IdentityFromStorage {
 #[serde(deny_unknown_fields)]
 pub struct IdentityFromFile {
     pub path: PathBuf,
+}
+
+/// Identity sourced from a GCP Secret Manager secret version whose payload is
+/// the same YAML blob as [`IdentityFromFile`]'s file contents.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IdentityFromGcpSecret {
+    /// Full secret resource, e.g.
+    /// `projects/<P>/secrets/<S>/versions/<V>`. Trailing `/versions/<V>` may be
+    /// omitted; `latest` is used by default.
+    pub resource: String,
 }
