@@ -86,6 +86,11 @@ default = [
 # Forwarding feature so downstream users can disable randomness default behavior at workspace level
 randomness_disabled = ["aptos-types/randomness_disabled"]
 
+# Forwarding feature: enable GCP Secret Manager as an IdentityBlob source.
+# Pulls `reqwest` + `base64` into `aptos-config`. See
+# `config/src/config/gcp_secret.rs` for the runtime contract.
+gcp-secret-manager = ["aptos-config/gcp-secret-manager"]
+
 [workspace]
 resolver = "2"
 
