@@ -202,8 +202,13 @@ impl NetworkConfig {
                 Some(identity_blob.network_private_key)
             },
             Identity::FromGcpSecret(config) => {
-                let identity_blob: IdentityBlob =
-                    IdentityBlob::from_gcp_secret(&config.resource).unwrap();
+                let identity_blob: IdentityBlob = IdentityBlob::from_gcp_secret(&config.resource)
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "load identity blob for network_private_key from GCP secret {}: {e:#}",
+                            config.resource
+                        )
+                    });
                 Some(identity_blob.network_private_key)
             },
             Identity::None => None,
@@ -271,8 +276,13 @@ impl NetworkConfig {
                 }
             },
             Identity::FromGcpSecret(config) => {
-                let identity_blob: IdentityBlob =
-                    IdentityBlob::from_gcp_secret(&config.resource).unwrap();
+                let identity_blob: IdentityBlob = IdentityBlob::from_gcp_secret(&config.resource)
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "load identity blob for peer_id from GCP secret {}: {e:#}",
+                            config.resource
+                        )
+                    });
                 if let Some(address) = identity_blob.account_address {
                     Some(address)
                 } else {

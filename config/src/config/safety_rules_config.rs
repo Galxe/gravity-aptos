@@ -11,7 +11,7 @@ use crate::{
     },
     keys::ConfigKey,
 };
-use anyhow::bail;
+use anyhow::{bail, Context};
 use aptos_crypto::{bls12381, Uniform};
 use aptos_types::{chain_id::ChainId, network_address::NetworkAddress, waypoint::Waypoint, PeerId};
 use rand::rngs::StdRng;
@@ -189,7 +189,9 @@ impl InitialSafetyRulesConfig {
             InitialSafetyRulesConfig::FromGcpSecret {
                 identity_blob_secret,
                 ..
-            } => IdentityBlob::from_gcp_secret(identity_blob_secret),
+            } => IdentityBlob::from_gcp_secret(identity_blob_secret).with_context(|| {
+                format!("load safety-rules identity blob from GCP secret {identity_blob_secret}")
+            }),
             InitialSafetyRulesConfig::None => {
                 bail!("loading identity blob failed with missing initial safety rules config")
             },
@@ -215,7 +217,9 @@ impl InitialSafetyRulesConfig {
             } => {
                 let mut blobs = vec![];
                 for resource in overriding_identity_secrets {
-                    let blob = IdentityBlob::from_gcp_secret(resource)?;
+                    let blob = IdentityBlob::from_gcp_secret(resource).with_context(|| {
+                        format!("load overriding identity blob from GCP secret {resource}")
+                    })?;
                     blobs.push(blob);
                 }
                 Ok(blobs)
