@@ -22,10 +22,12 @@ aptos-short-hex-str = { workspace = true }
 aptos-temppath = { workspace = true }
 aptos-types = { workspace = true }
 arr_macro = { workspace = true }
+base64 = { workspace = true, optional = true }
 bcs = { workspace = true }
 byteorder = { workspace = true }
 cfg-if = { workspace = true }
 get_if_addrs = { workspace = true }
+reqwest = { workspace = true, optional = true }
 maplit = { workspace = true }
 num_cpus = { workspace = true }
 poem-openapi = { workspace = true }
@@ -46,6 +48,10 @@ tempfile = { workspace = true }
 default = []
 failpoints = []
 fuzzing = ["aptos-crypto/fuzzing", "aptos-types/fuzzing"]
+# Enable loading IdentityBlob from GCP Secret Manager at startup. Off by
+# default to keep `reqwest` + `base64` out of the dep graph of binaries that
+# only read identities from disk.
+gcp-secret-manager = ["dep:reqwest", "dep:base64"]
 smoke-test = []
 testing = []
 tokio-console = []

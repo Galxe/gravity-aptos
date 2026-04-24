@@ -11,7 +11,7 @@ use crate::{
     },
     keys::ConfigKey,
 };
-use anyhow::bail;
+use anyhow::{bail, Context};
 use aptos_crypto::{bls12381, Uniform};
 use aptos_types::{chain_id::ChainId, network_address::NetworkAddress, waypoint::Waypoint, PeerId};
 use rand::rngs::StdRng;
@@ -127,6 +127,16 @@ pub enum InitialSafetyRulesConfig {
         overriding_identity_paths: Vec<PathBuf>,
         waypoint: WaypointConfig,
     },
+    /// Load the validator identity blob(s) from GCP Secret Manager instead of
+    /// disk. Each string is a `projects/<P>/secrets/<S>/versions/<V>` resource;
+    /// `/versions/<V>` may be omitted (defaults to `latest`). The secret
+    /// payload must be the same YAML bytes that `FromFile` would read.
+    FromGcpSecret {
+        identity_blob_secret: String,
+        #[serde(skip_serializing_if = "Vec::is_empty", default)]
+        overriding_identity_secrets: Vec<String>,
+        waypoint: WaypointConfig,
+    },
     None,
 }
 
@@ -143,16 +153,30 @@ impl InitialSafetyRulesConfig {
         }
     }
 
+    pub fn from_gcp_secret(
+        identity_blob_secret: String,
+        overriding_identity_secrets: Vec<String>,
+        waypoint: WaypointConfig,
+    ) -> Self {
+        Self::FromGcpSecret {
+            identity_blob_secret,
+            overriding_identity_secrets,
+            waypoint,
+        }
+    }
+
     pub fn waypoint(&self) -> Waypoint {
         match self {
-            InitialSafetyRulesConfig::FromFile { waypoint, .. } => waypoint.waypoint(),
+            InitialSafetyRulesConfig::FromFile { waypoint, .. }
+            | InitialSafetyRulesConfig::FromGcpSecret { waypoint, .. } => waypoint.waypoint(),
             InitialSafetyRulesConfig::None => panic!("Must have a waypoint"),
         }
     }
 
     pub fn has_identity_blob(&self) -> bool {
         match self {
-            InitialSafetyRulesConfig::FromFile { .. } => true,
+            InitialSafetyRulesConfig::FromFile { .. }
+            | InitialSafetyRulesConfig::FromGcpSecret { .. } => true,
             InitialSafetyRulesConfig::None => false,
         }
     }
@@ -162,6 +186,12 @@ impl InitialSafetyRulesConfig {
             InitialSafetyRulesConfig::FromFile {
                 identity_blob_path, ..
             } => IdentityBlob::from_file(identity_blob_path),
+            InitialSafetyRulesConfig::FromGcpSecret {
+                identity_blob_secret,
+                ..
+            } => IdentityBlob::from_gcp_secret(identity_blob_secret).with_context(|| {
+                format!("load safety-rules identity blob from GCP secret {identity_blob_secret}")
+            }),
             InitialSafetyRulesConfig::None => {
                 bail!("loading identity blob failed with missing initial safety rules config")
             },
@@ -181,6 +211,19 @@ impl InitialSafetyRulesConfig {
                 }
                 Ok(blobs)
             },
+            InitialSafetyRulesConfig::FromGcpSecret {
+                overriding_identity_secrets,
+                ..
+            } => {
+                let mut blobs = vec![];
+                for resource in overriding_identity_secrets {
+                    let blob = IdentityBlob::from_gcp_secret(resource).with_context(|| {
+                        format!("load overriding identity blob from GCP secret {resource}")
+                    })?;
+                    blobs.push(blob);
+                }
+                Ok(blobs)
+            },
             InitialSafetyRulesConfig::None => {
                 bail!("loading overriding identity blobs failed with missing initial safety rules config")
             },
@@ -194,6 +237,12 @@ impl InitialSafetyRulesConfig {
                 overriding_identity_paths,
                 ..
             } => overriding_identity_paths,
+            InitialSafetyRulesConfig::FromGcpSecret { .. } => {
+                unreachable!(
+                    "overriding_identity_blob_paths_mut is not applicable to \
+                     InitialSafetyRulesConfig::FromGcpSecret (smoke tests use the file variant)"
+                )
+            },
             InitialSafetyRulesConfig::None => {
                 unreachable!()
             },
