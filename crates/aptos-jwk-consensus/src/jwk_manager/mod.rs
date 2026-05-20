@@ -202,6 +202,29 @@ impl JWKManager {
                         on_chain_version = on_chain_version,
                         "Blockchain source needs update (version comparison)"
                     );
+                    // Fix B (diagnostic): warn if observed nonce is more than one
+                    // ahead of the on-chain version. The relayer always returns the
+                    // latest L1 event, so a gap > 1 means we will propose a
+                    // contiguous version (on_chain + 1) using the data of a
+                    // non-contiguous event — intermediate events between
+                    // on_chain_version+1 and nonce will be silently dropped.
+                    // This currently affects oracle/bridge sources when multiple
+                    // L1 events accumulate before the relayer catches up.
+                    // Long-term fix: queue events in the relayer and emit them
+                    // one at a time; tracked in companion issue.
+                    if let Some(gap) = nonce.checked_sub(on_chain_version + 1) {
+                        if gap > 0 {
+                            warn!(
+                                epoch = self.epoch_state.epoch,
+                                issuer = String::from_utf8(issuer.clone()).ok(),
+                                observed_nonce = nonce,
+                                on_chain_version = on_chain_version,
+                                missed_events = gap,
+                                "Observed nonce is more than one ahead of on-chain \
+                                 version; intermediate events may be dropped."
+                            );
+                        }
+                    }
                 }
                 should_update
             }
@@ -418,6 +441,46 @@ impl JWKManager {
                 let vtxn_guard =
                     self.vtxn_pool
                         .put(Topic::JWK_CONSENSUS(issuer.clone()), Arc::new(txn), None);
+
+                // Fix A: for oracle/bridge sources (gravity://), speculatively
+                // advance state.on_chain to the just-certified version.
+                //
+                // Why: the on-chain reset_with_on_chain_state path that would
+                // normally refresh state.on_chain fires off the
+                // ObservedJWKsUpdated event. For traditional OIDC JWK sources
+                // this event is emitted on every JWK update by the on-chain
+                // jwks module. For oracle/bridge sources the emission is not
+                // guaranteed (and empirically not happening on Gravity mainnet
+                // as of 2026-05). Without this speculative update,
+                // state.on_chain.version stays stale within an epoch, and the
+                // next observation for the same issuer is silently blocked
+                // (its proposed version collides with what is already on-chain),
+                // forcing the user-visible bridge message to wait until the
+                // next epoch boundary (worst case: epoch_interval, ~2h on
+                // mainnet).
+                //
+                // Why gated to gravity:// : for traditional JWK sources, a
+                // legitimate reset_with_on_chain_state can deliver a stale
+                // ProviderJWKs (e.g., a reconfig event that re-broadcasts the
+                // pre-update state). If we have already speculatively bumped
+                // state.on_chain to a newer post-QC version, the reset's
+                // version check would treat the stale snapshot as "different"
+                // and overwrite our valid Finished state. Restricting the
+                // speculative update to gravity:// avoids this regression for
+                // the JWK path while still fixing the bridge path.
+                //
+                // Safety: this is monotonic. The certified update's version is
+                // (state.on_chain_version() + 1) at the time the InProgress
+                // state was created, so it strictly exceeds the previous
+                // on_chain version. Guarded explicitly with the > check below
+                // for defense in depth.
+                let is_gravity_source = String::from_utf8(issuer.clone())
+                    .map(|s| s.starts_with("gravity://"))
+                    .unwrap_or(false);
+                if is_gravity_source && update.update.version > state.on_chain_version() {
+                    state.on_chain = Some(update.update.clone());
+                }
+
                 state.consensus_state = ConsensusState::Finished {
                     vtxn_guard,
                     my_proposal: my_proposal.clone(),

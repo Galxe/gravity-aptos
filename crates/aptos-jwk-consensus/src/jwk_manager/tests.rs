@@ -334,6 +334,8 @@ async fn test_jwk_manager_state_transition() {
             my_proposal: expected_carl_state.consensus_state.my_proposal_cloned(),
             quorum_certified: qc_update_for_carl.clone(),
         };
+        // (Fix A speculative on_chain update is gated to gravity:// sources; Carl
+        //  uses an https:// issuer, so on_chain stays unchanged here.)
     }
     assert_eq!(expected_states, jwk_manager.states_by_issuer);
     let expected_vtxns = vec![ValidatorTransaction::ObservedJWKUpdate(
@@ -412,6 +414,8 @@ async fn test_jwk_manager_state_transition() {
             my_proposal: expected_alice_state.consensus_state.my_proposal_cloned(),
             quorum_certified: qc_update_for_alice.clone(),
         };
+        // (Fix A speculative on_chain update is gated to gravity:// sources; Alice
+        //  uses an https:// issuer, so on_chain stays unchanged here.)
     }
     assert_eq!(expected_states, jwk_manager.states_by_issuer);
     let expected_vtxn_hashes = vec![
@@ -486,4 +490,146 @@ impl TUpdateCertifier for DummyUpdateCertifier {
         let (abort_handle, _) = AbortHandle::new_pair();
         abort_handle
     }
+}
+
+/// Helper: build a JWKMoveStruct whose `variant.data` is exactly the 16-byte
+/// big-endian encoding of the given u128 nonce. This is the shape that
+/// `PerProviderState::convert_oracle_nonce` expects for oracle/bridge sources.
+fn oracle_jwk_with_nonce(nonce: u128) -> aptos_types::jwks::jwk::JWKMoveStruct {
+    use aptos_types::{jwks::jwk::JWKMoveStruct, move_any::Any};
+    JWKMoveStruct {
+        variant: Any {
+            type_name: "oracle::Nonce".to_string(),
+            data: nonce.to_be_bytes().to_vec(),
+        },
+    }
+}
+
+/// Regression test for the cross-chain "stuck within epoch" bug.
+///
+/// Repro: a validator certifies a JWK update for version V via
+/// `process_quorum_certified_update`. Then a new observation arrives with
+/// nonce V+1 (next bridge message). Before Fix A, `state.on_chain` would
+/// stay at the pre-cert value until the next epoch boundary, so the new
+/// observation's proposed version would collide with the just-committed
+/// version and silently fail to form a quorum cert. With Fix A, the local
+/// `state.on_chain` is advanced speculatively right after pool.put, so the
+/// next observation immediately starts a new InProgress cert cycle.
+#[tokio::test]
+async fn test_consecutive_observations_within_epoch_after_qc_proceed() {
+    // Set up 4 validators; we drive validator 0.
+    let private_keys: Vec<Arc<PrivateKey>> = (0..4)
+        .map(|_| Arc::new(PrivateKey::generate_for_testing()))
+        .collect();
+    let public_keys: Vec<PublicKey> = private_keys
+        .iter()
+        .map(|sk| PublicKey::from(sk.as_ref()))
+        .collect();
+    let addrs: Vec<AccountAddress> = (0..4).map(|_| AccountAddress::random()).collect();
+    let voting_powers: Vec<u64> = vec![1, 1, 1, 1];
+    let validator_consensus_infos: Vec<ValidatorConsensusInfo> = (0..4)
+        .map(|i| ValidatorConsensusInfo::new(addrs[i], public_keys[i].clone(), voting_powers[i]))
+        .collect();
+    let epoch_state = Arc::new(EpochState {
+        epoch: 1,
+        verifier: ValidatorVerifier::new(validator_consensus_infos.clone()).into(),
+    });
+
+    let update_certifier = DummyUpdateCertifier::default();
+    let vtxn_pool = VTxnPoolState::default();
+    let mut jwk_manager = JWKManager::new(
+        private_keys[0].clone(),
+        addrs[0],
+        epoch_state.clone(),
+        Arc::new(update_certifier),
+        vtxn_pool.clone(),
+    );
+
+    // Oracle-style issuer (gravity:// scheme). We never call
+    // reset_with_on_chain_state in this test, simulating the case where the
+    // chain doesn't emit ObservedJWKsUpdated for this source.
+    let issuer = issuer_from_str("gravity://0/1/events?contract=0xabc");
+    // For oracle sources, the JWK payload encodes the L1 nonce as 16-byte
+    // big-endian u128. convert_oracle_nonce reads exactly that.
+    let jwks_v1 = vec![oracle_jwk_with_nonce(1)];
+
+    // ─── Step 1: first observation (nonce = 1) ───
+    jwk_manager
+        .process_new_observation(issuer.clone(), jwks_v1.clone(), Some(1))
+        .unwrap();
+
+    // Sanity: state should be InProgress proposing version=1.
+    let state = jwk_manager.states_by_issuer.get(&issuer).unwrap();
+    assert!(
+        matches!(state.consensus_state, ConsensusState::InProgress { .. }),
+        "expected InProgress after first observation, got {:?}",
+        state.consensus_state.name()
+    );
+    let my_proposal_v1 = state.consensus_state.my_proposal_cloned();
+    assert_eq!(my_proposal_v1.observed.version, 1);
+
+    // ─── Step 2: simulate quorum cert produced + pool.put ───
+    let signer_bit_vec = BitVec::from(private_keys.iter().map(|_| true).collect::<Vec<_>>());
+    let sig_v1 = Signature::aggregate(
+        private_keys
+            .iter()
+            .map(|sk| sk.sign(&my_proposal_v1.observed).unwrap())
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    let qc_v1 = QuorumCertifiedUpdate {
+        update: my_proposal_v1.observed.clone(),
+        multi_sig: AggregateSignature::new(signer_bit_vec.clone(), Some(sig_v1)),
+    };
+    jwk_manager
+        .process_quorum_certified_update(qc_v1)
+        .expect("first QC should be accepted");
+
+    // ─── Step 3 (Fix A assertion): on_chain advances WITHOUT a chain reset ───
+    let state = jwk_manager.states_by_issuer.get(&issuer).unwrap();
+    assert!(
+        matches!(state.consensus_state, ConsensusState::Finished { .. }),
+        "expected Finished after QC, got {:?}",
+        state.consensus_state.name()
+    );
+    assert_eq!(
+        state.on_chain_version(),
+        1,
+        "Fix A: state.on_chain should be speculatively advanced to the certified \
+         version immediately after pool.put, even without an ObservedJWKsUpdated \
+         chain event."
+    );
+    // For oracle/bridge sources, the nonce reading must also reflect the new
+    // certified value (needs_update check uses convert_oracle_nonce, not the
+    // version field).
+    assert_eq!(
+        state.convert_oracle_nonce().unwrap(),
+        1,
+        "Fix A: convert_oracle_nonce must reflect the just-certified nonce so \
+         that the next observation's needs_update check sees an up-to-date \
+         baseline."
+    );
+
+    // ─── Step 4: second observation in the SAME epoch with nonce = 2 ───
+    // Before Fix A, on_chain_version would still be 0 here, the proposed
+    // version would be 1 (already on-chain), and the certifier would silently
+    // never form a quorum until the next epoch boundary. With Fix A, the
+    // proposed version is 2 (= on_chain + 1) and InProgress starts cleanly.
+    let jwks_v2 = vec![oracle_jwk_with_nonce(2)];
+    jwk_manager
+        .process_new_observation(issuer.clone(), jwks_v2, Some(2))
+        .unwrap();
+
+    let state = jwk_manager.states_by_issuer.get(&issuer).unwrap();
+    assert!(
+        matches!(state.consensus_state, ConsensusState::InProgress { .. }),
+        "Fix A: second observation in the same epoch must transition to \
+         InProgress (was previously silently stuck at Finished); got {:?}",
+        state.consensus_state.name()
+    );
+    let my_proposal_v2 = state.consensus_state.my_proposal_cloned();
+    assert_eq!(
+        my_proposal_v2.observed.version, 2,
+        "Fix A: proposed version must be on_chain_version + 1 = 2, not 1"
+    );
 }
