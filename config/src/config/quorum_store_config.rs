@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 pub const BATCH_PADDING_BYTES: usize = 160;
-pub const DEFEAULT_MAX_BATCH_TXNS: usize = 300;
+pub const DEFEAULT_MAX_BATCH_TXNS: usize = 400;
 const DEFAULT_MAX_NUM_BATCHES: usize = 20;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
@@ -116,7 +116,7 @@ impl Default for QuorumStoreConfig {
             sender_max_total_txns: 20000,
             // TODO: on next release, remove DEFAULT_MAX_NUM_BATCHES * BATCH_PADDING_BYTES
             sender_max_total_bytes: 40 * 1024 * 1024 - DEFAULT_MAX_NUM_BATCHES * BATCH_PADDING_BYTES,
-            receiver_max_batch_txns: 300,
+            receiver_max_batch_txns: 400,
             receiver_max_batch_bytes: 1024 * 1024 + BATCH_PADDING_BYTES,
             receiver_max_num_batches: 20,
             receiver_max_total_txns: 20000,
@@ -127,7 +127,7 @@ impl Default for QuorumStoreConfig {
             batch_request_retry_limit: 10,
             batch_request_retry_interval_ms: 1000,
             batch_request_rpc_timeout_ms: 5000,
-            batch_expiry_gap_when_init_usecs: Duration::from_secs(60).as_micros() as u64,
+            batch_expiry_gap_when_init_usecs: Duration::from_secs(120).as_micros() as u64,
             remote_batch_expiry_gap_when_init_usecs: Duration::from_millis(500).as_micros() as u64,
             memory_quota: 120_000_000,
             db_quota: 300_000_000,
@@ -157,7 +157,7 @@ impl QuorumStoreConfig {
             sender_max_num_batches: 5,
             sender_max_total_txns: 500,
             sender_max_total_bytes: 8 * 1024 * 1024,
-            receiver_max_batch_txns: 300,
+            receiver_max_batch_txns: 400,
             receiver_max_batch_bytes: 4 * 1024 * 1024,
             receiver_max_num_batches: 5,
             receiver_max_total_txns: 500,
