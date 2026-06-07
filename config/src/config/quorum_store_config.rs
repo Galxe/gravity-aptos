@@ -105,7 +105,7 @@ impl Default for QuorumStoreConfig {
     fn default() -> QuorumStoreConfig {
         QuorumStoreConfig {
             channel_size: 1000,
-            proof_timeout_ms: 30000,
+            proof_timeout_ms: 10000,
             batch_generation_poll_interval_ms: 25,
             batch_generation_min_non_empty_interval_ms: 100,
             batch_generation_max_interval_ms: 250,
