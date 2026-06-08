@@ -136,7 +136,7 @@ impl Default for QuorumStoreConfig {
             // number of batch coordinators to handle QS batch messages, should be >= 1
             num_workers_for_remote_batches: 10,
             batch_buckets: DEFAULT_BUCKETS.to_vec(),
-            allow_batches_without_pos_in_proposal: true,
+            allow_batches_without_pos_in_proposal: false,
             enable_opt_quorum_store: false,
             opt_qs_minimum_batch_age_usecs: Duration::from_millis(20).as_micros() as u64,
             enable_payload_v2: false,
