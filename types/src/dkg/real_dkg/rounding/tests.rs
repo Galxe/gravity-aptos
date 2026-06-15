@@ -400,3 +400,187 @@ fn get_sub_total(vals: &[u64], subset: u64) -> u64 {
         .map(|(idx, &val)| val * ((subset >> idx) & 1))
         .sum()
 }
+
+/// Reproduces finding `genesis-subether-voting-power-zero-dkg-panic` (severity HIGH).
+///
+/// Genesis voting power is specified in wei and truncated to the u64 consensus voting
+/// power by integer-dividing by 10^18 (`gravity_cli` waypoint.rs and the runtime greth
+/// `wei_to_ether`). Any genesis validator staked with < 1 ether therefore gets consensus
+/// `voting_power == 0`, and nothing on the active genesis path rejects this (the
+/// genesis-tool only asserts `stakeAmount == votingPower` on the raw wei values, and the
+/// Solidity `_initializeGenesisValidator` bypasses the `minimumBond` / `votingPower > 0`
+/// check). The truncated voting power is fed directly as the DKG stake
+/// (`real_dkg/mod.rs`: `validator_stakes = next_validators.map(|vi| vi.voting_power)`).
+///
+/// If the whole genesis set is sub-ether, every `voting_power == 0`, so `stake_sum == 0`
+/// inside `compute_profile_fixed_point`. Line 332,
+///   `stake_gap_fixed = stake_per_weight * delta_total_fixed / stake_sum_fixed`
+/// divides by `stake_sum_fixed == 0` -> the U64F64 fixed-point arithmetic panics with
+/// "division by zero". This happens in the very first `compute_profile_fixed_point`
+/// call inside `DKGRoundingProfile::new` (the `best_profile` computation at
+/// `rounding/mod.rs:204`, BEFORE `is_valid_profile` and before the `Err -> infallible`
+/// fallback arm), and `infallible` itself would divide by zero the same way. So there is
+/// no fallback: `DKGRounding::new` aborts the thread.
+///
+/// Because the DKG inputs (the on-chain validator set) are byte-identical across all
+/// honest nodes, every node panics at the same epoch boundary: deterministic,
+/// simultaneous crash = chain halt with no recovery path (re-genesis required).
+///
+/// This test demonstrates the defect by asserting `DKGRounding::new` panics for an
+/// all-zero validator set. A correct implementation would instead return an error (or
+/// reject the set at genesis), so this `#[should_panic]` documents and pins the crash.
+#[test]
+#[should_panic(expected = "division by zero")]
+fn test_all_zero_voting_power_panics_dkg_rounding() {
+    // Every genesis validator staked < 1 ether => voting_power truncates to 0.
+    let validator_stakes = vec![0u64, 0, 0, 0];
+
+    // On HEAD this call panics ("division by zero") inside
+    // compute_profile_fixed_point at rounding/mod.rs:332. It does NOT return.
+    let _dkg_rounding = DKGRounding::new(
+        &validator_stakes,
+        *DEFAULT_SECRECY_THRESHOLD.deref(),
+        *DEFAULT_RECONSTRUCT_THRESHOLD.deref(),
+        Some(*DEFAULT_FAST_PATH_SECRECY_THRESHOLD.deref()),
+    );
+}
+
+/// Companion to the above: a *mixed* set where only some validators are sub-ether (here a
+/// single non-zero validator among zeros) does NOT divide by zero, but silently produces a
+/// degenerate single-power profile. This isolates the all-zero case as the hard crash and
+/// documents that a partially-sub-ether genesis is the milder (but still wrong) outcome.
+#[test]
+fn test_partial_zero_voting_power_does_not_panic_control() {
+    // One validator above 1 ether (voting_power 1), the rest truncated to 0.
+    let validator_stakes = vec![1u64, 0, 0, 0];
+    let dkg_rounding = DKGRounding::new(
+        &validator_stakes,
+        *DEFAULT_SECRECY_THRESHOLD.deref(),
+        *DEFAULT_RECONSTRUCT_THRESHOLD.deref(),
+        Some(*DEFAULT_FAST_PATH_SECRECY_THRESHOLD.deref()),
+    );
+    // Does not panic; stake_sum == 1 != 0. The degenerate weighting is its own concern,
+    // but the point here is only that the all-zero case is the division-by-zero trigger.
+    println!(
+        "partial-zero profile: {:?}",
+        dkg_rounding.profile.validator_weights
+    );
+}
+
+/// Reproduces finding `dkg-recon-threshold-eq-total-weight-zero-ft` (severity HIGH).
+///
+/// For the small unequal 4-validator weighted set with voting powers
+/// `[1_000_000, 1_000_000, 700_000, 1_300_000]` (total 4_000_000, every node strictly
+/// below the 1/3 = 1_333_333 BFT bound), the DKG weighted rounding collapses the
+/// randomness *reconstruction* threshold to exactly the total weight.
+///
+/// `DKGRounding::new` accepts the very first profile at `total_weight_min == n == 4`:
+/// `compute_profile_fixed_point` with `stake_per_weight == 1_000_000` rounds the ideal
+/// weights `[1.0, 1.0, 0.7, 1.3]` to `[1, 1, 1, 1]` (700k -> 1, 1.3M -> 1), giving
+/// `delta_up == 0.3`. Then
+///   `reconstruct_threshold_in_weights = min(weight_total, ceil(0.5*4M/1M + 0.3) + 1)`
+///                                     = min(4, ceil(2.3) + 1) = min(4, 4) = 4.
+/// So `reconstruct_threshold_in_weights == total_weight == 4`.
+///
+/// Consequence: randomness can only be reconstructed once shares of weight >= 4 are
+/// collected, i.e. ALL four validators must submit a share every round. A single
+/// offline/crashed/Byzantine validator leaves weight 3 < 4, so `rand_store`'s
+/// `try_aggregate` never fires, no `Randomness` is decided, and randomness-gated block
+/// commit stalls. The randomness subsystem therefore tolerates ZERO faults for a
+/// 4-validator BFT set that must tolerate f = 1.
+///
+/// `is_valid_profile` only checks the reconstruct *stake* ratio
+/// (0.5 + 1M*0.6/4M = 0.65 <= 2/3), never an integer weight fault-tolerance margin,
+/// so this profile is accepted with no warning.
+///
+/// This test asserts the liveness-margin invariant
+///   `total_weight - reconstruct_threshold_in_weights >= max_single_validator_weight`
+/// (the minimum needed to survive any one validator being down). On HEAD it FAILS,
+/// demonstrating the defect. The first two assertions pin down the exact arithmetic
+/// so the failure cannot be mistaken for a flaky/changed-default issue.
+///
+/// #[ignore]: FAILS on HEAD by design. Ignored so `cargo test -p aptos-types` stays green; run
+/// with `--ignored`. Un-ignore once a weight fault-tolerance margin (or genesis guard) is enforced.
+#[test]
+#[ignore = "repro of dkg-recon-threshold-eq-total-weight-zero-ft; FAILS until a fault-tolerance \
+            margin is enforced. Run with --ignored."]
+fn test_recon_threshold_eq_total_weight_zero_fault_tolerance() {
+    // The user's probe vector: 4 weighted validators, each strictly under 1/3.
+    let validator_stakes = vec![1_000_000u64, 1_000_000, 700_000, 1_300_000];
+
+    let dkg_rounding = DKGRounding::new(
+        &validator_stakes,
+        *DEFAULT_SECRECY_THRESHOLD.deref(),
+        *DEFAULT_RECONSTRUCT_THRESHOLD.deref(),
+        Some(*DEFAULT_FAST_PATH_SECRECY_THRESHOLD.deref()),
+    );
+    let profile = &dkg_rounding.profile;
+    println!("probe-vector rounding profile: {:?}", profile);
+
+    // The profile is "valid" by the only acceptance gate, which checks the stake
+    // ratio (0.65 <= 2/3) but no integer weight fault-tolerance margin.
+    assert!(is_valid_profile(
+        profile,
+        *DEFAULT_RECONSTRUCT_THRESHOLD.deref()
+    ));
+
+    let weights = &profile.validator_weights;
+    let total_weight: u64 = weights.iter().sum();
+    let recon_threshold = profile.reconstruct_threshold_in_weights;
+    let max_single = *weights.iter().max().unwrap();
+
+    // Pin the exact arithmetic so the repro is unambiguous.
+    assert_eq!(
+        weights,
+        &vec![1u64, 1, 1, 1],
+        "expected rounded weights [1,1,1,1] for the probe vector"
+    );
+    assert_eq!(total_weight, 4, "expected total weight 4");
+
+    // The defect: reconstruction threshold collapses to the full total weight.
+    assert_eq!(
+        recon_threshold, total_weight,
+        "DEFECT: reconstruct_threshold_in_weights ({}) == total_weight ({}): \
+         randomness requires unanimity, zero crash-fault tolerance",
+        recon_threshold, total_weight,
+    );
+
+    // The liveness invariant a BFT-of-4 set must satisfy: randomness must still be
+    // reconstructible after any single validator is down. This requires the spare
+    // weight above threshold to cover the largest single validator's weight.
+    //
+    // On HEAD: 4 - 4 = 0 < 1  -> this assertion FAILS, demonstrating the bug.
+    let spare = total_weight - recon_threshold;
+    assert!(
+        spare >= max_single,
+        "LIVENESS VIOLATION (finding dkg-recon-threshold-eq-total-weight-zero-ft): \
+         spare weight above reconstruct threshold = {} (total {} - threshold {}), \
+         but the largest single validator weight is {}. With < {} spare weight, a \
+         single offline validator (weight {}) drops the collected weight below the \
+         reconstruct threshold {}, so randomness can never be decided and the chain \
+         stalls. A 4-validator BFT set must tolerate f = 1.",
+        spare, total_weight, recon_threshold, max_single, max_single, max_single, recon_threshold,
+    );
+}
+
+/// Control case showing the defect is specific to the *unequal* small set: an equal
+/// 4-validator set `[1M; 4]` rounds to weights `[1,1,1,1]` with `delta_up == 0`, giving
+/// `reconstruct_threshold = ceil(0.5*4M/1M) + 1 = 3 < 4`, which DOES leave fault
+/// tolerance (spare 1 >= max single weight 1). This passes on HEAD and isolates the
+/// unequal-stake `delta_up` inflation as the trigger.
+#[test]
+fn test_recon_threshold_equal_stakes_has_fault_tolerance_control() {
+    let validator_stakes = vec![1_000_000u64; 4];
+    let dkg_rounding = DKGRounding::new(
+        &validator_stakes,
+        *DEFAULT_SECRECY_THRESHOLD.deref(),
+        *DEFAULT_RECONSTRUCT_THRESHOLD.deref(),
+        Some(*DEFAULT_FAST_PATH_SECRECY_THRESHOLD.deref()),
+    );
+    let profile = &dkg_rounding.profile;
+    let total_weight: u64 = profile.validator_weights.iter().sum();
+    let recon_threshold = profile.reconstruct_threshold_in_weights;
+    assert_eq!(total_weight, 4);
+    assert_eq!(recon_threshold, 3);
+    assert!(total_weight - recon_threshold >= 1);
+}

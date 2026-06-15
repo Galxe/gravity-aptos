@@ -1061,4 +1061,121 @@ mod tests {
             Err(VerifyError::UnknownAuthor)
         );
     }
+
+    /// Reproduces finding `genesis-no-bft-threshold-validation-single-validator-over-third`
+    /// (severity HIGH), liveness half.
+    ///
+    /// The active (contract-based) genesis path performs no BFT-safety validation of the
+    /// resulting voting-power distribution: `genesis-tool/src/genesis.rs` only asserts
+    /// `stakeAmount == votingPower` per validator, `gravity_cli` waypoint.rs only truncates
+    /// wei -> ether, and `ValidatorVerifier::new` (this file, ~207-213) just computes
+    /// `quorum = total*2/3 + 1` with NO floor or cap on any single validator's share. So a
+    /// genesis author can hand a single validator > 1/3 of total voting power and nothing
+    /// rejects it.
+    ///
+    /// Why > 1/3 of one validator is a liveness disaster for a BFT chain:
+    /// a quorum requires `quorum_voting_power = total*2/3 + 1`. If one validator V holds
+    /// `vp_V > total/3`, then the *rest* of the set holds `total - vp_V < total*2/3 + 1`,
+    /// i.e. strictly less than a quorum. Therefore NO quorum can be formed without V's
+    /// vote. If V is offline, crashed, or Byzantine-withholding, the chain cannot certify a
+    /// single block: liveness halts. A correct BFT-of-n set must tolerate the largest
+    /// single faulty validator, which requires `total - max_single_vp >= quorum`.
+    ///
+    /// Probe-shaped vector with one node pushed just over 1/3:
+    ///   voting powers [1_000_000, 1_000_000, 700_000, 1_500_000], total 4_200_000.
+    ///   The 1.5M node = 35.7% > 1/3 = 1_400_000.
+    ///   quorum = 4_200_000*2/3 + 1 = 2_800_001.
+    ///   remaining three honest nodes = 2_700_000 < 2_800_001  -> cannot reach quorum.
+    ///
+    /// This test asserts the BFT liveness invariant
+    ///   `total_voting_power - max_single_voting_power >= quorum_voting_power`
+    /// (the honest remainder, after the single largest validator is removed, must still be
+    /// able to form a quorum). On HEAD this FAILS, demonstrating that `ValidatorVerifier`
+    /// silently accepts a set in which one validator can unilaterally halt the chain, with
+    /// no genesis or constructor-level guard. The exact arithmetic is pinned first so the
+    /// failure is unambiguous.
+    ///
+    /// #[ignore]: FAILS on HEAD by design. Ignored so `cargo test -p aptos-types` stays green; run
+    /// with `--ignored`. Un-ignore once genesis / ValidatorVerifier rejects a single validator
+    /// >= 1/3 (and other unsafe sets).
+    #[test]
+    #[ignore = "repro of genesis-no-bft-threshold-validation-single-validator-over-third; FAILS \
+                until BFT-safety validation is added. Run with --ignored."]
+    fn test_single_validator_over_one_third_halts_liveness_no_validation() {
+        // One validator just over 1/3 of total voting power; the genesis path accepts this.
+        let voting_powers: [u64; 4] = [1_000_000, 1_000_000, 700_000, 1_500_000];
+
+        let validator_infos: Vec<ValidatorConsensusInfo> = voting_powers
+            .iter()
+            .enumerate()
+            .map(|(i, &vp)| {
+                let signer = ValidatorSigner::random([i as u8; 32]);
+                ValidatorConsensusInfo::new(signer.author(), signer.public_key(), vp)
+            })
+            .collect();
+
+        // No validation rejects this distribution; `new` always succeeds.
+        let verifier = ValidatorVerifier::new(validator_infos);
+
+        let total = verifier.total_voting_power();
+        let quorum = verifier.quorum_voting_power();
+        let max_single = voting_powers.iter().copied().max().unwrap() as u128;
+
+        // Pin the arithmetic.
+        assert_eq!(total, 4_200_000, "total voting power");
+        assert_eq!(quorum, 2_800_001, "quorum = total*2/3 + 1");
+        assert_eq!(max_single, 1_500_000, "largest single validator");
+        // The single validator is strictly over 1/3 of total.
+        assert!(
+            max_single * 3 > total,
+            "the probe validator (vp {}) should exceed total/3 (total {})",
+            max_single,
+            total
+        );
+
+        // Honest remainder after removing the single largest validator.
+        let remainder = total - max_single; // 2_700_000
+
+        // The BFT liveness invariant: the remainder must still be able to form a quorum,
+        // otherwise one faulty validator halts the chain. On HEAD: 2_700_000 < 2_800_001.
+        assert!(
+            remainder >= quorum,
+            "BFT LIVENESS VIOLATION (finding \
+             genesis-no-bft-threshold-validation-single-validator-over-third): a single \
+             validator holds {} of {} total voting power (> 1/3). The honest remainder \
+             {} is below the quorum {}, so if that one validator is offline or \
+             Byzantine-withholding, NO block can ever reach quorum and the chain halts. \
+             `ValidatorVerifier::new` accepts this set with no validation, and the active \
+             genesis path performs no per-validator or distribution BFT-safety check.",
+            max_single, total, remainder, quorum,
+        );
+    }
+
+    /// Companion control: an equal 4-validator set (each exactly 25% < 1/3) DOES satisfy
+    /// the liveness invariant, isolating the > 1/3 single-validator concentration as the
+    /// trigger. This passes on HEAD.
+    #[test]
+    fn test_balanced_validator_set_survives_one_fault_control() {
+        let voting_powers: [u64; 4] = [1_000_000; 4];
+        let validator_infos: Vec<ValidatorConsensusInfo> = voting_powers
+            .iter()
+            .enumerate()
+            .map(|(i, &vp)| {
+                let signer = ValidatorSigner::random([i as u8; 32]);
+                ValidatorConsensusInfo::new(signer.author(), signer.public_key(), vp)
+            })
+            .collect();
+        let verifier = ValidatorVerifier::new(validator_infos);
+
+        let total = verifier.total_voting_power(); // 4_000_000
+        let quorum = verifier.quorum_voting_power(); // 2_666_667
+        let max_single = voting_powers.iter().copied().max().unwrap() as u128;
+
+        assert_eq!(total, 4_000_000);
+        assert_eq!(quorum, 2_666_667);
+        // No single validator exceeds 1/3.
+        assert!(max_single * 3 <= total);
+        // Remainder after one fault still forms a quorum: 3_000_000 >= 2_666_667.
+        assert!(total - max_single >= quorum);
+    }
 }

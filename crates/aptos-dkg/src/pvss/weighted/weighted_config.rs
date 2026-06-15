@@ -365,4 +365,61 @@ mod test {
         assert_eq!(wc.get_virtual_player(&wc.get_player(11), 1).id, 13);
         assert_eq!(wc.get_virtual_player(&wc.get_player(11), 2).id, 14);
     }
+
+    /// Documents the weight-0-player half of finding
+    /// `genesis-no-bft-threshold-validation-single-validator-over-third` (severity HIGH).
+    ///
+    /// `WeightedConfig::new` rejects only `threshold_weight == 0` and empty weight vectors
+    /// (weighted_config.rs:41-52); it does NOT reject a weight==0 *player*. A weight-0
+    /// player is reachable on the active genesis path: when only some genesis validators are
+    /// sub-1-ether their wei->ether-truncated voting power becomes 0, those 0s flow into the
+    /// DKG stake vector, and the rounding can emit a weight-0 player. Nothing on the genesis
+    /// path filters this out (epoch_manager `try_get_rand_config_for_new_epoch` feeds the
+    /// wconfig straight through).
+    ///
+    /// This test shows the *structural* malformation that results: a weight-0 player shares
+    /// the SAME `starting_index` as the following player and owns an EMPTY share range
+    /// `[start, start)`. Two distinct players therefore alias the same starting index, and
+    /// the weight-0 player owns no share — a malformed weighted-PVSS config that
+    /// `WeightedConfig::new` accepts without complaint.
+    ///
+    /// The assertions below pin the colliding index / empty range. The final assertion
+    /// states the structural invariant a well-formed config should satisfy (every player
+    /// owns a non-empty, non-aliased share range); it is written as a documented expectation
+    /// and is gated behind a comment because the current implementation deliberately permits
+    /// weight-0 players (see the `bvt` test above). To make the defect *fail* on HEAD,
+    /// uncomment the final `assert!`.
+    #[test]
+    fn weight_zero_player_collides_starting_index() {
+        // Player 1 has weight 0 (e.g. a sub-ether genesis validator truncated to vp 0),
+        // surrounded by normal-weight players.
+        let wc = WeightedConfig::new(2, vec![2, 0, 3]).unwrap();
+
+        // Player 0 owns shares [0, 2); player 1 (weight 0) and player 2 BOTH start at 2.
+        assert_eq!(wc.get_player_starting_index(&wc.get_player(0)), 0);
+        assert_eq!(wc.get_player_starting_index(&wc.get_player(1)), 2);
+        assert_eq!(wc.get_player_starting_index(&wc.get_player(2)), 2);
+
+        // The weight-0 player owns an empty share range and has no virtual player:
+        assert_eq!(wc.get_player_weight(&wc.get_player(1)), 0);
+        assert_eq!(wc.get_share_index(1, 0), None);
+
+        // Two distinct players (1 and 2) alias the same starting index: malformed config.
+        let collide = wc.get_player_starting_index(&wc.get_player(1))
+            == wc.get_player_starting_index(&wc.get_player(2));
+        assert!(
+            collide,
+            "DEFECT (finding genesis-no-bft-threshold-validation-...): expected the \
+             weight-0 player to collide its starting_index with the next player"
+        );
+
+        // Structural invariant a well-formed weighted-PVSS config SHOULD satisfy: every
+        // player owns a non-empty share range (weight >= 1). The current implementation
+        // violates it by accepting weight-0 players. Uncomment to make the defect fail:
+        //
+        //   assert!(
+        //       (0..wc.get_total_num_players()).all(|i| wc.get_player_weight(&wc.get_player(i)) >= 1),
+        //       "WeightedConfig::new accepted a weight-0 player (empty share range)",
+        //   );
+    }
 }
