@@ -250,10 +250,22 @@ impl BlockInfo {
         self.epoch == executed_block_info.epoch
             && self.round == executed_block_info.round
             && self.id == executed_block_info.id
+            // `id` (a cryptographic hash of the block) matching above already proves this is the
+            // same block, so a differing `timestamp_usecs` is metadata-only. The executed block
+            // info can legitimately carry an *earlier* timestamp than the ordered QC in two
+            // reconfiguration cases (see `allow_timestamp_change`):
+            //   1. a reconfiguration suffix block (`has_reconfiguration()`), whose timestamp is
+            //      moved back to the reconfiguration block's timestamp; and
+            //   2. an epoch-start block (`round == GENESIS_ROUND`), whose committed timestamp is
+            //      inherited from the closing reconfiguration. Such a block carries no
+            //      `next_epoch_state` of its own, so `has_reconfiguration()` is false even though
+            //      the backwards adjustment is legitimate. Without case 2, recovery panics in
+            //      `LedgerRecoveryData::find_root` at an epoch boundary because the consensus-db
+            //      QC and the executed LedgerInfo disagree only on this timestamp.
             && (self.timestamp_usecs == executed_block_info.timestamp_usecs
-            // executed block info has changed its timestamp because it's a reconfiguration suffix
                 || (self.timestamp_usecs > executed_block_info.timestamp_usecs
-                    && executed_block_info.has_reconfiguration()))
+                    && (executed_block_info.has_reconfiguration()
+                        || executed_block_info.round == GENESIS_ROUND)))
     }
 
     /// This function checks if the current BlockInfo is consistent
@@ -291,3 +303,80 @@ impl Display for BlockInfo {
 
 /// A continuously increasing sequence number for committed blocks.
 pub type BlockHeight = u64;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::epoch_state::EpochState;
+
+    /// All fixed fields identical across helpers, so two infos only differ by the
+    /// arguments that matter for `match_ordered_only` (round, timestamp, reconfig, id).
+    fn block_info(round: Round, timestamp_usecs: u64, reconfiguration: bool, id: HashValue) -> BlockInfo {
+        BlockInfo::new(
+            22,     // epoch
+            round,
+            id,
+            HashValue::zero(), // executed_state_id
+            581799, // version
+            timestamp_usecs,
+            reconfiguration.then(EpochState::empty),
+        )
+    }
+
+    #[test]
+    fn match_ordered_only_identical_timestamp() {
+        let id = HashValue::sha3_256_of(b"block");
+        let qc = block_info(5, 1000, false, id);
+        let executed = block_info(5, 1000, false, id);
+        assert!(qc.match_ordered_only(&executed));
+    }
+
+    #[test]
+    fn match_ordered_only_reconfiguration_suffix_earlier_timestamp() {
+        // Reconfiguration suffix block: executed timestamp moved backwards. Tolerated
+        // because `executed.has_reconfiguration()` (pre-existing behavior).
+        let id = HashValue::sha3_256_of(b"reconfig_suffix");
+        let qc = block_info(5, 1000, true, id);
+        let executed = block_info(5, 700, true, id);
+        assert!(qc.match_ordered_only(&executed));
+    }
+
+    #[test]
+    fn match_ordered_only_epoch_start_earlier_timestamp() {
+        // Regression test for the epoch-boundary recovery panic: an epoch-start (round 0)
+        // block carries no `next_epoch_state`, but its committed timestamp is inherited from
+        // the closing reconfiguration and precedes the ordered QC timestamp. Must be tolerated.
+        let id = HashValue::sha3_256_of(b"epoch_start");
+        let qc = block_info(GENESIS_ROUND, 1_780_531_610_602_370, false, id);
+        let executed = block_info(GENESIS_ROUND, 1_780_531_610_347_257, false, id);
+        assert!(qc.match_ordered_only(&executed));
+    }
+
+    #[test]
+    fn match_ordered_only_non_genesis_timestamp_mismatch_rejected() {
+        // Non-epoch-start, no reconfiguration: a timestamp mismatch is still a real
+        // inconsistency and must be rejected (the fix must not over-broaden).
+        let id = HashValue::sha3_256_of(b"block");
+        let qc = block_info(5, 1000, false, id);
+        let executed = block_info(5, 700, false, id);
+        assert!(!qc.match_ordered_only(&executed));
+    }
+
+    #[test]
+    fn match_ordered_only_executed_timestamp_later_rejected() {
+        // Only an *earlier* executed timestamp reflects the reconfiguration adjustment; a
+        // later one is rejected even for epoch-start blocks.
+        let id = HashValue::sha3_256_of(b"block");
+        let qc = block_info(GENESIS_ROUND, 700, false, id);
+        let executed = block_info(GENESIS_ROUND, 1000, false, id);
+        assert!(!qc.match_ordered_only(&executed));
+    }
+
+    #[test]
+    fn match_ordered_only_different_id_rejected() {
+        // `id` mismatch is a genuinely different block and is always rejected.
+        let qc = block_info(GENESIS_ROUND, 1000, false, HashValue::sha3_256_of(b"a"));
+        let executed = block_info(GENESIS_ROUND, 700, false, HashValue::sha3_256_of(b"b"));
+        assert!(!qc.match_ordered_only(&executed));
+    }
+}
