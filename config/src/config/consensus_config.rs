@@ -85,6 +85,13 @@ pub struct ConsensusConfig {
     pub max_blocks_per_sending_request_quorum_store_override: u64,
     pub max_blocks_per_receiving_request: u64,
     pub max_blocks_per_receiving_request_quorum_store_override: u64,
+    /// Bounded look-ahead depth for the PFN/VFN fast-sync (recovery) execute pipeline. While
+    /// catching up, recovery feeds up to this many blocks to execution before draining results,
+    /// so consensus->execution is not lockstep-per-block. `1` keeps the original strictly-serial
+    /// behavior; `4`-`8` is the recommended range for catch-up nodes. Only affects the recovery
+    /// path; the live validator path is unchanged. Per-block state-root checks and per-block
+    /// persistence are preserved regardless of depth.
+    pub fast_sync_execute_lookahead: usize,
     pub broadcast_vote: bool,
     pub proof_cache_capacity: u64,
     pub rand_rb_config: ReliableBroadcastConfig,
@@ -348,6 +355,8 @@ impl Default for ConsensusConfig {
             max_blocks_per_sending_request_quorum_store_override: 10,
             max_blocks_per_receiving_request: 10,
             max_blocks_per_receiving_request_quorum_store_override: 100,
+            // 1 == original strictly-serial recovery (no behavior change unless tuned).
+            fast_sync_execute_lookahead: 1,
             broadcast_vote: true,
             proof_cache_capacity: 10_000,
             rand_rb_config: ReliableBroadcastConfig {
