@@ -10,7 +10,7 @@
 //!
 //! ```text
 //! ┌────────────────────────────┐
-//! │  genesis.json              │  Config: extra_fields["consensusAlpha"]
+//! │  node startup (gravity-sdk)│  Maps genesis config fields → ForkCondition
 //! ├────────────────────────────┤
 //! │  ConsensusHardfork enum    │  Definition: add variants for new forks
 //! ├────────────────────────────┤
@@ -19,30 +19,27 @@
 //! └────────────────────────────┘
 //! ```
 //!
+//! This crate provides the fork identifiers, activation conditions, and the
+//! global query API. It deliberately does NOT hardcode any `genesis.json`
+//! field names: mapping a genesis field to a [`ForkCondition`] lives on the
+//! node side (gravity-sdk), which owns genesis parsing. Keeping that mapping
+//! in one place keeps each fork's activation decision in a single location.
+//!
 //! # Usage
 //!
-//! At node startup, read hardfork activation values from `genesis.json`,
-//! build a [`ConsensusHardforks`], and call [`init_consensus_hardforks`] once.
-//! Then use [`is_consensus_fork_active_at_epoch`] anywhere in consensus code.
-//!
-//! ## Reading from genesis.json
-//!
-//! In `genesis.json`, add fields under `.config`:
-//!
-//! ```json
-//! {
-//!   "config": {
-//!     "consensusAlpha": 100
-//!   }
-//! }
-//! ```
-//!
-//! At node startup (gravity-sdk side):
+//! At node startup, build a [`ConsensusHardforks`], register each fork's
+//! activation condition with [`ConsensusHardforks::insert`], and call
+//! [`init_consensus_hardforks`] once. Then use
+//! [`is_consensus_fork_active_at_epoch`] anywhere in consensus code.
 //!
 //! ```ignore
-//! let hardforks = ConsensusHardforks::from_genesis_extra_fields(|key| {
-//!     extra.get(key).and_then(|v| v.as_u64())
-//! });
+//! let mut hardforks = ConsensusHardforks::new();
+//! if let Some(ts_secs) = genesis_alpha_time {
+//!     hardforks.insert(
+//!         ConsensusHardfork::ConsensusAlpha,
+//!         ForkCondition::Timestamp(ts_secs * 1_000_000),
+//!     );
+//! }
 //! init_consensus_hardforks(hardforks);
 //! ```
 
@@ -147,30 +144,6 @@ impl ConsensusHardforks {
         Self {
             forks: HashMap::new(),
         }
-    }
-
-    /// Build hardforks from genesis.json extra_fields.
-    ///
-    /// Reads known field names and registers corresponding fork conditions.
-    ///
-    /// Currently recognized fields:
-    /// - `consensusAlpha` → `ConsensusAlpha` (Epoch)
-    ///
-    /// Unknown fields are silently ignored so that new forks can be added
-    /// by simply extending this method.
-    pub fn from_genesis_extra_fields<F>(get: F) -> Self
-    where
-        F: Fn(&str) -> Option<u64>,
-    {
-        let mut hardforks = Self::new();
-        if let Some(epoch) = get("consensusAlpha") {
-            hardforks.insert(
-                ConsensusHardfork::ConsensusAlpha,
-                ForkCondition::Epoch(epoch),
-            );
-        }
-        // Future forks: add more `if let` blocks here following the same pattern.
-        hardforks
     }
 
     /// Register a hardfork with its activation condition.
