@@ -54,13 +54,13 @@ async fn test_jwk_manager_state_transition() {
         verifier: ValidatorVerifier::new(validator_consensus_infos.clone()).into(),
     };
 
-    let update_certifier = DummyUpdateCertifier::default();
+    let update_certifier = Arc::new(DummyUpdateCertifier::default());
     let vtxn_pool = VTxnPoolState::default();
     let mut jwk_manager = JWKManager::new(
         private_keys[0].clone(),
         addrs[0],
         Arc::new(epoch_state),
-        Arc::new(update_certifier),
+        update_certifier.clone(),
         vtxn_pool.clone(),
     );
 
@@ -195,6 +195,14 @@ async fn test_jwk_manager_state_transition() {
     }
     assert_eq!(expected_states, jwk_manager.states_by_issuer);
 
+    // Replaying the same observation must preserve the active certifier session.
+    let invocation_count = update_certifier.invocations.lock().len();
+    assert!(jwk_manager
+        .process_new_observation(issuer_alice.clone(), alice_jwks_new.clone(), None)
+        .is_ok());
+    assert_eq!(invocation_count, update_certifier.invocations.lock().len());
+    assert_eq!(expected_states, jwk_manager.states_by_issuer);
+
     // If we also found a JWK update for issuer Carl, a separate JWK consensus session should be started.
     let carl_jwks_new = vec![JWK::Unsupported(UnsupportedJWK::new_for_testing(
         "carl_jwk_id_0",
@@ -202,7 +210,7 @@ async fn test_jwk_manager_state_transition() {
     ))
     .into()];
     assert!(jwk_manager
-        .process_new_observation(issuer_carl.clone(), carl_jwks_new.clone(), None)
+        .process_new_observation(issuer_carl.clone(), carl_jwks_new.clone(), Some(1))
         .is_ok());
     {
         let expected_carl_state = expected_states.get_mut(&issuer_carl).unwrap();
@@ -222,6 +230,14 @@ async fn test_jwk_manager_state_transition() {
             abort_handle_wrapper: QuorumCertProcessGuard::dummy(),
         };
     }
+    assert_eq!(expected_states, jwk_manager.states_by_issuer);
+
+    // Nonce-based observers also replay cached results while certification is in progress.
+    let invocation_count = update_certifier.invocations.lock().len();
+    assert!(jwk_manager
+        .process_new_observation(issuer_carl.clone(), carl_jwks_new.clone(), Some(1))
+        .is_ok());
+    assert_eq!(invocation_count, update_certifier.invocations.lock().len());
     assert_eq!(expected_states, jwk_manager.states_by_issuer);
 
     // Now that there are in-progress consensus sessions for Alice/Carl,
@@ -266,6 +282,13 @@ async fn test_jwk_manager_state_transition() {
     ];
     assert_eq!(expected_responses, last_invocations);
 
+    let stale_qc_jwks_for_alice = expected_states
+        .get(&issuer_alice)
+        .unwrap()
+        .consensus_state
+        .my_proposal_cloned()
+        .observed;
+
     // If Alice rotates again while the consensus session for Alice is in progress, the existing session should be discarded and a new session should start.
     let alice_jwks_new_2 = vec![
         JWK::Unsupported(UnsupportedJWK::new_for_testing(
@@ -302,6 +325,27 @@ async fn test_jwk_manager_state_transition() {
     }
     assert_eq!(expected_states, jwk_manager.states_by_issuer);
 
+    // A quorum certificate from the discarded session must not finish the replacement session.
+    let signer_bit_vec = BitVec::from(private_keys.iter().map(|_| true).collect::<Vec<_>>());
+    let sig = Signature::aggregate(
+        private_keys
+            .iter()
+            .map(|sk| sk.sign(&stale_qc_jwks_for_alice).unwrap())
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    let stale_qc_update_for_alice = QuorumCertifiedUpdate {
+        update: stale_qc_jwks_for_alice,
+        multi_sig: AggregateSignature::new(signer_bit_vec, Some(sig)),
+    };
+    let err = jwk_manager
+        .process_quorum_certified_update(stale_qc_update_for_alice)
+        .expect_err("a stale quorum certificate must be rejected");
+    assert!(err
+        .to_string()
+        .contains("does not match the active proposal"));
+    assert_eq!(expected_states, jwk_manager.states_by_issuer);
+
     // For issuer Carl, in state `InProgress`, when receiving a quorum-certified update from the aggregator:
     // the state should be switched to `Finished`;
     // Carl's update should be available in validator txn pool.
@@ -336,6 +380,15 @@ async fn test_jwk_manager_state_transition() {
         };
     }
     assert_eq!(expected_states, jwk_manager.states_by_issuer);
+
+    // Replaying the same observation must preserve the certified transaction in the pool.
+    let invocation_count = update_certifier.invocations.lock().len();
+    assert!(jwk_manager
+        .process_new_observation(issuer_carl.clone(), carl_jwks_new.clone(), Some(1))
+        .is_ok());
+    assert_eq!(invocation_count, update_certifier.invocations.lock().len());
+    assert_eq!(expected_states, jwk_manager.states_by_issuer);
+
     let expected_vtxns = vec![ValidatorTransaction::ObservedJWKUpdate(
         qc_update_for_carl.clone(),
     )];
