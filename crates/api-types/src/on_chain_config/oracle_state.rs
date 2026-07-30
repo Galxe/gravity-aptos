@@ -9,17 +9,31 @@ pub struct OracleSourceState {
     pub source_id: u64,
     /// Latest nonce for this source
     pub latest_nonce: u128,
-    /// The latest DataRecord (None if nonce is 0)
-    pub latest_record: Option<LatestDataRecord>,
+    /// Latest successfully delivered source-defined restart position
+    pub latest_position: u128,
 }
 
-/// Rust representation of the on-chain DataRecord
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LatestDataRecord {
-    /// Timestamp when this was recorded
-    pub recorded_at: u64,
-    /// Source block number
-    pub block_number: u64,
-    /// Payload data
-    pub data: Vec<u8>,
+#[cfg(test)]
+mod tests {
+    use super::OracleSourceState;
+
+    #[test]
+    fn bcs_round_trip_has_fixed_size() {
+        let state = OracleSourceState {
+            source_type: 6,
+            source_id: 137,
+            latest_nonce: u128::MAX,
+            latest_position: u128::MAX - 1,
+        };
+
+        let encoded = bcs::to_bytes(&state).expect("OracleSourceState should serialize");
+        assert_eq!(encoded.len(), 44);
+
+        let decoded: OracleSourceState =
+            bcs::from_bytes(&encoded).expect("OracleSourceState should deserialize");
+        assert_eq!(decoded.source_type, state.source_type);
+        assert_eq!(decoded.source_id, state.source_id);
+        assert_eq!(decoded.latest_nonce, state.latest_nonce);
+        assert_eq!(decoded.latest_position, state.latest_position);
+    }
 }
