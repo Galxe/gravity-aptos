@@ -270,6 +270,19 @@ fn unix_micros() -> u64 {
         .as_micros() as u64
 }
 
+fn inbound_queue_delay_seconds(rx_at: u64, dequeue_at: u64) -> f64 {
+    let Some(dt_micros) = dequeue_at.checked_sub(rx_at) else {
+        warn!(
+            receive_timestamp_micros = rx_at,
+            dequeue_timestamp_micros = dequeue_at,
+            "Inbound message receive timestamp is later than dequeue timestamp"
+        );
+        return 0.0;
+    };
+
+    (dt_micros as f64) / 1_000_000.0
+}
+
 /// Deserialize inbound direct send and rpc messages into the application `TMessage`
 /// type, logging and dropping messages that fail to deserialize.
 fn received_message_to_event<TMessage: Message>(
@@ -283,8 +296,7 @@ fn received_message_to_event<TMessage: Message>(
         rpc_replier,
     } = message;
     let dequeue_at = unix_micros();
-    let dt_micros = dequeue_at - rx_at;
-    let dt_seconds = (dt_micros as f64) / 1000000.0;
+    let dt_seconds = inbound_queue_delay_seconds(rx_at, dequeue_at);
     match message {
         NetworkMessage::RpcRequest(rpc_req) => {
             crate::counters::inbound_queue_delay_observe(rpc_req.protocol_id, dt_seconds);
@@ -324,6 +336,21 @@ fn request_to_network_event<TMessage: Message, Request: IncomingRequest>(
 impl<TMessage> FusedStream for NetworkEvents<TMessage> {
     fn is_terminated(&self) -> bool {
         self.done
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inbound_queue_delay_seconds_returns_elapsed_time() {
+        assert_eq!(inbound_queue_delay_seconds(1_000_000, 1_250_000), 0.25);
+    }
+
+    #[test]
+    fn inbound_queue_delay_seconds_handles_reversed_timestamps() {
+        assert_eq!(inbound_queue_delay_seconds(1_250_000, 1_000_000), 0.0);
     }
 }
 
