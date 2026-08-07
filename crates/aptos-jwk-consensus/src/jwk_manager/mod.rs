@@ -187,7 +187,7 @@ impl JWKManager {
         );
         let state = self.states_by_issuer.entry(issuer.clone()).or_default();
         state.observed = Some(jwks.clone());
-        
+
         // Determine if update is needed based on source type
         let needs_update = match observed_nonce {
             Some(nonce) => {
@@ -210,13 +210,23 @@ impl JWKManager {
                 state.observed.as_ref() != state.on_chain.as_ref().map(ProviderJWKs::jwks)
             }
         };
-        
+
         if needs_update {
             let observed = ProviderJWKs {
                 issuer: issuer.clone(),
                 version: state.on_chain_version() + 1,
                 jwks,
             };
+            if state.consensus_state.has_proposal(&observed) {
+                debug!(
+                    epoch = self.epoch_state.epoch,
+                    issuer = String::from_utf8(issuer).ok(),
+                    version = observed.version,
+                    "Ignoring duplicate observation for active proposal."
+                );
+                return Ok(());
+            }
+
             let signature = self
                 .consensus_key
                 .sign(&observed)
@@ -413,6 +423,13 @@ impl JWKManager {
         let state = self.states_by_issuer.entry(issuer.clone()).or_default();
         match &state.consensus_state {
             ConsensusState::InProgress { my_proposal, .. } => {
+                if my_proposal.observed != update.update {
+                    bail!(
+                        "qc update does not match the active proposal for issuer {:?}",
+                        String::from_utf8(issuer)
+                    );
+                }
+
                 //TODO: counters
                 let txn = ValidatorTransaction::ObservedJWKUpdate(update.clone());
                 let vtxn_guard =
@@ -517,6 +534,14 @@ impl ConsensusState {
             ConsensusState::NotStarted => "NotStarted",
             ConsensusState::InProgress { .. } => "InProgress",
             ConsensusState::Finished { .. } => "Finished",
+        }
+    }
+
+    fn has_proposal(&self, proposal: &ProviderJWKs) -> bool {
+        match self {
+            ConsensusState::InProgress { my_proposal, .. }
+            | ConsensusState::Finished { my_proposal, .. } => &my_proposal.observed == proposal,
+            ConsensusState::NotStarted => false,
         }
     }
 
