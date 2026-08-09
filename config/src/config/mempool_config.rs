@@ -100,6 +100,17 @@ pub struct MempoolConfig {
     /// up to 10 minutes (shared_mempool_priority_update_interval_secs) to enable the load balancing. If this flag is enabled,
     /// then the PFNs will always do load balancing irrespective of the load.
     pub enable_max_load_balancing_at_any_load: bool,
+    /// Gravity PFN: max txs to batch before flushing reth pending-body events into the
+    /// broadcast timeline (`AdmitHandle::admit_batch`). Default 64.
+    pub admit_batch_cap: usize,
+    /// Gravity PFN: max ms to wait after the first pending-body event before flushing
+    /// even if under `admit_batch_cap`. Default 5.
+    pub admit_batch_max_wait_ms: u64,
+    /// Gravity: max age (ms) of a broadcast-store full reconcile against
+    /// `get_broadcast_txns` before `maybe_reconcile(false)` refreshes. Listener-era
+    /// default 2000; set lower for more aggressive poll, higher to rely on admit path.
+    /// Env `MEMPOOL_SNAPSHOT_MAX_AGE_MS` overrides this when set.
+    pub reconcile_max_age_ms: u64,
 }
 
 impl Default for MempoolConfig {
@@ -164,6 +175,9 @@ impl Default for MempoolConfig {
                 },
             ],
             enable_max_load_balancing_at_any_load: false,
+            admit_batch_cap: 64,
+            admit_batch_max_wait_ms: 5,
+            reconcile_max_age_ms: 2_000,
         }
     }
 }
